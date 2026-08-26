@@ -45,29 +45,33 @@ The replacement suite first proves that replacing the current `tools/` and
 `docs/toolingdocs/` pair preserves product sentinels, `project-tooling.toml`, and
 `.tooling-state/`, and that a same-version migration and repeated verification are no-ops.
 
-A separate historical case materializes the real `0.1.0` payload from pinned Git commit and tree
-objects, integrates it, replaces both portable directories with the current `0.3.0` payload, and
-then proves:
+Three historical cases materialize the real `0.1.0`, `0.2.0`, and `0.3.0` payloads from
+individually pinned Git commit, `tools`, and `docs/toolingdocs` tree objects. Each case integrates
+the old payload, replaces both portable directories with the current `0.4.0` payload, and then
+proves:
 
 - changing a copied documentation file while leaving its manifest unchanged is rejected as an
   invalid portable payload;
 - verification rejects the unreconciled managed tree before migration;
-- read-only migration assessment reports exactly the registered
-  `reconcile-managed-payload-0-1-0-to-0-3-0` transition and only config/state operations;
+- read-only migration assessment reports exactly the corresponding direct registered
+  `0.1.0`/`0.2.0`/`0.3.0` to `0.4.0` reconciliation and only config/state operations;
 - the mutating migration changes versioned config/state while leaving the new payload and all
   product hashes unchanged;
 - verification passes afterward and the second migration is a byte-stable no-op.
 
-The source checkout must have complete Git history so the pinned historical objects can be
-verified (`fetch-depth: 0` in CI). Replacing the old fixture with a newly manufactured “legacy”
-payload would invalidate the purpose of this test.
+The source checkout must have complete Git history so every pinned historical object can be
+verified (`fetch-depth: 0` in CI). Replacing any old fixture with a newly manufactured “legacy”
+payload would invalidate the purpose of these tests.
 
 ## Run the focused acceptance suite
 
 From the source repository with the pinned tooling dependencies installed outside `tools/`:
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider tools/tests/acceptance/test_copy_matrix.py tools/tests/acceptance/test_tooling_replacement.py
+PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider \
+  tools/tests/acceptance/test_copy_matrix.py \
+  tools/tests/acceptance/test_tooling_replacement.py \
+  tests/source/test_historical_tooling_migration.py
 ```
 
 Do not set `TEMPLATE_TOOLING_NESTED_TEST=1` for this top-level run; that guard exists only to

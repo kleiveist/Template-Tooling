@@ -21,10 +21,12 @@ from tools.core.filesystem import (
     FilesystemSafetyError,
     atomic_write_text,
     read_regular_bytes,
+    safe_relative_path,
     validate_root,
 )
 from tools.core.manifest import (
     PROTECTED_DIRECTORIES,
+    PROTECTED_FILE_NAMES,
     PROTECTED_FILE_SUFFIXES,
     SENSITIVE_DIRECTORIES,
     SENSITIVE_FILE_NAMES,
@@ -368,6 +370,10 @@ def _validate_payload_object(
 
 
 def _validate_payload_policy(logical: str, *, is_directory: bool) -> None:
+    try:
+        safe_relative_path(logical)
+    except FilesystemSafetyError as exc:
+        raise PortablePayloadError(str(exc)) from exc
     path = Path(logical)
     folded_parts = tuple(part.casefold() for part in path.parts)
     folded_name = path.name.casefold()
@@ -383,6 +389,8 @@ def _validate_payload_policy(logical: str, *, is_directory: bool) -> None:
         )
     if is_directory and (
         folded_name in PROTECTED_DIRECTORIES
+        or folded_name == "build"
+        or folded_name.endswith(".egg-info")
         or folded_name in SENSITIVE_DIRECTORIES
         or (len(folded_parts) == 2 and folded_name in SENSITIVE_ROOT_DIRECTORIES)
     ):
@@ -391,6 +399,8 @@ def _validate_payload_policy(logical: str, *, is_directory: bool) -> None:
         )
     if not is_directory and (
         folded_name in SENSITIVE_FILE_NAMES
+        or folded_name in PROTECTED_FILE_NAMES
+        or folded_name.startswith(".coverage.")
         or path.suffix.casefold() in PROTECTED_FILE_SUFFIXES
         or any(logical.casefold().endswith(suffix) for suffix in _BUILD_SUFFIXES)
     ):

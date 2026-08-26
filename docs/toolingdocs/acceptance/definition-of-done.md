@@ -24,7 +24,10 @@ item needs reproducible evidence from the exact candidate revision.
 | Live actions | Install/test/build adapter dispatch accepts only a profile-selected adapter and its fixed capability. Documentation states that these commands execute live product behavior outside integration rollback. |
 | Idempotence | Check after fix is integrated; a second full-fix and a second migration produce no operations, action, report, state change, or target-tree change. |
 | Copy matrix | Every fixture in [the copy matrix](copy-matrix.md) passes detection, fix, verify, copied tools test, protected-hash, and no-op assertions. |
-| Historical upgrade | The pinned real `0.1.0` payload upgrades through the registered `0.1.0` to `0.3.0` reconciliation; tampering is rejected; config/state migrate; current payload and product hashes remain unchanged. |
+| Historical upgrade | The pinned real `0.1.0`, `0.2.0`, and `0.3.0` payloads each upgrade through their direct registered reconciliation to `0.4.0`; tampering is rejected; config/state migrate; current payload and product hashes remain unchanged. |
+| Deterministic export | `tooling export` creates only `tools/` and `docs/toolingdocs/`, refuses an existing destination, rejects unsafe source objects, normalizes metadata and produces the same manifest and bytes from the same source. |
+| Test separation | Repository-only tests live under `tests/source/`; the exported `tools/tests/` tree contains portable runtime and acceptance tests without source-marker skips. |
+| Continuous integration | Linux CI exports and exercises an independent customer workflow plus migration and reproducible bilingual PDFs; Windows CI runs the portable suite and validates an exported CLI. Both use an external tooling environment and leave the checkout clean. |
 | Documentation | All portable pages use relative links and the exact generated index/backlink markers; `python tools/control.py docs check` passes; command examples match the parser. |
 | Case study | New German and English portable-tooling sources and diagrams build reproducibly; no inherited PDF, renamed legacy chapter, old architecture claim, or generated LaTeX artifact is stored as source. |
 | Repository quality | Focused tests, the complete `tools/tests` suite, static CLI/documentation contracts, `git diff --check`, and the portable-artifact scan pass on the candidate. |
@@ -46,13 +49,17 @@ be inapplicable only when the fixture/profile explicitly does not configure that
   interpreter path, not imports from the source checkout.
 - Record commands, exit codes, environment constraints, and the exact commit under test.
 
-## Open release work
+## Export evidence and remaining trust boundary
 
-The current command `python tools/control.py tooling export` intentionally reports `NOT_READY`.
-A portable exporter, deterministic export artifact verification, and its publishing/CI workflow
-remain open work. Product artifacts under `.dist/` do not satisfy this gate.
+Create the candidate from an existing output parent and inspect it before distribution:
 
-Until that work lands, “integration complete” means the checked-in copy/migration contract is
-accepted; it does not mean a supported portable package has been exported or published. Any
-manual transfer must use one complete, reviewed `tools/` plus `docs/toolingdocs/` pair from a
-trusted pinned revision and then follow the [folder replacement guide](../guides/folder-replacement.md).
+```sh
+python tools/control.py tooling export --output PATH
+```
+
+The result is a directory, not a signed archive or a publication. Its
+`tools/PORTABLE-PAYLOAD.json` binds every exported file except the manifest itself and is
+validated again before the staged directory is published. It detects incomplete, mixed or
+changed copies but cannot authenticate an adversarial replacement of both payload and manifest.
+Use a trusted pinned revision, retain release checksums/signatures outside the payload when
+publishing, and follow the [folder replacement guide](../guides/folder-replacement.md).

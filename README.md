@@ -67,10 +67,16 @@ inconsistency, or an unsafe/dirty Git preflight when Git metadata exists. The pa
 proves internal consistency of the copied files against the included manifest; it is not an
 external authenticity or release signature.
 
-`python tools/control.py tooling export` is intentionally unavailable in the current phase and
-returns a not-ready result. Build artifacts under `.dist/` are product outputs, not portable
-exports. Until the exporter and its release CI gate are delivered, distribute only a reviewed,
-complete `tools/` plus `docs/toolingdocs/` pair from one trusted repository revision.
+`python tools/control.py tooling export` creates a deterministic
+`Template-Tooling-<version>/` directory in the current directory. Pass `--output PATH` to select
+an existing output parent. The command fails closed instead of merging with or replacing an
+existing package and writes only `tools/` plus `docs/toolingdocs/`, including a manifest of the
+exported bytes. Build artifacts under `.dist/` are product outputs, not portable exports.
+
+The source-only tests under `tests/source/`, this README, `.github/`, the source marker and the
+workflow handoff are deliberately absent from the package. The manifest proves internal
+self-consistency; obtain the export from a trusted revision because it is not a publisher
+signature.
 
 For repository work, follow the [contribution guide](docs/toolingdocs/development/contribution.md)
 and keep changes small, tested, and ownership-aware.

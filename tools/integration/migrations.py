@@ -699,5 +699,8 @@ REGISTRY = MigrationRegistry(
         _managed_payload_reconciliation("0.1.0", "0.2.0", order=10),
         _managed_payload_reconciliation("0.1.0", "0.3.0", order=20),
         _managed_payload_reconciliation("0.2.0", "0.3.0", order=30),
+        _managed_payload_reconciliation("0.1.0", "0.4.0", order=40),
+        _managed_payload_reconciliation("0.2.0", "0.4.0", order=50),
+        _managed_payload_reconciliation("0.3.0", "0.4.0", order=60),
     )
 )

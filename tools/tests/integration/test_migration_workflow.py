@@ -32,8 +32,9 @@ from tools.tests.integration.test_workflow import (
 )
 
 PAYLOAD_RECONCILIATION_IDS = {
-    "0.1.0": "reconcile-managed-payload-0-1-0-to-0-3-0",
-    "0.2.0": "reconcile-managed-payload-0-2-0-to-0-3-0",
+    "0.1.0": "reconcile-managed-payload-0-1-0-to-0-4-0",
+    "0.2.0": "reconcile-managed-payload-0-2-0-to-0-4-0",
+    "0.3.0": "reconcile-managed-payload-0-3-0-to-0-4-0",
 }
 
 
@@ -175,7 +176,7 @@ def test_registered_managed_migration_can_reconcile_a_copied_tooling_upgrade(
 ) -> None:
     root, tools = _portable_project(tmp_path)
     workflow.run_full_fix(root, tools_root=tools)
-    upgraded_version = "0.4.0"
+    upgraded_version = "0.5.0"
     (tools / "VERSION").write_text(f"{upgraded_version}\n", encoding="utf-8")
     _seal_payload(root, tools)
     registry = MigrationRegistry(
@@ -214,7 +215,7 @@ def test_productive_payload_reconciliation_updates_only_config_and_state(
     workflow.run_full_fix(root, tools_root=tools)
     config = root / "project-tooling.toml"
     config_before = config.read_text(encoding="utf-8")
-    (tools / "VERSION").write_text("0.3.0\n", encoding="utf-8")
+    (tools / "VERSION").write_text("0.4.0\n", encoding="utf-8")
     _seal_payload(root, tools)
     reconciliation_id = PAYLOAD_RECONCILIATION_IDS[source_version]
 
@@ -232,13 +233,13 @@ def test_productive_payload_reconciliation_updates_only_config_and_state(
     state = load_state(root)
 
     assert applied.applied_ids == (reconciliation_id,)
-    assert state.tooling_version == "0.3.0"
+    assert state.tooling_version == "0.4.0"
     assert state.applied_migrations == (reconciliation_id,)
     assert '[project]\nname = "target-project"\nprofile = "web-only"' in (
         config.read_text(encoding="utf-8")
     )
     assert config_before.replace(
-        f'version = "{source_version}"', 'version = "0.3.0"'
+        f'version = "{source_version}"', 'version = "0.4.0"'
     ) == config.read_text(encoding="utf-8")
 
     before_noop = _snapshot(root)

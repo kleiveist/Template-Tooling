@@ -14,8 +14,9 @@ repeat without gaining ownership of product content.
 <!-- AUTO-GENERATED:docs-index END -->
 
 The [copy matrix](copy-matrix.md) defines the fixture and historical-replacement evidence. The
-[definition of done](definition-of-done.md) separates gates that the current integration must
-pass from the exporter and release-CI work that remains open.
+[definition of done](definition-of-done.md) combines those gates with deterministic export and
+clean-checkout CI evidence. Repository-only tests live outside the exported `tools/tests` tree;
+customer acceptance runs only the tests that travel with the payload.
 
 Acceptance results are evidence for one repository revision and environment. They are not an
 external signature for a copied payload, a hostile-code security audit, or proof that every

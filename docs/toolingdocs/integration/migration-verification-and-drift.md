@@ -29,16 +29,22 @@ idempotent.
 
 ## Current production migrations
 
-The registry contains three exact managed-payload reconciliations:
+The registry retains three exact historical managed-payload reconciliations:
 
 - `reconcile-managed-payload-0-1-0-to-0-2-0` preserves the prior 0.2.0 release path;
 - `reconcile-managed-payload-0-1-0-to-0-3-0` upgrades a 0.1.0 integration directly;
 - `reconcile-managed-payload-0-2-0-to-0-3-0` upgrades a 0.2.0 integration directly.
 
+The current release adds three direct paths:
+
+- `reconcile-managed-payload-0-1-0-to-0-4-0`;
+- `reconcile-managed-payload-0-2-0-to-0-4-0`;
+- `reconcile-managed-payload-0-3-0-to-0-4-0`.
+
 They are intentionally operation-free. Each supports the workflow where an operator
 has already replaced the managed `tools/` and `docs/toolingdocs/` folders with the exact
 target payload. Applicability requires the stated source and target tooling versions
-and state schema 1 on both sides. The current 0.3.0 release therefore has a direct path
+and state schema 1 on both sides. The current 0.4.0 release therefore has a direct path
 from every previously released integration; it does not depend on implicit chaining.
 
 Each migration's identical pre- and postconditions require the canonical SHA-256 of

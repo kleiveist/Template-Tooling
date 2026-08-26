@@ -1,25 +1,25 @@
 {
   "schema_version": 1,
-  "tooling_version": "0.3.0",
+  "tooling_version": "0.4.0",
   "files": [
     {
       "path": "docs/toolingdocs/acceptance/acceptance.md",
-      "sha256": "sha256:8471bd5bd4695e6cdc51eb5c5630bbf0b22f067575d871e62bba238bd2887755",
-      "size": 1026,
+      "sha256": "sha256:9ccd3845253fbd59eb4f83bb048e8d391a2a3fd47806f6de890e61730001ec31",
+      "size": 1131,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/acceptance/copy-matrix.md",
-      "sha256": "sha256:b27ebddeea29a7dd9b9493d52e6a8944be6b102d80cf0b53abf91eb53d2b83e2",
-      "size": 4305,
+      "sha256": "sha256:9c5fd8784dbbb972a43fb4273608b4d3578c8cc7da6388009cc6ae2bbe8c8abc",
+      "size": 4470,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/acceptance/definition-of-done.md",
-      "sha256": "sha256:d77bebf82b0874a55632cf23a7806992906f1b90dff2865c8d808bfa8147e5e0",
-      "size": 5725,
+      "sha256": "sha256:0aae90e61f89eb9ba00318dc2b28801ab383c3e8816fc10f5509aed7230d77c7",
+      "size": 6497,
       "kind": "file",
       "executable": false
     },
@@ -123,22 +123,22 @@
     },
     {
       "path": "docs/toolingdocs/development/security-boundaries.md",
-      "sha256": "sha256:cc977b57ba2e9c124b04c54dfef507cb9eb4a55428acb79dde92f7de3fa03a01",
-      "size": 5770,
+      "sha256": "sha256:b0251b34843e637698c5ad667bcb830cebd9ee23ac37d3d7e7f1602be4a6a13f",
+      "size": 5974,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/guides/builds.md",
-      "sha256": "sha256:b4924c7dc85e8dc7aa881e9292deaec7de5db7559cd612330c2b6b6e0b3881b5",
-      "size": 2550,
+      "sha256": "sha256:c98d8aadb40465709cf82fbb3f8ed9b33d6a402e6b451f230a0668ab020ed059",
+      "size": 2530,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/guides/folder-replacement.md",
-      "sha256": "sha256:123a9e8268a55a932be9e576e8105cfdc1e328112e3d4a876eeafcc9dc620d5e",
-      "size": 5188,
+      "sha256": "sha256:9db0988dbc83c97a86a3464d00f14e8fc5b4d27e3665bc0829df9eb7cd978aaf",
+      "size": 5303,
       "kind": "file",
       "executable": false
     },
@@ -158,8 +158,8 @@
     },
     {
       "path": "docs/toolingdocs/guides/releases.md",
-      "sha256": "sha256:4178cb33f965bbc948c48b98193d84be8914b7a1dd8acefaa488b6ef04dfd0fe",
-      "size": 2218,
+      "sha256": "sha256:ab58c6802ab8992813df2d6a6d00d7c4627acfe0c5f6dff869ac7372d865a849",
+      "size": 2707,
       "kind": "file",
       "executable": false
     },
@@ -200,8 +200,8 @@
     },
     {
       "path": "docs/toolingdocs/integration/migration-verification-and-drift.md",
-      "sha256": "sha256:8f70ab5956d6cfda471a2859685da3dc3fcec8298ef3b2a5b42ab3233a2b3b2f",
-      "size": 3514,
+      "sha256": "sha256:5ae6d7b67eb4d08cb905119d32d49d220394b5272e241a5f5ab156c1c28db746",
+      "size": 3709,
       "kind": "file",
       "executable": false
     },
@@ -214,8 +214,8 @@
     },
     {
       "path": "docs/toolingdocs/reference/cli.md",
-      "sha256": "sha256:85208e2797cef7b192bfd55996e3d569a5cc71b303ebd21e6acf353909607c96",
-      "size": 2370,
+      "sha256": "sha256:1fe0d8e29d3d8501a86267ec51a61a70730347459ead65451f7fe5385cadbefc",
+      "size": 2514,
       "kind": "file",
       "executable": false
     },
@@ -228,7 +228,7 @@
     },
     {
       "path": "docs/toolingdocs/reference/project-configuration.md",
-      "sha256": "sha256:56cdbf6360828d580dc55c7ae6e49df2b9853af55a2e1047cabd812e4b61d69b",
+      "sha256": "sha256:aed8fa62e089a86d1f875948c989cf367d3fd564348ef388cc16d49198fa94df",
       "size": 1868,
       "kind": "file",
       "executable": false
@@ -249,7 +249,7 @@
     },
     {
       "path": "docs/toolingdocs/reference/tooling-state.md",
-      "sha256": "sha256:bcbb2fe11d12e17def06c9994bc9f137b8d3287ace40c3a01f5defb8ef02c407",
+      "sha256": "sha256:408817fa006ce577afa9611a34c6eb2a728af43966701f35b3692703040a01fa",
       "size": 1866,
       "kind": "file",
       "executable": false
@@ -263,7 +263,7 @@
     },
     {
       "path": "tools/VERSION",
-      "sha256": "sha256:d915cc95d6ca8f47ae297713ed46d4e5c5d99ddd29fc3c61e263bdf305f2b5b0",
+      "sha256": "sha256:40b8eb4000a913a7791090535f291d3d369874162a89ef3c9e3d4e887a1b9e79",
       "size": 6,
       "kind": "file",
       "executable": false
@@ -431,22 +431,22 @@
     },
     {
       "path": "tools/core/filesystem.py",
-      "sha256": "sha256:d49e8c8278d9343e08bb8c4b54f3cbe9aacf1122f10cffc95121e0a444ebd9be",
-      "size": 12559,
+      "sha256": "sha256:5635b4ece514ddb37e57bf3613a1743d5605be9419344b88d64e84ab465426e1",
+      "size": 12867,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/core/manifest.py",
-      "sha256": "sha256:740ae897f32e8eb72877363f98e46abfddf7104e1353d2ead3b1e5fd314c580d",
-      "size": 19748,
+      "sha256": "sha256:af81a0338db76dbf5209f906547bf7be678d2cdf65c6043f08a6f8088111bc9d",
+      "size": 20250,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/core/portable_payload.py",
-      "sha256": "sha256:1171334112fb9e3cd2083bb136d4070bb6e66cbf85ca1ccdbb3f1dd76957e9d5",
-      "size": 18997,
+      "sha256": "sha256:9bbb02fbc7df8fee99f89a05a8f04b741179c4d93921d142c032bdefe57c6ef8",
+      "size": 19361,
       "kind": "file",
       "executable": false
     },
@@ -633,9 +633,16 @@
       "executable": false
     },
     {
+      "path": "tools/integration/export.py",
+      "sha256": "sha256:58c6b8c125a75aeb996ae4ae93d626c690b3bb62ef82b7e5bea451388d471507",
+      "size": 17994,
+      "kind": "file",
+      "executable": false
+    },
+    {
       "path": "tools/integration/migrations.py",
-      "sha256": "sha256:644271348ee187500cb9e0d589e1f0230ea2b24ce138daea7a6cf2ca44bb41eb",
-      "size": 25803,
+      "sha256": "sha256:b7be99a7bbc55268c26157b7b8e095061da39be494964b99b8051c3cf938532f",
+      "size": 26010,
       "kind": "file",
       "executable": false
     },
@@ -669,8 +676,8 @@
     },
     {
       "path": "tools/integration/service.py",
-      "sha256": "sha256:ba07f4acb7ab5528e8c1b1dc71bec140bd13ecb91f8a274020c0b2b6f207f766",
-      "size": 11442,
+      "sha256": "sha256:e865f7d2bae8bf5d0021fa03d26f9201b2d485f00d69b90a8652cc54a083a780",
+      "size": 11858,
       "kind": "file",
       "executable": false
     },
@@ -963,7 +970,7 @@
     },
     {
       "path": "tools/resources/examples/project-tooling.example.toml",
-      "sha256": "sha256:b8893a828cd568752fe0aa18c92f15b01cd3b665d1912964942affe12c3fbba7",
+      "sha256": "sha256:d9681d8505b47c1ee9113db8bfa82a9b2383ee79fca57913cc1df49d261f58f3",
       "size": 225,
       "kind": "file",
       "executable": false
@@ -1208,8 +1215,8 @@
     },
     {
       "path": "tools/tests/acceptance/test_tooling_replacement.py",
-      "sha256": "sha256:91b3a7d31f5072fc827b02ef74d2da38de0147eedc8ec3553ca8934b76b0d40a",
-      "size": 21838,
+      "sha256": "sha256:2004adde2bb3645274ba856ffd0a42e03c7f72ee34fecd51f15f3f51f98d713e",
+      "size": 14040,
       "kind": "file",
       "executable": false
     },
@@ -1271,8 +1278,8 @@
     },
     {
       "path": "tools/tests/core/test_filesystem.py",
-      "sha256": "sha256:19b85e7211ba2e2d5e9b8cd52578406c3d1e19e394b17494ec1dd0f114a4cf73",
-      "size": 4727,
+      "sha256": "sha256:af5d28dd45de5effc6e379c398cb3c58f7f523f66343af3643362b0b5f59a460",
+      "size": 4988,
       "kind": "file",
       "executable": false
     },
@@ -1340,16 +1347,23 @@
       "executable": false
     },
     {
+      "path": "tools/tests/integration/test_export.py",
+      "sha256": "sha256:e149321c02f976c5a9d4e941648b58a13d2e15f99ad5334bc544a4a8e0db60b9",
+      "size": 12366,
+      "kind": "file",
+      "executable": false
+    },
+    {
       "path": "tools/tests/integration/test_migration_workflow.py",
-      "sha256": "sha256:f9ef32aa04ff0fdb98a7dce4d127fe0342ecd28a6f2d7d06a43e4978a8de765b",
-      "size": 12189,
+      "sha256": "sha256:25f20cdc94e890fc385c3edfd2fbd0d139832ee624ad5a49855e85276fd07f88",
+      "size": 12246,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tests/integration/test_migrations.py",
-      "sha256": "sha256:53a649f8fcb0067c5997ae4c27e1baf1bd221cb403010382dd3b649cdbb55fb3",
-      "size": 13199,
+      "sha256": "sha256:5af11fb10760dacf22b208de7c17f9147f570b3290407df1c501babf7921c446",
+      "size": 13416,
       "kind": "file",
       "executable": false
     },
@@ -1446,8 +1460,8 @@
     },
     {
       "path": "tools/tests/quality/test_rust_analyzer_packaging.py",
-      "sha256": "sha256:33d86d3c16e49fe73ef3405ff3a950d218962ed34cc296a4e8596d2925645800",
-      "size": 6818,
+      "sha256": "sha256:310aad5da12e21def9be8687691d00845c7c0a676e633c0e762a2ee0fa430a5a",
+      "size": 4192,
       "kind": "file",
       "executable": false
     },
@@ -1495,22 +1509,8 @@
     },
     {
       "path": "tools/tests/quality/test_tooling.py",
-      "sha256": "sha256:d646284ef1125e59f1ac936fa4a2b7bd2f3b411dcdc84dc61ee9506d2efe7a34",
-      "size": 20463,
-      "kind": "file",
-      "executable": false
-    },
-    {
-      "path": "tools/tests/quality/test_typescript_ast.py",
-      "sha256": "sha256:73984eae736a498e51db85a263df817a05181dcde2b6d8ccddc4e280f626857a",
-      "size": 4564,
-      "kind": "file",
-      "executable": false
-    },
-    {
-      "path": "tools/tests/test_ci_workflows.py",
-      "sha256": "sha256:e29dbf6bc6599bcec7d38e58075989ff70a16f2021a3a61108db086c7ce34bf7",
-      "size": 34848,
+      "sha256": "sha256:20e858f55e4837634d5d60a4376bfeb3e29aa30ce88c7227a8eae3daa9442b1f",
+      "size": 19440,
       "kind": "file",
       "executable": false
     },
@@ -1530,8 +1530,8 @@
     },
     {
       "path": "tools/tests/test_container_release.py",
-      "sha256": "sha256:f776bacaa7978066153922fcaf3571ae8e0fd2132e076516019ca5597b224ef5",
-      "size": 12746,
+      "sha256": "sha256:f73f2ba11a90fedc8dc027bebf242cabae62e755a602f15e47dd350da451328b",
+      "size": 8938,
       "kind": "file",
       "executable": false
     },
@@ -1586,8 +1586,8 @@
     },
     {
       "path": "tools/tests/test_portable_documentation.py",
-      "sha256": "sha256:61fa2b234b29c9fbf5160763dac6a05553ce75f9acd14a9315e8dad597d2a094",
-      "size": 6698,
+      "sha256": "sha256:2edff81ed34cc17abd606d2efbed609843b579157db0e7be4abc102e1d5b86d3",
+      "size": 5975,
       "kind": "file",
       "executable": false
     },
@@ -1676,5 +1676,5 @@
       "executable": false
     }
   ],
-  "digest": "sha256:0ea416085b70e96d8fbfaa714655a77807b888f0464405f68ef24358e8fc5531"
+  "digest": "sha256:6bd0f398d058633c1cd62367e3109964c6961be60e9c8686ccc542df23f634ea"
 }

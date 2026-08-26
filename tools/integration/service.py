@@ -153,17 +153,27 @@ def run_adapter_action(
 
 
 def run_export(*, output: str | None = None) -> int:
-    """Phase 8 installs the archive writer; fail closed until then."""
+    """Create one deterministic, self-validating portable tooling directory."""
 
-    del output
+    from tools.integration.export import export_portable_tooling
+
+    try:
+        result = export_portable_tooling(
+            output_parent=Path(output) if output is not None else None
+        )
+    except Exception as exc:  # noqa: BLE001 - expected CLI boundary
+        return _emit_error("tooling-export", exc, json_output=False)
     payload = {
         "schema_version": OUTPUT_SCHEMA_VERSION,
         "action": "tooling-export",
-        "status": "NOT_READY",
-        "message": "Portable export is implemented in phase 8.",
+        "status": "EXPORTED",
+        "message": (
+            f"Created {result.path} with {result.file_count} files; "
+            f"manifest {result.manifest_digest}."
+        ),
     }
     _emit(payload, json_output=False, title="Tooling export")
-    return 2
+    return 0
 
 
 def _assessment_payload(

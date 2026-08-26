@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import stat
 import tempfile
+import unicodedata
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
@@ -20,6 +21,7 @@ _WINDOWS_RESERVED_NAMES = {
     *(f"com{index}" for index in range(1, 10)),
     *(f"lpt{index}" for index in range(1, 10)),
 }
+_WINDOWS_INVALID_CHARACTERS = frozenset('<>:"|?*')
 
 
 def safe_relative_path(value: str | os.PathLike[str]) -> str:
@@ -34,6 +36,7 @@ def safe_relative_path(value: str | os.PathLike[str]) -> str:
     if (
         not raw
         or "\x00" in raw
+        or unicodedata.normalize("NFC", raw) != raw
         or "\\" in raw
         or posix.is_absolute()
         or windows.is_absolute()
@@ -42,8 +45,15 @@ def safe_relative_path(value: str | os.PathLike[str]) -> str:
     ):
         raise FilesystemSafetyError(f"Unsafe relative path: {raw!r}.")
     for part in parts:
-        stem = part.split(".", maxsplit=1)[0].casefold()
-        if ":" in part or part.endswith((" ", ".")) or stem in _WINDOWS_RESERVED_NAMES:
+        stem = part.split(".", maxsplit=1)[0].rstrip(" .").casefold()
+        if (
+            any(
+                character in _WINDOWS_INVALID_CHARACTERS or ord(character) < 32
+                for character in part
+            )
+            or part.endswith((" ", "."))
+            or stem in _WINDOWS_RESERVED_NAMES
+        ):
             raise FilesystemSafetyError(
                 f"Path is not portable across supported platforms: {raw!r}."
             )

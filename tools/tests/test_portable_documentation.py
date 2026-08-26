@@ -16,7 +16,6 @@ from tools.core.context import load_context
 from tools.inst import docs_index
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-SOURCE_MARKER = REPOSITORY_ROOT / ".template-tooling-source"
 DOCS_ROOT = load_context(
     project_root=REPOSITORY_ROOT,
     tools_root=REPOSITORY_ROOT / "tools",
@@ -44,10 +43,7 @@ BUILD_SUFFIXES = {
 
 
 def _markdown_files() -> tuple[Path, ...]:
-    portable = tuple(sorted(DOCS_ROOT.rglob("*.md")))
-    if SOURCE_MARKER.is_file():
-        return (REPOSITORY_ROOT / "README.md", *portable)
-    return portable
+    return tuple(sorted(DOCS_ROOT.rglob("*.md")))
 
 
 def _link_path(page: Path, raw_target: str) -> Path | None:
@@ -97,8 +93,6 @@ def test_portable_documentation_has_complete_section_structure() -> None:
 
     assert (DOCS_ROOT / "case-study" / "source" / "de" / "main.tex").is_file()
     assert (DOCS_ROOT / "case-study" / "source" / "en" / "main.tex").is_file()
-    if SOURCE_MARKER.is_file():
-        assert (REPOSITORY_ROOT / "README.md").is_file()
 
 
 def test_portable_documentation_navigation_is_consistent() -> None:
@@ -192,17 +186,6 @@ def test_documentation_tree_contains_no_placeholders_or_build_outputs() -> None:
 
     assert placeholders == []
     assert build_outputs == []
-
-
-@pytest.mark.skipif(
-    not SOURCE_MARKER.is_file(),
-    reason="the repository-only README is intentionally absent from copied tooling",
-)
-def test_root_readme_declares_its_repository_only_export_boundary() -> None:
-    readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8").casefold()
-    assert "repository-only" in readme
-    assert "not included" in readme and "export" in readme
-    assert "# full-stack project template" not in readme
 
 
 @pytest.mark.parametrize("language", ("de", "en"))

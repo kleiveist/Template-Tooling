@@ -9,7 +9,7 @@ field set is exact: unknown or missing fields are rejected.
 
 ```toml
 schema_version = 1
-tooling_version = "0.3.0"
+tooling_version = "0.4.0"
 profile = "web-only"
 optional_features = []
 applied_migrations = []

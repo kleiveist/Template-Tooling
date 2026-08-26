@@ -87,9 +87,11 @@ documentation, fixtures, logs, or acceptance artifacts.
 
 ## Non-goals and reporting
 
-The current tooling does not provide publisher authentication, a signed export, a hostile-code
+The current tooling does not provide publisher authentication, a signed archive, a hostile-code
 sandbox, hermetic product builds, universal dependency rollback, or protection from a privileged
-concurrent process. `tooling export` is intentionally not ready in the current phase.
+concurrent process. `tooling export` creates a deterministic, self-validating directory but does
+not establish who supplied it. The exporter rejects symlinks, case-folding collisions, hidden or
+sensitive runtime objects and every unapproved build/dist artifact before publishing a target.
 
 When reporting a security issue, stop the mutating workflow, preserve the smallest redacted
 reproduction and transaction evidence, identify the affected ownership boundary, and avoid

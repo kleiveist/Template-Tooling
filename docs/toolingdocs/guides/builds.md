@@ -44,6 +44,5 @@ Builds execute product scripts and external toolchains in the live project. They
 generated files and caches and are outside `integrate --full-fix` rollback. Inspect the output,
 checksums where available, and `git diff` before treating an artifact as releasable.
 
-`.dist/` contains product build output. It is never a substitute for
-`tooling export`, which remains unavailable in the current phase. Continue with the
-[release gate](releases.md).
+`.dist/` contains product build output. It is never a substitute for the deterministic
+`tooling export` directory. Continue with the [release gate](releases.md).

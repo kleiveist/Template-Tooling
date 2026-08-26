@@ -61,9 +61,10 @@ python tools/control.py tooling migrate --check --json
 ```
 
 Review the reported old version, new version, pending migration IDs, profile, paths, payload
-consistency, and conflicts. The current production registry has exact managed-payload
-reconciliations for `0.1.0` to `0.2.0`, `0.1.0` to `0.3.0`, and `0.2.0` to `0.3.0`. An
-unregistered version jump fails closed; do not edit state to bypass it.
+consistency, and conflicts. The production registry retains the historical `0.1.0` to `0.2.0`,
+`0.1.0` to `0.3.0`, and `0.2.0` to `0.3.0` paths. The current `0.4.0` payload adds direct
+reconciliations from `0.1.0`, `0.2.0`, and `0.3.0`; it never relies on implicit migration
+chaining. An unregistered version jump fails closed; do not edit state to bypass it.
 
 A same-version replacement has no version migration to apply. Verification still checks payload
 and recorded integration state for drift.

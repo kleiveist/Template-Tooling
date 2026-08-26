@@ -43,18 +43,25 @@ artifact.
 Run the applicable tests and builds before this gate, inspect every warning, and verify artifact
 checksums and signatures using the target platform's release process.
 
-## Portable tooling release limit
+## Export the portable tooling
 
 ```sh
 python tools/control.py tooling export
+python tools/control.py tooling export --output PATH
 ```
 
-This command is registered but intentionally returns `NOT_READY` in the current phase. There is
-no supported CLI path yet for publishing a portable tooling package. `.dist/` product artifacts
-are not tooling exports.
+The default output parent is the current directory; `--output` must name an existing directory.
+The command stages and validates `Template-Tooling-<version>/`, normalizes file metadata, and
+publishes it only if no case-insensitive destination already exists. It never merges or replaces
+an earlier export.
 
-Until export and its CI acceptance gate are implemented, a tooling update must be transferred as
-one reviewed `tools/` plus `docs/toolingdocs/` pair from a trusted, pinned repository revision.
-The included payload manifest verifies self-consistency only; it does not authenticate the
-source. Follow the [folder replacement guide](folder-replacement.md) and never combine files from
-different revisions.
+The result contains exactly `tools/` and `docs/toolingdocs/`. Source-only tests, repository files,
+Git metadata, local state, dependency environments, logs, caches and build intermediates are not
+included. The one verified Rust analyzer WASM and the Tauri `build/` source directory are narrow
+policy exceptions. Symlinks, hidden runtime objects, case-folding collisions and any other
+`dist/` object fail closed.
+
+The included payload manifest verifies the exported bytes and relocation-independent paths; it
+does not authenticate the source or sign the directory. Publish checksums/signatures separately,
+start from a trusted pinned revision, follow the [folder replacement guide](folder-replacement.md),
+and never combine files from different exports.

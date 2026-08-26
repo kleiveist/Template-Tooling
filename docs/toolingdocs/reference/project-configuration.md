@@ -11,7 +11,7 @@ replacement of `tools/` and `docs/toolingdocs/`. Its current schema is 1.
 schema_version = 1
 
 [tooling]
-version = "0.3.0"
+version = "0.4.0"
 
 [project]
 name = "example-project"
