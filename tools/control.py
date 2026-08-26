@@ -30,12 +30,11 @@ release = importlib.import_module("tools.inst.release")
 run = importlib.import_module("tools.inst.run")
 run_test = importlib.import_module("tools.inst.run_test")
 stop = importlib.import_module("tools.inst.stop")
-profile_cli = importlib.import_module("tools.profiles.cli")
 profile_runtime = importlib.import_module("tools.profiles.runtime")
 quality_control = importlib.import_module("tools.quality.control")
 tauri_build = importlib.import_module("tools.tauri.build")
 tauri_control = importlib.import_module("tools.tauri.control")
-template_lifecycle_cli = importlib.import_module("tools.template_lifecycle.cli")
+integration_cli = importlib.import_module("tools.integration.cli")
 control_parser = importlib.import_module("tools.control_parser")
 
 Handler = Callable[[argparse.Namespace], int]
@@ -154,7 +153,6 @@ def _handle_container(args: argparse.Namespace) -> int:
 
 def _handlers() -> dict[str, Handler]:
     return {
-        "init": profile_cli.main,
         "doctor": doctor.main,
         "install": install.main,
         "console": _handle_console,
@@ -170,7 +168,8 @@ def _handlers() -> dict[str, Handler]:
         "stop": stop.main,
         "test": _handle_test,
         "tauri": tauri_control.main,
-        "template": template_lifecycle_cli.main,
+        "integrate": integration_cli.main,
+        "tooling": integration_cli.main,
     }
 
 

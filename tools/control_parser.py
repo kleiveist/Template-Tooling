@@ -5,9 +5,9 @@ import sys
 
 from tools import logger
 from tools.inst import configuration, db
+from tools.integration import cli as integration_cli
 from tools.quality import control as quality_control
 from tools.tauri import control as tauri_control
-from tools.template_lifecycle import cli as template_lifecycle_cli
 
 
 class HelpFormatter(argparse.RawDescriptionHelpFormatter):
@@ -25,10 +25,11 @@ class ControlParser(argparse.ArgumentParser):
 
 
 ROOT_HELP = """
-One entry point for the complete project lifecycle.
+One entry point for portable project tooling.
 
-Need a derived project from the master template?
-  init     Generate a profile-based scaffold in .generated/<profile-id> or --target-dir.
+Integrate a copied tools/ and docs/ directory:
+  1. integrate --check      Detect the project and print a read-only plan.
+  2. integrate --full-fix   Apply the complete plan transactionally.
 
 Recommended workflow after returning to the project:
   1. doctor   Check tools, dependencies and occupied ports.
@@ -49,15 +50,17 @@ Groups with their own command maps:
   python tools/control.py docs
   python tools/control.py quality
   python tools/control.py tauri
-  python tools/control.py template
+  python tools/control.py integrate --check
+  python tools/control.py tooling
   python tools/control.py version
   python tools/control.py release
 """
 
 ROOT_EXAMPLES = """
 examples:
-  python tools/control.py init
-  python tools/control.py init --profile web-only --dry-run
+  python tools/control.py integrate --check
+  python tools/control.py integrate --full-fix
+  python tools/control.py tooling verify
   python tools/control.py doctor
   python tools/control.py install
   python tools/control.py run --detach
@@ -71,7 +74,6 @@ examples:
   python tools/control.py db current
   python tools/control.py docs index --dry-run
   python tools/control.py tauri
-  python tools/control.py template status
 
 Compatibility:
   The former aliases --doctor, --install, --run, --stop, --test and --build remain available.
@@ -107,7 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="<command>",
     )
 
-    _add_project_parser(subparsers)
+    integration_cli.configure_parser(subparsers, formatter_class=HelpFormatter)
     _add_environment_parsers(subparsers)
     _add_build_parser(subparsers)
     _add_platform_parsers(subparsers)
@@ -116,49 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_test_parser(subparsers)
     _add_quality_parser(subparsers)
     _add_tauri_parser(subparsers)
-    template_lifecycle_cli.configure_parser(subparsers, formatter_class=HelpFormatter)
     return parser
-
-
-def _add_project_parser(subparsers: argparse._SubParsersAction) -> None:
-    init_parser = subparsers.add_parser(
-        "init",
-        help="generate a derived project from a selected profile",
-        description="Create a profile-based project scaffold from the master template without modifying this repository.",
-        formatter_class=HelpFormatter,
-    )
-    init_parser.add_argument("--profile", help="profile id to generate; omit to choose interactively")
-    init_parser.add_argument(
-        "--with",
-        dest="optional_features",
-        action="append",
-        default=[],
-        metavar="FEATURE",
-        help="add an optional capability; repeat the flag or use comma-separated feature ids",
-    )
-    init_parser.add_argument("--name", dest="project_name", help="project display name")
-    init_parser.add_argument("--slug", dest="project_slug", help="lowercase package/application slug")
-    init_parser.add_argument("--identifier", help="Tauri reverse-domain identifier")
-    init_parser.add_argument(
-        "--target-dir",
-        metavar="PATH",
-        help="destination directory (default: .generated/<profile-id>[-<capability>] below the template root)",
-    )
-    init_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="show the scaffold plan without writing files",
-    )
-    _add_examples(
-        init_parser,
-        """examples:
-  python tools/control.py init
-  python tools/control.py init --profile web-only
-  python tools/control.py init --profile web-cloud --with postgres
-  python tools/control.py init --profile desktop-cloud --target-dir ../desktop-cloud-app
-  python tools/control.py init --profile desktop-cloud --name CustomerApp --identifier com.customer.app
-  python tools/control.py init --profile full-platform --dry-run""",
-    )
 
 
 def _add_environment_parsers(subparsers: argparse._SubParsersAction) -> None:
@@ -174,7 +134,9 @@ def _add_doctor_parser(subparsers: argparse._SubParsersAction) -> None:
         description="Inspect runtimes, dependencies, project files and local ports without changing them.",
         formatter_class=HelpFormatter,
     )
-    doctor_parser.add_argument("--watch", action="store_true", help="repeat checks until interrupted")
+    doctor_parser.add_argument(
+        "--watch", action="store_true", help="repeat checks until interrupted"
+    )
     doctor_parser.add_argument(
         "--interval",
         type=int,
@@ -196,8 +158,12 @@ def _add_install_parser(subparsers: argparse._SubParsersAction) -> None:
         description="Prepare the local frontend, backend and optional E2E environment.",
         formatter_class=HelpFormatter,
     )
-    install_parser.add_argument("--skip-frontend", action="store_true", help="do not run npm install")
-    install_parser.add_argument("--skip-backend", action="store_true", help="do not prepare the Python venv")
+    install_parser.add_argument(
+        "--skip-frontend", action="store_true", help="do not run npm install"
+    )
+    install_parser.add_argument(
+        "--skip-backend", action="store_true", help="do not prepare the Python venv"
+    )
     install_parser.add_argument(
         "--skip-tooling",
         action="store_true",
@@ -304,7 +270,9 @@ def _add_container_build_parser(build_subparsers: argparse._SubParsersAction) ->
         default="all",
         help="image component to build (default: all)",
     )
-    container_build_parser.add_argument("--no-cache", action="store_true", help="disable Docker build cache")
+    container_build_parser.add_argument(
+        "--no-cache", action="store_true", help="disable Docker build cache"
+    )
 
 
 def _add_platform_parsers(subparsers: argparse._SubParsersAction) -> None:
@@ -343,9 +311,15 @@ def _add_container_parser(subparsers: argparse._SubParsersAction) -> None:
         formatter_class=HelpFormatter,
     )
     container_parser.set_defaults(container_parser=container_parser)
-    container_subparsers = container_parser.add_subparsers(dest="container_command", metavar="<action>")
-    container_subparsers.add_parser("doctor", help="check Docker, Compose, and deployment files")
-    container_subparsers.add_parser("validate", help="validate the Compose model without starting services")
+    container_subparsers = container_parser.add_subparsers(
+        dest="container_command", metavar="<action>"
+    )
+    container_subparsers.add_parser(
+        "doctor", help="check Docker, Compose, and deployment files"
+    )
+    container_subparsers.add_parser(
+        "validate", help="validate the Compose model without starting services"
+    )
     _add_examples(
         container_parser,
         "examples:\n  python tools/control.py container doctor\n  python tools/control.py container validate",
@@ -359,9 +333,13 @@ def _add_version_parser(subparsers: argparse._SubParsersAction) -> None:
         description="Read the VERSION source of truth and compare published metadata.",
         formatter_class=HelpFormatter,
     )
-    version_subparsers = version_parser.add_subparsers(dest="version_command", metavar="<action>")
+    version_subparsers = version_parser.add_subparsers(
+        dest="version_command", metavar="<action>"
+    )
     version_subparsers.add_parser("check", help="verify all enabled component versions")
-    version_subparsers.add_parser("sync", help="copy VERSION into enabled component metadata")
+    version_subparsers.add_parser(
+        "sync", help="copy VERSION into enabled component metadata"
+    )
 
 
 def _add_release_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -372,7 +350,9 @@ def _add_release_parser(subparsers: argparse._SubParsersAction) -> None:
         formatter_class=HelpFormatter,
     )
     release_parser.set_defaults(release_parser=release_parser)
-    release_subparsers = release_parser.add_subparsers(dest="release_command", metavar="<action>")
+    release_subparsers = release_parser.add_subparsers(
+        dest="release_command", metavar="<action>"
+    )
     release_subparsers.add_parser("check", help="run the production release gate")
 
 
@@ -412,7 +392,9 @@ def _add_docs_parser(subparsers: argparse._SubParsersAction) -> None:
         description="Check documentation navigation without requiring the external PyGitIndex script.",
         formatter_class=HelpFormatter,
     )
-    docs_check_parser.add_argument("--docs-dir", default="docs", help="documentation directory (default: docs)")
+    docs_check_parser.add_argument(
+        "--docs-dir", default="docs", help="documentation directory (default: docs)"
+    )
     docs_index_parser = docs_subparsers.add_parser(
         "index",
         help="regenerate indices and backlinks with the system PyGitIndex script",
@@ -440,7 +422,9 @@ def _configure_docs_index_parser(docs_index_parser: argparse.ArgumentParser) -> 
         action="store_true",
         help="replace index files instead of updating markers",
     )
-    docs_index_parser.add_argument("--compact", action="store_true", help="list only directory overviews in README")
+    docs_index_parser.add_argument(
+        "--compact", action="store_true", help="list only directory overviews in README"
+    )
     docs_index_parser.add_argument(
         "--no-backlinks",
         action="store_true",
@@ -456,7 +440,9 @@ def _configure_docs_index_parser(docs_index_parser: argparse.ArgumentParser) -> 
         metavar="PATH",
         help="explicit PyGitIndex.py path (otherwise use PYGITINDEX_PATH, PATH or known user locations)",
     )
-    docs_index_parser.add_argument("--docs-dir", default="docs", help="documentation directory (default: docs)")
+    docs_index_parser.add_argument(
+        "--docs-dir", default="docs", help="documentation directory (default: docs)"
+    )
     _add_examples(
         docs_index_parser,
         """examples:
@@ -507,7 +493,9 @@ def _add_service_parsers(subparsers: argparse._SubParsersAction) -> None:
         type=int,
         help="override BACKEND_PORT for stale-listener cleanup",
     )
-    stop_parser.add_argument("--tracked-only", action="store_true", help="do not inspect stale listeners")
+    stop_parser.add_argument(
+        "--tracked-only", action="store_true", help="do not inspect stale listeners"
+    )
     _add_examples(
         stop_parser,
         "examples:\n  python tools/control.py stop\n  python tools/control.py stop --tracked-only",
@@ -528,7 +516,9 @@ def _add_test_parser(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         help="suite to run; use all for the complete configured set",
     )
-    test_parser.add_argument("--no-start", action="store_true", help="do not start services for E2E tests")
+    test_parser.add_argument(
+        "--no-start", action="store_true", help="do not start services for E2E tests"
+    )
     test_parser.add_argument(
         "--report",
         nargs="?",
@@ -536,7 +526,9 @@ def _add_test_parser(subparsers: argparse._SubParsersAction) -> None:
         choices=["md", "markdown", "json", "all", "done"],
         help="write a report, or use '--report done' to remove .report",
     )
-    test_parser.add_argument("--suite-help", action="store_true", help=argparse.SUPPRESS)
+    test_parser.add_argument(
+        "--suite-help", action="store_true", help=argparse.SUPPRESS
+    )
     _add_examples(
         test_parser,
         """suites:
