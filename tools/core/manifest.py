@@ -24,17 +24,23 @@ from tools.core.filesystem import (
 MANIFEST_SCHEMA_VERSION = 1
 MANIFEST_MODES = {"paths", "scope"}
 PROTECTED_DIRECTORIES = {
+    ".build",
     ".cache",
     ".dist",
     ".git",
     ".generated",
+    ".hypothesis",
+    ".mypy_cache",
+    ".nox",
     ".pytest_cache",
     ".report",
     ".ruff_cache",
     ".runtime",
     ".tooling-state",
+    ".tox",
     ".venv",
     "__pycache__",
+    "artifacts",
     "cache",
     "caches",
     "coverage",
@@ -43,9 +49,12 @@ PROTECTED_DIRECTORIES = {
     "log",
     "logs",
     "node_modules",
+    "out",
     "playwright-report",
+    "runtime",
     "target",
     "test-results",
+    "venv",
 }
 SENSITIVE_ROOT_DIRECTORIES = {
     ".data",
@@ -77,19 +86,32 @@ SENSITIVE_FILE_NAMES = {
     "service_account.json",
 }
 PROTECTED_FILE_SUFFIXES = {
+    ".aux",
     ".db",
+    ".fdb_latexmk",
+    ".fls",
+    ".gz",
     ".jks",
     ".key",
     ".keystore",
     ".log",
+    ".out",
     ".p12",
+    ".pdf",
     ".pem",
     ".pfx",
     ".pyc",
     ".pyo",
     ".sqlite",
     ".sqlite3",
+    ".tar",
+    ".tgz",
+    ".tmp",
+    ".toc",
+    ".whl",
+    ".zip",
 }
+PROTECTED_FILE_NAMES = {".coverage", ".ds_store", "coverage.xml", "lcov.info"}
 
 
 class ManifestError(RuntimeError):
@@ -544,7 +566,9 @@ def is_protected_relative_path(relative: str) -> bool:
 def _is_protected_relative(relative: str) -> bool:
     parts = PurePosixPath(relative).parts
     lowered = tuple(part.casefold() for part in parts)
-    if any(part in PROTECTED_DIRECTORIES for part in lowered):
+    if any(
+        part in PROTECTED_DIRECTORIES or part.endswith(".egg-info") for part in lowered
+    ):
         return True
     if any(
         part in SENSITIVE_ROOT_DIRECTORIES or part in SENSITIVE_DIRECTORIES
@@ -556,7 +580,11 @@ def _is_protected_relative(relative: str) -> bool:
         return False
     if name.startswith(".env") or name.endswith(".env"):
         return True
-    if name in SENSITIVE_FILE_NAMES:
+    if (
+        name in SENSITIVE_FILE_NAMES
+        or name in PROTECTED_FILE_NAMES
+        or name.startswith(".coverage.")
+    ):
         return True
     return any(name.endswith(suffix) for suffix in PROTECTED_FILE_SUFFIXES)
 

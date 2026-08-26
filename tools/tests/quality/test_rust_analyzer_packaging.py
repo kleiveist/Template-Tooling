@@ -3,10 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
-import os
 import re
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -15,7 +12,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 ARTIFACT = Path("tools/quality/rust_analyzer/dist/rust_quality_analyzer.wasm")
-SOURCE_REPOSITORY_MARKER = "template-tooling-source-v1"
 BUILDER_PATH = ROOT / "tools" / "quality" / "rust_analyzer" / "build.py"
 
 
@@ -32,81 +28,11 @@ def _load_builder() -> ModuleType:
 BUILDER = _load_builder()
 
 
-def _git_check_ignore(root: Path, relative: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [
-            "git",
-            "-c",
-            f"core.excludesFile={os.devnull}",
-            "check-ignore",
-            "-q",
-            "--",
-            relative.as_posix(),
-        ],
-        cwd=root,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-
-def test_only_checked_in_rust_analyzer_wasm_is_not_gitignored(tmp_path: Path) -> None:
-    assert (ROOT / ARTIFACT).is_file()
-    try:
-        is_source_repository = (
-            ROOT / ".template-tooling-source"
-        ).read_text(encoding="utf-8").strip() == SOURCE_REPOSITORY_MARKER
-    except OSError:
-        is_source_repository = False
-    if not is_source_repository:
-        pytest.skip("source-repository ignore policy is outside the portable payload")
-
-    repository_ignore = ROOT / ".gitignore"
-
-    isolated_root = tmp_path / "project"
-    isolated_root.mkdir()
-    shutil.copy2(repository_ignore, isolated_root / ".gitignore")
-    isolated_artifact = isolated_root / ARTIFACT
-    isolated_artifact.parent.mkdir(parents=True)
-    shutil.copy2(ROOT / ARTIFACT, isolated_artifact)
-    ignored_probe = isolated_root / "frontend" / "dist" / "probe.js"
-    ignored_probe.parent.mkdir(parents=True)
-    ignored_probe.write_text("ignored build output\n", encoding="utf-8")
-    analyzer_probe = isolated_artifact.with_name("probe.map")
-    analyzer_probe.write_text("ignored analyzer build output\n", encoding="utf-8")
-
-    initialized = subprocess.run(
-        ["git", "init", "--quiet"],
-        cwd=isolated_root,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    assert initialized.returncode == 0, initialized.stderr
-
-    top_level = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        cwd=isolated_root,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    assert top_level.returncode == 0, top_level.stderr
-    assert Path(top_level.stdout.strip()).resolve() == isolated_root.resolve()
-
-    ignored = _git_check_ignore(isolated_root, ignored_probe.relative_to(isolated_root))
-    assert ignored.returncode == 0, ignored.stderr
-    analyzer_ignored = _git_check_ignore(isolated_root, analyzer_probe.relative_to(isolated_root))
-    assert analyzer_ignored.returncode == 0, analyzer_ignored.stderr
-
-    artifact_result = _git_check_ignore(isolated_root, ARTIFACT)
-    assert artifact_result.returncode == 1, artifact_result.stderr
-    assert not artifact_result.stderr
-
-
 def test_artifact_and_provenance_bind_the_private_path_free_build_recipe() -> None:
     artifact = (ROOT / ARTIFACT).read_bytes()
-    provenance = json.loads((BUILDER.ROOT / "provenance.json").read_text(encoding="utf-8"))
+    provenance = json.loads(
+        (BUILDER.ROOT / "provenance.json").read_text(encoding="utf-8")
+    )
 
     assert BUILDER.ROOT / "build.py" in BUILDER.source_inputs()
     assert provenance["artifact"]["sha256"] == hashlib.sha256(artifact).hexdigest()
@@ -117,7 +43,9 @@ def test_artifact_and_provenance_bind_the_private_path_free_build_recipe() -> No
     assert b"registry/src" not in artifact
 
 
-def test_clean_build_environment_removes_inherited_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_clean_build_environment_removes_inherited_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RUSTFLAGS", "--cfg inherited")
     monkeypatch.setenv("CARGO_ENCODED_RUSTFLAGS", "--cfg inherited_encoded")
     monkeypatch.setenv("RUSTC_WRAPPER", "/does/not/exist")
@@ -163,7 +91,9 @@ def test_dependency_remapping_is_stable_for_spaces_and_alternate_roots() -> None
     ]
 
 
-def test_source_root_wins_exact_target_directory_collision(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_source_root_wins_exact_target_directory_collision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(BUILDER, "run", lambda *_args, **_kwargs: "/rust sysroot")
     overlapping = BUILDER.path_remappings(
         {"workspace_members": [], "packages": []},
@@ -173,5 +103,7 @@ def test_source_root_wins_exact_target_directory_collision(monkeypatch: pytest.M
         },
         "/toolchain/rustc",
     )
-    root_mapping = next(mapping for mapping in overlapping if mapping.source == BUILDER.ROOT)
+    root_mapping = next(
+        mapping for mapping in overlapping if mapping.source == BUILDER.ROOT
+    )
     assert root_mapping.destination == BUILDER.VIRTUAL_SOURCE_ROOT

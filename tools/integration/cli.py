@@ -76,6 +76,21 @@ def configure_parser(
         "--json", action="store_true", help="emit machine-readable JSON"
     )
 
+    adapter_action = actions.add_parser(
+        "action",
+        help="run one profile-selected adapter capability",
+        formatter_class=formatter_class,
+    )
+    adapter_action.add_argument("adapter", help="selected adapter name")
+    adapter_action.add_argument(
+        "capability",
+        choices=("install", "run", "stop", "test", "build"),
+        help="fixed capability implemented by that adapter",
+    )
+    adapter_action.add_argument(
+        "--json", action="store_true", help="emit machine-readable JSON"
+    )
+
     export = actions.add_parser(
         "export",
         help="create a portable tools/docs export",
@@ -108,6 +123,12 @@ def main(args: argparse.Namespace) -> int:
         )
     if action == "verify":
         return service.run_verify(json_output=bool(args.json))
+    if action == "action":
+        return service.run_adapter_action(
+            adapter_name=args.adapter,
+            capability=args.capability,
+            json_output=bool(args.json),
+        )
     if action == "export":
         return service.run_export(output=getattr(args, "output", None))
     return 2

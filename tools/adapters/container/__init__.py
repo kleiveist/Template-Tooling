@@ -1,6 +1,11 @@
 """Cloud/container project-structure adapter."""
 
-from tools.adapters.base import BaseAdapter, PathRequirement
+from tools.adapters.base import (
+    AdapterActionResult,
+    AdapterCapability,
+    BaseAdapter,
+    PathRequirement,
+)
 from tools.core.context import ProjectContext
 from tools.integration.model import Ownership
 
@@ -8,6 +13,13 @@ from tools.integration.model import Ownership
 class ContainerAdapter(BaseAdapter):
     name = "container"
     feature_ids = ("cloud",)
+    capabilities = frozenset({AdapterCapability.BUILD, AdapterCapability.TEST})
+
+    def test(self, context: ProjectContext) -> AdapterActionResult:
+        return self._run_control_action(context, AdapterCapability.TEST)
+
+    def build(self, context: ProjectContext) -> AdapterActionResult:
+        return self._run_control_action(context, AdapterCapability.BUILD)
 
     def requirements(self, context: ProjectContext) -> tuple[PathRequirement, ...]:
         del context

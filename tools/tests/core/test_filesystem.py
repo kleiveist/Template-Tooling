@@ -33,7 +33,16 @@ from tools.core.filesystem import (
         "nested//empty.txt",
         "trailing/",
         "file:stream",
+        'tools/bad"name.py',
+        "tools/bad<name.py",
+        "tools/bad>name.py",
+        "tools/bad|name.py",
+        "tools/bad?name.py",
+        "tools/bad*name.py",
+        "tools/control\x01name.py",
+        "tools/cafe\u0301.py",
         "NUL.txt",
+        "CON .txt",
     ),
 )
 def test_safe_relative_path_rejects_cross_platform_escapes(value: str) -> None:

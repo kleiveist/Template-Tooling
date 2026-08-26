@@ -6,12 +6,15 @@ from pathlib import Path
 import pytest
 
 from tools.adapters import DEFAULT_REGISTRY, Adapter, build_default_registry
-from tools.adapters.base import AdapterDesiredState, BaseAdapter
+from tools.adapters.base import AdapterDesiredState, BaseAdapter, PathRequirement
 from tools.adapters.registry import AdapterRegistry, AdapterRegistryError
 from tools.core.context import ProjectContext
 from tools.integration.model import (
     IntegrationPlan,
     IntegrationResult,
+    OperationKind,
+    Ownership,
+    StructuredChange,
     VerificationResult,
 )
 from tools.profiles.loader import load_catalog, resolve_profile
@@ -183,6 +186,179 @@ def test_registry_detect_plan_and_verify_are_sorted_and_read_only(
     assert verification.ok
     assert not verification.failures
     assert _tree_payloads(adapter_context.project_root) == before
+
+
+def test_default_frontend_allowlist_is_complete_exact_and_path_aware(
+    adapter_context: ProjectContext,
+) -> None:
+    frontend = DEFAULT_REGISTRY.select_names(("frontend",))
+
+    policy = DEFAULT_REGISTRY.structured_key_allowlist(
+        adapter_context,
+        frontend,
+    )
+
+    assert list(policy) == ["ui/package.json"]
+    assert policy == {
+        "ui/package.json": frozenset(
+            {
+                "scripts.build",
+                "scripts.dev",
+                "scripts.format:check",
+                "scripts.lint",
+                "scripts.tauri",
+                "scripts.test",
+                "scripts.test:e2e",
+                "scripts.typecheck",
+            }
+        )
+    }
+
+
+def test_registry_merges_disjoint_same_path_structured_patches(
+    adapter_context: ProjectContext,
+) -> None:
+    class _BuildScript(BaseAdapter):
+        name = "build-script"
+        feature_ids = ("build-script",)
+
+        def requirements(self, context: ProjectContext) -> tuple[PathRequirement, ...]:
+            del context
+            return (
+                PathRequirement(
+                    "ui/package.json",
+                    Ownership.STRUCTURED,
+                    kind="file",
+                    required=False,
+                    structured_changes=(
+                        StructuredChange("scripts.build", "vite build"),
+                    ),
+                ),
+            )
+
+    class _DevScript(BaseAdapter):
+        name = "dev-script"
+        feature_ids = ("dev-script",)
+
+        def requirements(self, context: ProjectContext) -> tuple[PathRequirement, ...]:
+            del context
+            return (
+                PathRequirement(
+                    "ui/package.json",
+                    Ownership.STRUCTURED,
+                    kind="file",
+                    required=False,
+                    structured_changes=(StructuredChange("scripts.dev", "vite"),),
+                ),
+            )
+
+    adapter_context.paths.frontend.mkdir(parents=True)
+    (adapter_context.paths.frontend / "package.json").write_text(
+        '{"name":"customer-ui"}\n', encoding="utf-8"
+    )
+    adapters = (_BuildScript(), _DevScript())
+    registry = AdapterRegistry(adapters)
+
+    plan = registry.plan(
+        adapter_context,
+        AdapterDesiredState("fixture", ("build-script", "dev-script")),
+        adapters,
+    )
+
+    assert len(plan.operations) == 1
+    operation = plan.operations[0]
+    assert operation.kind is OperationKind.PATCH
+    assert [change.key for change in operation.structured_changes] == [
+        "scripts.build",
+        "scripts.dev",
+    ]
+    assert registry.structured_key_allowlist(adapter_context, adapters) == {
+        "ui/package.json": frozenset({"scripts.build", "scripts.dev"})
+    }
+
+
+def test_registry_rejects_overlapping_structured_key_claims(
+    adapter_context: ProjectContext,
+) -> None:
+    class _FirstScript(BaseAdapter):
+        name = "first-script"
+        feature_ids = ("first-script",)
+
+        def requirements(self, context: ProjectContext) -> tuple[PathRequirement, ...]:
+            del context
+            return (
+                PathRequirement(
+                    "ui/package.json",
+                    Ownership.STRUCTURED,
+                    kind="file",
+                    required=False,
+                    structured_changes=(StructuredChange("scripts.dev", "first"),),
+                ),
+            )
+
+    class _SecondScript(BaseAdapter):
+        name = "second-script"
+        feature_ids = ("second-script",)
+
+        def requirements(self, context: ProjectContext) -> tuple[PathRequirement, ...]:
+            del context
+            return (
+                PathRequirement(
+                    "ui/package.json",
+                    Ownership.STRUCTURED,
+                    kind="file",
+                    required=False,
+                    structured_changes=(StructuredChange("scripts.dev", "second"),),
+                ),
+            )
+
+    adapters = (_FirstScript(), _SecondScript())
+    registry = AdapterRegistry(adapters)
+
+    with pytest.raises(AdapterRegistryError, match="claimed by both"):
+        registry.structured_key_allowlist(adapter_context, adapters)
+
+
+def test_registry_rejects_parent_child_structured_key_claims(
+    adapter_context: ProjectContext,
+) -> None:
+    class _ScriptsTable(BaseAdapter):
+        name = "scripts-table"
+        feature_ids = ("scripts-table",)
+
+        def requirements(self, context: ProjectContext) -> tuple[PathRequirement, ...]:
+            del context
+            return (
+                PathRequirement(
+                    "ui/package.json",
+                    Ownership.STRUCTURED,
+                    kind="file",
+                    required=False,
+                    structured_changes=(StructuredChange("scripts", {}),),
+                ),
+            )
+
+    class _DevScript(BaseAdapter):
+        name = "nested-dev-script"
+        feature_ids = ("nested-dev-script",)
+
+        def requirements(self, context: ProjectContext) -> tuple[PathRequirement, ...]:
+            del context
+            return (
+                PathRequirement(
+                    "ui/package.json",
+                    Ownership.STRUCTURED,
+                    kind="file",
+                    required=False,
+                    structured_changes=(StructuredChange("scripts.dev", "vite"),),
+                ),
+            )
+
+    adapters = (_ScriptsTable(), _DevScript())
+    registry = AdapterRegistry(adapters)
+
+    with pytest.raises(AdapterRegistryError, match="claimed by both"):
+        registry.structured_key_allowlist(adapter_context, adapters)
 
 
 def test_registry_profile_plan_accepts_project_profile(

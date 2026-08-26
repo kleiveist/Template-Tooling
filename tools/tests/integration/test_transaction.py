@@ -51,6 +51,7 @@ def _apply(
     verifier=lambda _root: _verification(),
     *,
     finalizer=None,
+    staged_action=None,
     structured_key_allowlist=None,
 ):
     return apply_transaction(
@@ -59,6 +60,7 @@ def _apply(
             plan,
             verifier,
             report_finalizer=finalizer,
+            staged_action=staged_action,
             structured_key_allowlist=structured_key_allowlist or {},
         )
     )
@@ -103,18 +105,18 @@ def test_transaction_stages_journals_and_commits_tooling_state_last(
     )
     replacements: list[str] = []
     verification_roots: list[Path] = []
-    original_replace = transaction_module._replace_from_stage
+    original_replace = transaction_module._replace_from_frozen
 
-    def recording_replace(target: Path, staging: Path, relative: str) -> None:
+    def recording_replace(target: Path, relative: str, frozen) -> None:
         if target == root:
             replacements.append(relative)
-        original_replace(target, staging, relative)
+        original_replace(target, relative, frozen)
 
     def verifier(target: Path) -> VerificationResult:
         verification_roots.append(target)
         return _verification()
 
-    monkeypatch.setattr(transaction_module, "_replace_from_stage", recording_replace)
+    monkeypatch.setattr(transaction_module, "_replace_from_frozen", recording_replace)
     result = _apply(root, plan, verifier)
 
     assert result.ok
@@ -187,6 +189,277 @@ def test_staged_verification_failure_leaves_target_untouched(tmp_path: Path) -> 
         _apply(root, plan, lambda _root: _verification(False))
 
     assert path.read_bytes() == old
+    assert not (root / ".tooling-state").exists()
+
+
+def test_staged_action_runs_before_verification_and_live_mutation(
+    tmp_path: Path,
+) -> None:
+    root = _project(tmp_path)
+    (root / "tools").mkdir()
+    managed = root / "tools/managed.txt"
+    before = b"before\n"
+    managed.write_bytes(before)
+    events: list[str] = []
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.UPDATE,
+                "tools/managed.txt",
+                Ownership.TOOLING,
+                b"after\n",
+                _digest(before),
+            ),
+        )
+    )
+
+    def staged_action(staging: Path) -> VerificationResult:
+        assert staging != root
+        assert (staging / "tools/managed.txt").read_bytes() == b"after\n"
+        assert managed.read_bytes() == before
+        events.append("action")
+        return VerificationResult(
+            (
+                Finding(
+                    "staged-action",
+                    FindingStatus.PASS,
+                    "isolated action passed",
+                ),
+            )
+        )
+
+    def verifier(target: Path) -> VerificationResult:
+        events.append("verify-live" if target == root else "verify-staging")
+        return _verification()
+
+    result = _apply(root, plan, verifier, staged_action=staged_action)
+
+    assert events == ["action", "verify-staging", "verify-live"]
+    assert managed.read_bytes() == b"after\n"
+    assert tuple(finding.check for finding in result.verification.findings) == (
+        "staged-action",
+        "transaction-fixture",
+    )
+
+
+def test_failed_staged_action_leaves_live_project_unchanged(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    (root / "tools").mkdir()
+    managed = root / "tools/managed.txt"
+    before = b"before\n"
+    managed.write_bytes(before)
+    verifier_calls = 0
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.UPDATE,
+                "tools/managed.txt",
+                Ownership.TOOLING,
+                b"after\n",
+                _digest(before),
+            ),
+        )
+    )
+
+    def staged_action(staging: Path) -> VerificationResult:
+        (staging / "action-artifact.txt").write_text("temporary\n", encoding="utf-8")
+        return VerificationResult(
+            (
+                Finding(
+                    "staged-action",
+                    FindingStatus.FAIL,
+                    "isolated action failed",
+                ),
+            )
+        )
+
+    def verifier(_target: Path) -> VerificationResult:
+        nonlocal verifier_calls
+        verifier_calls += 1
+        return _verification()
+
+    with pytest.raises(IntegrationError, match="Staged action verification failed"):
+        _apply(root, plan, verifier, staged_action=staged_action)
+
+    assert verifier_calls == 0
+    assert managed.read_bytes() == before
+    assert not (root / "action-artifact.txt").exists()
+    assert not (root / ".tooling-state").exists()
+
+
+def test_successful_staged_action_artifacts_are_never_published(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    (root / "tools").mkdir()
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.ADD,
+                "tools/managed.txt",
+                Ownership.TOOLING,
+                b"managed\n",
+            ),
+        )
+    )
+
+    def staged_action(staging: Path) -> VerificationResult:
+        (staging / "node_modules").mkdir()
+        (staging / "node_modules/dependency.js").write_text(
+            "temporary\n", encoding="utf-8"
+        )
+        (staging / "tools/action-cache.bin").write_bytes(b"temporary")
+        return _verification()
+
+    result = _apply(root, plan, staged_action=staged_action)
+
+    assert result.ok
+    assert (root / "tools/managed.txt").read_bytes() == b"managed\n"
+    assert not (root / "node_modules").exists()
+    assert not (root / "tools/action-cache.bin").exists()
+
+
+def test_staged_action_cannot_modify_a_planned_output(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    (root / "tools").mkdir()
+    managed = root / "tools/managed.txt"
+    before = b"before\n"
+    managed.write_bytes(before)
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.UPDATE,
+                "tools/managed.txt",
+                Ownership.TOOLING,
+                b"planned\n",
+                _digest(before),
+            ),
+        )
+    )
+
+    def staged_action(staging: Path) -> VerificationResult:
+        (staging / "tools/managed.txt").write_bytes(b"action-overwrite\n")
+        return _verification()
+
+    with pytest.raises(
+        IntegrationError,
+        match="Staged action or verifier modified a planned integration output",
+    ):
+        _apply(root, plan, staged_action=staged_action)
+
+    assert managed.read_bytes() == before
+    assert not (root / ".tooling-state").exists()
+
+
+def test_staging_verifier_cannot_modify_a_planned_output(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    (root / "tools").mkdir()
+    managed = root / "tools/managed.txt"
+    before = b"before\n"
+    managed.write_bytes(before)
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.UPDATE,
+                "tools/managed.txt",
+                Ownership.TOOLING,
+                b"planned\n",
+                _digest(before),
+            ),
+        )
+    )
+
+    def verifier(target: Path) -> VerificationResult:
+        if target != root:
+            (target / "tools/managed.txt").write_bytes(b"verifier-overwrite\n")
+        return _verification()
+
+    with pytest.raises(
+        IntegrationError,
+        match="Staged action or verifier modified a planned integration output",
+    ):
+        _apply(root, plan, verifier)
+
+    assert managed.read_bytes() == before
+
+
+def test_frozen_output_is_published_even_if_staging_changes_later(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _project(tmp_path)
+    (root / "tools").mkdir()
+    before = b"before\n"
+    managed = root / "tools/managed.txt"
+    managed.write_bytes(before)
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.UPDATE,
+                "tools/managed.txt",
+                Ownership.TOOLING,
+                b"planned\n",
+                _digest(before),
+            ),
+        )
+    )
+    staged_root: Path | None = None
+
+    def staged_action(staging: Path) -> VerificationResult:
+        nonlocal staged_root
+        staged_root = staging
+        return _verification()
+
+    original_write_journal = transaction_module._write_journal
+
+    def mutate_after_freeze(*args, **kwargs):
+        assert staged_root is not None
+        (staged_root / "tools/managed.txt").write_bytes(b"late-overwrite\n")
+        return original_write_journal(*args, **kwargs)
+
+    monkeypatch.setattr(transaction_module, "_write_journal", mutate_after_freeze)
+
+    result = _apply(root, plan, staged_action=staged_action)
+
+    assert result.ok
+    assert managed.read_bytes() == b"planned\n"
+
+
+@pytest.mark.parametrize(
+    ("staged_action", "message"),
+    (
+        (lambda _staging: None, "Staged action returned an invalid result"),
+        (lambda _staging: object(), "Staged action returned an invalid result"),
+        (
+            lambda _staging: (_ for _ in ()).throw(RuntimeError("secret detail")),
+            "Staged action execution failed; target remains unchanged",
+        ),
+    ),
+)
+def test_invalid_or_crashing_staged_action_leaves_live_project_unchanged(
+    tmp_path: Path,
+    staged_action,
+    message: str,
+) -> None:
+    root = _project(tmp_path)
+    (root / "tools").mkdir()
+    managed = root / "tools/managed.txt"
+    before = b"before\n"
+    managed.write_bytes(before)
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.UPDATE,
+                "tools/managed.txt",
+                Ownership.TOOLING,
+                b"planned\n",
+                _digest(before),
+            ),
+        )
+    )
+
+    with pytest.raises(IntegrationError, match=message):
+        _apply(root, plan, staged_action=staged_action)
+
+    assert managed.read_bytes() == before
     assert not (root / ".tooling-state").exists()
 
 
@@ -473,6 +746,35 @@ def test_structured_patch_requires_an_explicit_exact_key_allowlist(
 
     assert package.read_bytes() == before
     assert not (root / ".tooling-state").exists()
+
+
+def test_structured_patch_rejects_parent_child_key_policies(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    package = root / "package.json"
+    before = b'{"scripts":{"test":"old","foreign":"keep"}}\n'
+    package.write_bytes(before)
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.PATCH,
+                "package.json",
+                Ownership.STRUCTURED,
+                expected_sha256=_digest(before),
+                structured_changes=(StructuredChange("scripts.test", "new"),),
+            ),
+        )
+    )
+
+    with pytest.raises(IntegrationError, match="allowlist keys overlap"):
+        _apply(
+            root,
+            plan,
+            structured_key_allowlist={
+                "package.json": frozenset({"scripts", "scripts.test"})
+            },
+        )
+
+    assert package.read_bytes() == before
 
 
 @pytest.mark.parametrize(

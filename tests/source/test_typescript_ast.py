@@ -10,38 +10,31 @@ from tools.quality.model import QualityConfig
 from tools.quality.scanner import SourceMetrics, scan_repository
 from tools.quality.typescript import analyze_typescript
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 TYPESCRIPT_RUNTIME = ROOT / "frontend" / "node_modules" / "typescript"
 TYPESCRIPT_SCRIPT = ROOT / "frontend" / "scripts" / "quality-ast.mjs"
-SOURCE_REPOSITORY_MARKER = "template-tooling-source-v1"
-
-
-def _is_source_repository() -> bool:
-    try:
-        return (ROOT / ".template-tooling-source").read_text(
-            encoding="utf-8"
-        ).strip() == SOURCE_REPOSITORY_MARKER
-    except OSError:
-        return False
-
 
 pytestmark = pytest.mark.skipif(
-    not _is_source_repository()
-    or shutil.which("node") is None
+    shutil.which("node") is None
     or not TYPESCRIPT_RUNTIME.exists()
     or not TYPESCRIPT_SCRIPT.is_file(),
-    reason="source-only TypeScript AST integration prerequisites are unavailable",
+    reason="source TypeScript AST integration prerequisites are unavailable",
 )
 
 
-def test_real_typescript_ast_feeds_frontend_architecture(quality_config: QualityConfig) -> None:
+def test_real_typescript_ast_feeds_frontend_architecture(
+    quality_config: QualityConfig,
+) -> None:
     metrics = scan_repository(ROOT, quality_config)
 
     analysis, ast_result = analyze_typescript(ROOT, metrics)
 
     assert ast_result.status == "PASS"
     assert analysis is not None
-    assert any(edge.path == "frontend/src/main.ts" and edge.specifier == "./api/backend" for edge in analysis.imports)
+    assert any(
+        edge.path == "frontend/src/main.ts" and edge.specifier == "./api/backend"
+        for edge in analysis.imports
+    )
     assert any(function.symbol == "readRootDotenv" for function in analysis.functions)
     architecture = architecture_result(ROOT, quality_config, metrics, analysis)
     assert architecture.status == "PASS"
@@ -54,11 +47,15 @@ def _prepare_typescript_tooling(tmp_path: Path) -> Path:
     scripts.mkdir(parents=True)
     (scripts / "quality-ast.mjs").symlink_to(ROOT / "frontend/scripts/quality-ast.mjs")
     (frontend / "node_modules").mkdir()
-    (frontend / "node_modules/typescript").symlink_to(TYPESCRIPT_RUNTIME, target_is_directory=True)
+    (frontend / "node_modules/typescript").symlink_to(
+        TYPESCRIPT_RUNTIME, target_is_directory=True
+    )
     return frontend
 
 
-def test_real_typescript_ast_qualifies_same_named_methods_by_class(tmp_path: Path) -> None:
+def test_real_typescript_ast_qualifies_same_named_methods_by_class(
+    tmp_path: Path,
+) -> None:
     frontend = _prepare_typescript_tooling(tmp_path)
     source = frontend / "src/classes.ts"
     source.parent.mkdir()
@@ -72,10 +69,15 @@ def test_real_typescript_ast_qualifies_same_named_methods_by_class(tmp_path: Pat
 
     assert result.status == "PASS"
     assert analysis is not None
-    assert [function.symbol for function in analysis.functions] == ["First.refresh", "Second.refresh"]
+    assert [function.symbol for function in analysis.functions] == [
+        "First.refresh",
+        "Second.refresh",
+    ]
 
 
-def test_real_typescript_ast_qualifies_namespace_object_and_anonymous_class_symbols(tmp_path: Path) -> None:
+def test_real_typescript_ast_qualifies_namespace_object_and_anonymous_class_symbols(
+    tmp_path: Path,
+) -> None:
     frontend = _prepare_typescript_tooling(tmp_path)
     source = frontend / "src/scopes.ts"
     source.parent.mkdir()
@@ -88,13 +90,20 @@ def test_real_typescript_ast_qualifies_namespace_object_and_anonymous_class_symb
         "const Right = { measured() {} };\n",
         encoding="utf-8",
     )
-    metric = SourceMetrics(source, "frontend/src/scopes.ts", 6, frozenset(range(1, 7)), ())
+    metric = SourceMetrics(
+        source, "frontend/src/scopes.ts", 6, frozenset(range(1, 7)), ()
+    )
 
     analysis, result = analyze_typescript(tmp_path, [metric])
 
     assert result.status == "PASS"
     assert analysis is not None
-    assert {class_metric.symbol for class_metric in analysis.classes} == {"A.Service", "B.Service", "X", "Y"}
+    assert {class_metric.symbol for class_metric in analysis.classes} == {
+        "A.Service",
+        "B.Service",
+        "X",
+        "Y",
+    }
     assert {function.symbol for function in analysis.functions} == {
         "A.Service.run",
         "A.measured",

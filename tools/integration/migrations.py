@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Iterable, Mapping
 from collections.abc import Mapping as MappingABC
@@ -21,6 +22,8 @@ from tools.integration.planner import ObservedResource, safe_relative_path
 
 MIGRATION_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _SHA256 = re.compile(r"(?:sha256:)?[0-9a-f]{64}")
+_MANAGED_PAYLOAD_VERSION_PATH = "tools/VERSION"
+_MANAGED_PAYLOAD_MANIFEST_PATH = "tools/PORTABLE-PAYLOAD.json"
 
 
 def _duplicate(values: Iterable[str]) -> str | None:
@@ -218,6 +221,7 @@ class Migration:
     structured_key_allowlist: (
         tuple[StructuredKeyAllowlist, ...] | Mapping[str, Iterable[str]]
     ) = ()
+    reconciles_managed_payload: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "operations", tuple(self.operations))
@@ -244,6 +248,10 @@ class Migration:
                 f"Duplicate structured migration allowlist path: {duplicate}."
             )
         object.__setattr__(self, "structured_key_allowlist", policies)
+        if not isinstance(self.reconciles_managed_payload, bool):
+            raise MigrationError(
+                "Migration reconciles_managed_payload flag must be boolean."
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,6 +264,12 @@ class MigrationRun:
     @property
     def is_noop(self) -> bool:
         return not self.migrations
+
+    @property
+    def reconciles_managed_payload(self) -> bool:
+        return any(
+            migration.reconciles_managed_payload for migration in self.migrations
+        )
 
 
 class MigrationRegistry:
@@ -304,11 +318,8 @@ class MigrationRegistry:
         )
 
 
-REGISTRY = MigrationRegistry()
-
-
 def build_migration_run(
-    registry: MigrationRegistry = REGISTRY,
+    registry: MigrationRegistry | None = None,
     *,
     source_tooling_version: str,
     target_tooling_version: str,
@@ -318,8 +329,9 @@ def build_migration_run(
 ) -> MigrationRun:
     """Build a shell-free operation sequence; execution belongs to a transaction."""
 
+    selected_registry = REGISTRY if registry is None else registry
     already_applied = tuple(dict.fromkeys(applied))
-    selected = registry.select(
+    selected = selected_registry.select(
         source_tooling_version=source_tooling_version,
         target_tooling_version=target_tooling_version,
         source_state_schema=source_state_schema,
@@ -342,8 +354,6 @@ def validate_migration(migration: Migration) -> None:
         )
     if not isinstance(migration.description, str) or not migration.description.strip():
         raise MigrationError(f"Migration {migration.migration_id} has no description.")
-    if not migration.operations:
-        raise MigrationError(f"Migration {migration.migration_id} has no operations.")
     if not migration.preconditions or not migration.postconditions:
         raise MigrationError(
             f"Migration {migration.migration_id} requires preconditions and postconditions."
@@ -370,6 +380,10 @@ def validate_migration(migration: Migration) -> None:
         raise MigrationError(
             f"Migration {migration.migration_id} has invalid postconditions."
         )
+    if migration.reconciles_managed_payload:
+        _validate_managed_payload_reconciliation(migration)
+    elif not migration.operations:
+        raise MigrationError(f"Migration {migration.migration_id} has no operations.")
     allowed_keys = {
         policy.path: frozenset(policy.keys)
         for policy in migration.structured_key_allowlist
@@ -377,6 +391,65 @@ def validate_migration(migration: Migration) -> None:
     for operation in migration.operations:
         _validate_operation(
             migration.migration_id, operation, allowed_keys=allowed_keys
+        )
+
+
+def _validate_managed_payload_reconciliation(migration: Migration) -> None:
+    """Validate the one operation-free migration form used after folder replacement."""
+
+    if migration.operations:
+        raise MigrationError(
+            f"Migration {migration.migration_id} reconciles a managed payload and must not define operations."
+        )
+    if migration.structured_key_allowlist:
+        raise MigrationError(
+            f"Migration {migration.migration_id} reconciles a managed payload and must not define structured keys."
+        )
+
+    applies = migration.applies
+    source_versions = applies.source_tooling_versions
+    target_version = applies.target_tooling_version
+    source_schemas = applies.source_state_schemas
+    target_schema = applies.target_state_schema
+    if (
+        len(source_versions) != 1
+        or target_version is None
+        or source_versions[0] == target_version
+        or source_versions[0] != source_versions[0].strip()
+        or target_version != target_version.strip()
+    ):
+        raise MigrationError(
+            f"Migration {migration.migration_id} managed-payload reconciliation requires one exact source and one different exact target tooling version."
+        )
+    if (
+        len(source_schemas) != 1
+        or target_schema is None
+        or source_schemas[0] != target_schema
+    ):
+        raise MigrationError(
+            f"Migration {migration.migration_id} managed-payload reconciliation must preserve one exact state schema."
+        )
+
+    expected_digest = hashlib.sha256(f"{target_version}\n".encode()).hexdigest()
+    expected_conditions = (
+        MigrationCondition(
+            ConditionKind.SHA256_EQUALS,
+            _MANAGED_PAYLOAD_VERSION_PATH,
+            Ownership.TOOLING,
+            value=expected_digest,
+        ),
+        MigrationCondition(
+            ConditionKind.PATH_EXISTS,
+            _MANAGED_PAYLOAD_MANIFEST_PATH,
+            Ownership.TOOLING,
+        ),
+    )
+    if (
+        migration.preconditions != expected_conditions
+        or migration.postconditions != expected_conditions
+    ):
+        raise MigrationError(
+            f"Migration {migration.migration_id} managed-payload reconciliation requires identical canonical tools/VERSION and payload-manifest conditions."
         )
 
 
@@ -578,3 +651,56 @@ def _validate_digest(migration_id: str, operation: Operation) -> None:
 
 MigrationRange = MigrationApplicability
 select_migrations = build_migration_run
+
+
+def _managed_payload_reconciliation(
+    source_version: str,
+    target_version: str,
+    *,
+    order: int,
+) -> Migration:
+    target_conditions = (
+        MigrationCondition(
+            ConditionKind.SHA256_EQUALS,
+            _MANAGED_PAYLOAD_VERSION_PATH,
+            Ownership.TOOLING,
+            value=hashlib.sha256(f"{target_version}\n".encode()).hexdigest(),
+        ),
+        MigrationCondition(
+            ConditionKind.PATH_EXISTS,
+            _MANAGED_PAYLOAD_MANIFEST_PATH,
+            Ownership.TOOLING,
+        ),
+    )
+    source_slug = source_version.replace(".", "-")
+    target_slug = target_version.replace(".", "-")
+    return Migration(
+        migration_id=(f"reconcile-managed-payload-{source_slug}-to-{target_slug}"),
+        description=(
+            "Reconcile the externally replaced managed tooling payload with "
+            f"tooling {target_version}"
+        ),
+        order=order,
+        applies=MigrationApplicability(
+            source_tooling_versions=(source_version,),
+            target_tooling_version=target_version,
+            source_state_schemas=(1,),
+            target_state_schema=1,
+        ),
+        operations=(),
+        preconditions=target_conditions,
+        postconditions=target_conditions,
+        reconciles_managed_payload=True,
+    )
+
+
+REGISTRY = MigrationRegistry(
+    (
+        _managed_payload_reconciliation("0.1.0", "0.2.0", order=10),
+        _managed_payload_reconciliation("0.1.0", "0.3.0", order=20),
+        _managed_payload_reconciliation("0.2.0", "0.3.0", order=30),
+        _managed_payload_reconciliation("0.1.0", "0.4.0", order=40),
+        _managed_payload_reconciliation("0.2.0", "0.4.0", order=50),
+        _managed_payload_reconciliation("0.3.0", "0.4.0", order=60),
+    )
+)

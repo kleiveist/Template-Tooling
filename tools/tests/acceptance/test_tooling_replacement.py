@@ -206,13 +206,20 @@ def _replace_fixture_payload(project_root: Path, sandbox: Path) -> None:
     _copy_payload(project_root)
 
 
-def _run_json(project_root: Path, *arguments: str) -> tuple[dict[str, Any], str]:
+def _run_json(
+    project_root: Path,
+    *arguments: str,
+    expected_returncode: int = 0,
+) -> tuple[dict[str, Any], str]:
     environment = os.environ.copy()
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     environment["PYTHONHASHSEED"] = "0"
     environment["PYTHONNOUSERSITE"] = "1"
     environment.pop("PYTHONPYCACHEPREFIX", None)
     environment.pop("PYTHONPATH", None)
+    for key in tuple(environment):
+        if key.startswith("GIT_"):
+            environment.pop(key)
     completed = subprocess.run(
         [sys.executable, "tools/control.py", *arguments],
         cwd=project_root,
@@ -222,7 +229,7 @@ def _run_json(project_root: Path, *arguments: str) -> tuple[dict[str, Any], str]
         env=environment,
         timeout=60,
     )
-    assert completed.returncode == 0, (
+    assert completed.returncode == expected_returncode, (
         f"command failed: {' '.join(arguments)}\n"
         f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
     )

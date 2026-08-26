@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from tools.adapters import AdapterCapability
 from tools.integration.model import VerificationResult
 from tools.integration.report import plan_to_dict, verification_to_dict
 from tools.integration.sanitize import sanitize_text
@@ -103,18 +104,76 @@ def run_verify(
     return 0 if verified else 1
 
 
-def run_export(*, output: str | None = None) -> int:
-    """Phase 8 installs the archive writer; fail closed until then."""
+def run_adapter_action(
+    *,
+    adapter_name: str,
+    capability: str,
+    json_output: bool = False,
+    project_root: Path | None = None,
+    tools_root: Path | None = None,
+) -> int:
+    """Dispatch one explicit technology action through the selected adapter."""
 
-    del output
+    try:
+        requested = AdapterCapability(capability)
+        assessment = assess_project(project_root, tools_root=tools_root)
+        selected = {adapter.name: adapter for adapter in assessment.adapters}
+        adapter = selected.get(adapter_name)
+        if adapter is None:
+            raise ValueError(
+                f"Adapter {adapter_name!r} is not selected by profile "
+                f"{assessment.profile.profile_id!r}."
+            )
+        if requested not in adapter.capabilities:
+            raise ValueError(
+                f"Adapter {adapter_name!r} does not support {requested.value!r}."
+            )
+        action = getattr(adapter, requested.value, None)
+        if not callable(action):
+            raise TypeError(
+                f"Adapter {adapter_name!r} has no callable {requested.value!r} action."
+            )
+        result = action(assessment.context)
+    except Exception as exc:  # noqa: BLE001 - expected CLI boundary
+        return _emit_error("tooling-adapter-action", exc, json_output=json_output)
+
+    payload = {
+        "schema_version": OUTPUT_SCHEMA_VERSION,
+        "action": "tooling-adapter-action",
+        "status": "OK" if result.ok else "FAILED",
+        "adapter": result.adapter,
+        "capability": result.capability.value,
+        "message": sanitize_text(
+            result.message,
+            assessment.context.project_root,
+        )[:1000],
+    }
+    _emit(payload, json_output=json_output, title="Tooling adapter action")
+    return 0 if result.ok else 1
+
+
+def run_export(*, output: str | None = None) -> int:
+    """Create one deterministic, self-validating portable tooling directory."""
+
+    from tools.integration.export import export_portable_tooling
+
+    try:
+        result = export_portable_tooling(
+            output_parent=Path(output) if output is not None else None
+        )
+    except Exception as exc:  # noqa: BLE001 - expected CLI boundary
+        return _emit_error("tooling-export", exc, json_output=False)
     payload = {
         "schema_version": OUTPUT_SCHEMA_VERSION,
         "action": "tooling-export",
-        "status": "NOT_READY",
-        "message": "Portable export is implemented in phase 8.",
+        "status": "EXPORTED",
+        "message": (
+            f"Created {result.path} with {result.file_count} files; "
+            f"manifest {result.manifest_digest}."
+        ),
     }
     _emit(payload, json_output=False, title="Tooling export")
-    return 2
+    return 0
 
 
 def _assessment_payload(
@@ -257,6 +316,7 @@ def _emit_error(action: str, exc: Exception, *, json_output: bool) -> int:
 
 
 __all__ = [
+    "run_adapter_action",
     "run_check",
     "run_export",
     "run_full_fix",

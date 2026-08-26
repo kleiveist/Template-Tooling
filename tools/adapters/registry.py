@@ -15,12 +15,15 @@ from tools.adapters.base import (
     TransactionBoundary,
 )
 from tools.core.context import ProjectContext
+from tools.core.filesystem import FilesystemSafetyError, safe_relative_path
 from tools.integration.model import (
     Conflict,
     IntegrationPlan,
     IntegrationResult,
     Operation,
+    OperationKind,
     Ownership,
+    StructuredChange,
     VerificationResult,
 )
 from tools.integration.planner import DesiredProfile
@@ -184,6 +187,88 @@ class AdapterRegistry:
             adapter for adapter in self.all() if capability in adapter.capabilities
         )
 
+    def structured_key_allowlist(
+        self,
+        context: ProjectContext,
+        adapters: Iterable[Adapter] | None = None,
+    ) -> dict[str, frozenset[str]]:
+        """Return the exact declared structured policy for a selection."""
+
+        selected = self._selection(adapters)
+        by_path: dict[str, set[str]] = {}
+        canonical_paths: dict[str, str] = {}
+        owners: dict[tuple[str, str], str] = {}
+        for adapter in selected:
+            policies = adapter.structured_key_allowlist(context)
+            if not isinstance(policies, dict):
+                raise AdapterRegistryError(
+                    f"Adapter {adapter.name!r} returned an invalid structured allowlist."
+                )
+            for path, keys in policies.items():
+                if not isinstance(path, str):
+                    raise AdapterRegistryError(
+                        f"Adapter {adapter.name!r} returned a non-text policy path."
+                    )
+                try:
+                    normalized_path = safe_relative_path(path)
+                except FilesystemSafetyError as exc:
+                    raise AdapterRegistryError(
+                        f"Adapter {adapter.name!r} returned an unsafe policy path."
+                    ) from exc
+                if normalized_path != path:
+                    raise AdapterRegistryError(
+                        f"Adapter {adapter.name!r} returned a non-canonical policy path."
+                    )
+                collision_key = path.casefold()
+                canonical = canonical_paths.setdefault(collision_key, path)
+                if canonical != path:
+                    raise AdapterRegistryError(
+                        "Selected adapters declared case-colliding structured paths: "
+                        f"{canonical!r} and {path!r}."
+                    )
+                if (
+                    not isinstance(keys, frozenset)
+                    or not keys
+                    or any(
+                        not isinstance(key, str)
+                        or not key
+                        or any(not part for part in key.split("."))
+                        for key in keys
+                    )
+                ):
+                    raise AdapterRegistryError(
+                        f"Adapter {adapter.name!r} returned invalid keys for {path}."
+                    )
+                for key in keys:
+                    overlap = next(
+                        (
+                            (claimed_path, claimed_owner)
+                            for (
+                                claimed_path_key,
+                                claimed_path,
+                            ), claimed_owner in owners.items()
+                            if claimed_path_key == collision_key
+                            and _dotted_keys_overlap(key, claimed_path)
+                        ),
+                        None,
+                    )
+                    if overlap is not None:
+                        claimed_path, previous = overlap
+                        raise AdapterRegistryError(
+                            f"Structured keys {key!r} and {claimed_path!r} at {path!r} "
+                            f"are claimed by both {previous!r} and {adapter.name!r}."
+                        )
+                    owner_key = (collision_key, key)
+                    previous = owners.get(owner_key)
+                    if previous is not None:
+                        raise AdapterRegistryError(
+                            f"Structured key {key!r} at {path!r} is claimed by "
+                            f"both {previous!r} and {adapter.name!r}."
+                        )
+                    owners[owner_key] = adapter.name
+                by_path.setdefault(path, set()).update(keys)
+        return {path: frozenset(by_path[path]) for path in sorted(by_path)}
+
     def detect(
         self,
         context: ProjectContext,
@@ -205,11 +290,8 @@ class AdapterRegistry:
             else self._selection(adapters)
         )
         plans = tuple(adapter.plan(context, desired) for adapter in selected)
-        operations = tuple(
-            sorted(
-                (operation for plan in plans for operation in plan.operations),
-                key=lambda item: (item.path, str(item.kind), item.source_path or ""),
-            )
+        operations = _merge_disjoint_patch_operations(
+            tuple(operation for plan in plans for operation in plan.operations)
         )
         conflicts = tuple(
             sorted(
@@ -217,11 +299,6 @@ class AdapterRegistry:
                 key=lambda item: (item.path, item.code, item.reason),
             )
         )
-        duplicate_operation = _duplicate(item.path.casefold() for item in operations)
-        if duplicate_operation is not None:
-            raise AdapterRegistryError(
-                f"Selected adapters produced overlapping operations: {duplicate_operation}."
-            )
         duplicate_conflicts = _duplicate(
             (item.path.casefold(), item.code, item.reason) for item in conflicts
         )
@@ -273,10 +350,13 @@ class AdapterRegistry:
             )
         if any(item.ownership is Ownership.PROJECT for item in plan.operations):
             raise AdapterRegistryError("Refusing to submit a project-owned write.")
-        duplicate = _duplicate(item.path.casefold() for item in plan.operations)
-        if duplicate is not None:
-            raise AdapterRegistryError(
-                f"Refusing operations that target one path more than once: {duplicate}."
+        normalized_operations = _merge_disjoint_patch_operations(plan.operations)
+        if normalized_operations != plan.operations:
+            plan = IntegrationPlan(
+                profile=plan.profile,
+                desired_features=plan.desired_features,
+                operations=normalized_operations,
+                conflicts=plan.conflicts,
             )
         return self._transaction_boundary.submit(
             context,
@@ -329,6 +409,84 @@ def _deduplicate_conflicts(conflicts: tuple[Conflict, ...]) -> tuple[Conflict, .
     return tuple(
         sorted(selected.values(), key=lambda item: (item.path, item.code, item.reason))
     )
+
+
+def _merge_disjoint_patch_operations(
+    operations: Iterable[Operation],
+) -> tuple[Operation, ...]:
+    """Merge only compatible, key-disjoint PATCHes that share one exact path."""
+
+    by_path: dict[str, list[Operation]] = {}
+    canonical_paths: dict[str, str] = {}
+    for operation in operations:
+        collision_key = operation.path.casefold()
+        canonical = canonical_paths.setdefault(collision_key, operation.path)
+        if canonical != operation.path:
+            raise AdapterRegistryError(
+                "Selected adapters produced case-colliding operation paths: "
+                f"{canonical!r} and {operation.path!r}."
+            )
+        by_path.setdefault(operation.path, []).append(operation)
+
+    merged: list[Operation] = []
+    for path in sorted(by_path):
+        items = by_path[path]
+        if len(items) == 1:
+            merged.append(items[0])
+            continue
+        if any(
+            item.kind is not OperationKind.PATCH
+            or item.ownership is not Ownership.STRUCTURED
+            or item.content is not None
+            or item.source_path is not None
+            for item in items
+        ):
+            raise AdapterRegistryError(
+                f"Selected adapters produced overlapping operations: {path.casefold()}."
+            )
+        preimages = {item.expected_sha256 for item in items}
+        if len(preimages) != 1 or None in preimages:
+            raise AdapterRegistryError(
+                f"Structured PATCHes disagree on the preimage at {path}."
+            )
+        changes: list[StructuredChange] = []
+        claimed: set[str] = set()
+        for item in items:
+            for change in item.structured_changes:
+                overlap = next(
+                    (key for key in claimed if _dotted_keys_overlap(change.key, key)),
+                    None,
+                )
+                if overlap is not None:
+                    raise AdapterRegistryError(
+                        f"Structured PATCHes overlap at {path}: "
+                        f"{overlap!r} and {change.key!r}."
+                    )
+                claimed.add(change.key)
+                changes.append(change)
+        reasons = sorted({item.reason for item in items if item.reason})
+        merged.append(
+            Operation(
+                OperationKind.PATCH,
+                path,
+                Ownership.STRUCTURED,
+                expected_sha256=items[0].expected_sha256,
+                reason="; ".join(reasons),
+                structured_changes=tuple(
+                    sorted(changes, key=lambda change: change.key)
+                ),
+            )
+        )
+    return tuple(
+        sorted(
+            merged,
+            key=lambda item: (item.path, str(item.kind), item.source_path or ""),
+        )
+    )
+
+
+def _dotted_keys_overlap(left: str, right: str) -> bool:
+    return left == right or left.startswith(f"{right}.") or right.startswith(f"{left}.")
 
 
 __all__ = [

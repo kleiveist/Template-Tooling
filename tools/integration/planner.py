@@ -379,6 +379,8 @@ def _plan_structured(
         )
         return
     if observed is None:
+        if not desired.required:
+            return
         conflicts.append(
             Conflict(
                 desired.path,

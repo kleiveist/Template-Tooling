@@ -1,3 +1,7 @@
+<!-- AUTO-GENERATED:backlink START -->
+[← Development](development.md)
+<!-- AUTO-GENERATED:backlink END -->
+
 # Refactor inventory
 
 Status: Phase 1 baseline for `refactor/portable-tooling`
@@ -46,7 +50,7 @@ runtime. The reusable test logic is therefore retained, while the old paths are 
 
 The checkout contains no ignored local `.venv`, `.runtime`, `target`, cache, or log directory.
 The immediately preceding cleanup commit removed four tracked `tools/.runtime` files and 80
-tracked Rust `target/` files. That history is an export/CI regression case, not permission to
+tracked Rust `target/` files. That history is a portable-export regression case, not permission to
 restore those artifacts. The checked-in `tools/quality/rust_analyzer/dist/*.wasm` is an explicit
 runtime resource and is not a Cargo build directory.
 
@@ -58,7 +62,7 @@ runtime resource and is not a Cargo build directory.
 | `.gitignore` | `REFACTOR` | Ignore project-root runtime/state/build outputs and exercise export exclusions. |
 | `LICENSE` | `KEEP` | Repository licence; export has its own `tools/LICENSE`. |
 | `README.md` (missing) | `REPLACE` | New repository-only README; never part of export. |
-| `.github/` (missing) | `REPLACE` | New copy/integrate/idempotency CI, not old master-template workflows. |
+| `.github/` (missing) | `REMOVE` | Hosted push/pull-request workflows are outside the slim copy-paste scope; local acceptance covers copy, integration, idempotence, migration, and export. |
 | `docs/toolingdocs/**/.gitkeep` | `REPLACE` | Replace placeholders with portable architecture, integration, guides, reference, acceptance, and case-study sources. |
 
 ## Runtime module inventory
@@ -170,7 +174,7 @@ implement verification/services/CLI; rewire outside imports; only then delete th
 | Tauri safety/cache/platform tests | `REFACTOR` | Exercise fixture contexts and adapter boundaries instead of root product files. |
 | Install/run/stop/test/report/config/db command tests | `REFACTOR` | Inject fixture contexts and state-root runtime; retain process and cleanup safety. |
 | `test_readme_onboarding.py`, `test_community_ownership.py` | `REMOVE` | Assert old README/community/master-template contents. New repository/docs acceptance replaces them. |
-| Old product/workflow portions of `test_ci_workflows.py`, `test_container_release.py`, `test_frontend_quality_tooling.py`, `test_release_publish.py` | `REPLACE` | New portable export/copy/integration CI and adapter fixture tests. |
+| Old product/workflow portions of `test_ci_workflows.py`, `test_container_release.py`, `test_frontend_quality_tooling.py`, `test_release_publish.py` | `REPLACE` | Local portable export/copy/integration acceptance and adapter fixture tests. |
 | `test_profile_lifecycle_init.py`, `test_template_cli_integration.py` | `REPLACE` | New integration CLI tests; no scaffold initialization or template command. |
 | `tools/tests/template_lifecycle/test_manifest.py`, `test_state.py`, generic safety from `test_apply.py`, `test_migrations.py`, `test_report.py`, `test_verify.py` | `EXTRACT` | Port bounded characterization cases to `tools/tests/core/` and `tools/tests/integration/`. |
 | Lifecycle planner/service/status/integration/generation/CLI tests | `REPLACE` | Desired-profile planning, ownership, check/full-fix/idempotency, and copy fixtures. |

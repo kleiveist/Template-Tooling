@@ -5,6 +5,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from tools.adapters.base import (
+    AdapterActionResult,
+    AdapterCapability,
     AdapterDetection,
     BaseAdapter,
     PathRequirement,
@@ -23,6 +25,13 @@ _FASTAPI_DEPENDENCY = re.compile(r"(?i)(?:^|[^a-z0-9_-])fastapi(?:$|[^a-z0-9_-])
 class BackendAdapter(BaseAdapter):
     name = "backend"
     feature_ids = ("backend",)
+    capabilities = frozenset({AdapterCapability.INSTALL, AdapterCapability.TEST})
+
+    def install(self, context: ProjectContext) -> AdapterActionResult:
+        return self._run_control_action(context, AdapterCapability.INSTALL)
+
+    def test(self, context: ProjectContext) -> AdapterActionResult:
+        return self._run_control_action(context, AdapterCapability.TEST)
 
     def requirements(self, context: ProjectContext) -> tuple[PathRequirement, ...]:
         if context.paths.backend is None:

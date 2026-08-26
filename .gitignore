@@ -18,6 +18,7 @@ docs/toolingdocs/case-study/.build/
 tools/.runtime/
 tools/quality/rust_analyzer/target/
 .tooling-state/
+Template-Tooling-*/
 
 # The verified analyzer binary is a deliberate runtime resource. Other files
 # emitted beside it remain build output.

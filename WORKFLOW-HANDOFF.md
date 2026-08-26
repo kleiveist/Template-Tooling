@@ -1,422 +1,347 @@
-# Portable Tooling – Workflow-Übergabe
+# Portable Tooling – Workflow-Abschluss und Übergabe
 
 - Stand: 26. August 2026
 - Branch: `refactor/portable-tooling`
-- Letzter Implementierungscommit: `30b318c`
-  (`🛡️ Harden portable tooling acceptance and verification`)
+- Letzter gepushter Stand vor dieser Vereinfachung: `97392e1`
+  (`📝 Complete portable tooling workflow handoff`)
+- Aktueller Abschluss: schlanke lokale Copy-Paste-Abnahme ohne Hosted Checks (dieser Commit)
+- Tooling-Version: `0.4.0`
+- Portables Payload-Manifest:
+  `sha256:b818817d30d9df17d43f98d1f6d078e570d56ff07708724f0571471658398b49`
 - Ausgangspunkt: `main` bei `9fefcdd`
-
-Dieses Dokument hält den tatsächlich erreichten Stand fest. Es ersetzt keine Tests und
-erklärt Phase 7 oder Phase 8 nicht vorzeitig für abgeschlossen.
 
 ## Kurzfassung
 
-Die Architektur-, Integrations- und Copy-Test-Grundlage aus Phase 1 bis 6 ist committed.
-Das alte Git-Template-/Lifecycle-Modell wurde entfernt und durch einen portablen,
-profilgesteuerten Projektkontext mit sicherer Planung, Transaktion, Migration,
-Verifikation und persistentem Tooling-State ersetzt.
+Der verbindliche Umbauworkflow von Phase 1 bis Phase 8 ist implementiert, geprüft und in
+atomaren Phasencommits festgehalten. Das Repository stellt jetzt ein eigenständiges,
+profilgesteuertes Tooling bereit, das zusammen mit seiner Dokumentation direkt in bestehende
+Projekte kopiert oder deterministisch exportiert werden kann. Produktdateien, unbekannte Dateien,
+Projektkonfiguration und persistierter Tooling-State bleiben außerhalb des austauschbaren
+Payload-Eigentums.
 
-Noch nicht fertig sind:
+Der Abschlussstand umfasst insbesondere:
 
-1. konkrete Built-in-Adapter, die aus Profilen reale, allowlist-basierte
-   Produktintegrationen und Capabilities ableiten;
-2. der echte transaktionale Executor für notwendige Dependency-, Quality- und
-   Testaktionen innerhalb von `integrate --full-fix`;
-3. eine reale versionierte Produktionsmigration und ein kompletter
-   Copy-Matrix-Wiederholungslauf nach dem letzten WASM-Digest-Fix;
-4. Phase 7: portable Dokumentation, neue deutsche/englische Fallstudie und Root-README;
-5. Phase 8: Exporter, reale CI und abschließende Definition-of-Done-Prüfung.
+- portablen Projektkontext und konfigurierbare Pfade;
+- fünf Profile und capability-basierte Adapter;
+- read-only Check, transaktionalen Full-Fix, reale Aktionen, Backup und Rollback;
+- direkt registrierte Migrationen von `0.1.0`, `0.2.0` und `0.3.0` nach `0.4.0`;
+- unabhängige Copy-, Austausch-, Produkt-Hash- und Idempotenztests;
+- vollständig neue portable Dokumentation sowie deutsche und englische Fallstudienquellen;
+- deterministischen, fail-closed Export mit selbstvalidierendem Payload-Manifest;
+- physische Trennung portabler Kundentests von Source-Repository-Tests;
+- explizite lokale Abnahme für Export, Kopie, Migration, Wiederholung und Kundensmoke;
+- keine GitHub-Actions-Workflows, Push-Checks oder Pull-Request-Checks.
 
-Der Branch ist deshalb ein sicherer Fortsetzungsstand, aber noch kein finaler Release-Stand.
+Innerhalb des beschriebenen Entwicklungsworkflows ist keine Implementierungsphase mehr offen.
+Offen sind nur noch externe Betriebsaktionen: den bereits bestehenden Pull Request #6 in GitHub zu
+schließen, den neuen Abschlusscommit nur bei ausdrücklicher Freigabe zu pushen und gegebenenfalls
+einen signierten Releasekanal außerhalb des Payload-Manifests bereitzustellen.
 
-## Commit- und Phasenübersicht
+## Phasen- und Commitübersicht
 
-| Phase | Commit | Erreichter Stand |
+| Phase | Commit | Abschluss |
 | --- | --- | --- |
-| 1 – Bestandsaufnahme | `1c6cc21` | Alle übernommenen Module und Tests als `KEEP`, `REFACTOR`, `EXTRACT`, `REPLACE` oder `REMOVE` inventarisiert. |
-| 2 – Portabler Kontext | `a3ba1ac` | Zentraler `ProjectContext`, portable Ressourcen-, Dokumentations-, State- und Projektpfade sowie `project-tooling.toml`. |
-| 3 – Lifecycle-Extraktion | `70c4bf3` | Sicherheits-, Manifest-, State-, Planungs-, Migrations-, Transaktions-, Verifikations- und Reporting-Logik extrahiert; altes Template-Git-Modell entfernt. |
-| 4 – Profile und Adapter | `1269695` | Fünf Profile, Feature-Auflösung sowie konservative Adapterverträge, Registry, Detektions-, Planungs- und Verifikationsgrundlage; konkrete Profilintegrationen bleiben offen. |
-| 5 – Integration | `b578eb8` | Lesender Check, Full-Fix-Transaktion für unterstützte Config-/State-Änderungen, Migrationsrahmen, Rollback, Berichte, Eigentumsgrenzen und Idempotenz-Grundlage. |
-| 6 – Copy-Acceptance | `30b318c` | Neun unabhängige Fixture-Typen, alle fünf Profile, gleichversioniger Austauschtest, Runtime-Isolation und Fail-Closed-Regressionsprüfungen; reale Profilmutation und Versionsmigration bleiben offen. |
-| 7 – Dokumentation | offen | Nur Verzeichnisstruktur, Platzhalter und Refactor-Inventar vorhanden. |
-| 8 – Export und CI | offen | CLI-Route vorhanden, Export selbst ist noch ein `NOT_READY`-Stub; `.github/` fehlt. |
+| 1 – Bestandsaufnahme | `1c6cc21` | Übernommene Module und Tests als `KEEP`, `REFACTOR`, `EXTRACT`, `REPLACE` oder `REMOVE` klassifiziert. |
+| 2 – Portabler Kontext | `a3ba1ac` | Zentrale Projekt-, Tooling-, Ressourcen-, Dokumentations- und State-Pfade sowie `project-tooling.toml` eingeführt. |
+| 3 – Lifecycle-Extraktion | `70c4bf3` | Sicherheits- und Transaktionsmechanismen extrahiert; Git-Template-, Drei-Wege-Merge- und `.template/`-Architektur entfernt. |
+| 4 – Profile und Adapter | `1269695` | Fünf Profile, Feature-Auflösung, Adapterverträge, Registry, Detektion, Planung und Verifikation aufgebaut. |
+| 5 – Integration | `b578eb8` | Read-only Check, Full-Fix, State, Driftprüfung, Migration, Transaktion, Rollback und Reports implementiert. |
+| 6 – Acceptance-Härtung | `30b318c` | Unabhängige Copy-Matrix, Austauschbarkeit und Fail-Closed-Prüfungen aufgebaut. |
+| 6 – Funktionsabschluss | `74400bb` | Reale profilgesteuerte Aktionen, Prozessgrenzen, Managed-Payload-Schutz und produktive Migration ergänzt. |
+| 7 – Dokumentation | `ee4d4fe` | Root-README, 30 portable Seiten und vollständig neue bilinguale LaTeX-Fallstudie erstellt. |
+| 8 – Export und Abnahme | `4d86b99` | Deterministischen Export, Testsplit und 0.4.0-Migrationen abgeschlossen; die damals ergänzte Hosted CI wurde durch die spätere Betreiberentscheidung wieder entfernt. |
+| Übergabe | `97392e1` | Den vollständigen Phasenstand dokumentiert und mit dem Remote synchronisiert. |
+| Betriebsvereinfachung | dieser Commit | Push-/PR-Workflows entfernt und den lokalen Copy-Paste-Nachweis beibehalten. |
 
-## Was konkret abgeschlossen ist
+Der frühere Übergabecommit `6b48439` ist durch dieses Dokument fachlich ersetzt.
 
-### Phase 1 – belastbares Inventar
+Die Tooling-Version bleibt `0.4.0`: Der Stand ist weiterhin derselbe noch nicht veröffentlichte
+Releasekandidat, und diese Betreiberentscheidung ändert weder Runtime noch Migrationsgraph. Das
+Payload-Manifest wurde trotzdem neu erzeugt, weil portable Dokumentationsdateien geändert wurden.
 
-- Das Inventar liegt unter
-  `docs/toolingdocs/development/refactor-inventory.md`.
-- Wiederverwendbare Mechanismen wurden von alter Produkt-/Template-Architektur getrennt.
-- Alte README-, Community-, Master-Repository- und Full-Stack-Fixture-Annahmen wurden nicht
-  ungeprüft als neuer Qualitätsmaßstab übernommen.
+## Tatsächlich abgeschlossener Funktionsstand
 
-### Phase 2 – zentrale Pfad- und Kontextarchitektur
+### Portabler Kontext und Eigentumsmodell
 
-- `tools/core/context.py` ist die zentrale Quelle für Projekt-, Tooling-, Ressourcen-,
-  Dokumentations- und State-Pfade.
-- Projektpfade sind über `project-tooling.toml` konfigurierbar.
-- Die Konfiguration bleibt beim späteren Austausch von `tools/` und
-  `docs/toolingdocs/` im Zielprojekt erhalten.
-- Tooling-Virtualenv und Runtime liegen unter `.tooling-state/`, nicht unter `tools/`.
+- `tools/core/context.py` löst Projekt-, Tooling-, Ressourcen-, Dokumentations- und State-Wurzeln
+  aus dem Installationsort und der Projektkonfiguration auf.
+- Die Tooling-Virtualenv liegt unter `.tooling-state/venv`, niemals unter `tools/`.
+- Laufzeitberichte und Logs liegen außerhalb des austauschbaren Tooling-Payloads.
+- Tooling-verwaltete, strukturiert verwaltete und projektverwaltete Dateien besitzen getrennte
+  Schreibregeln.
+- Produktquellen, Fremdschlüssel und unbekannte Dateien werden nicht als Tooling-Eigentum
+  behandelt und nicht automatisch ersetzt.
+- `tools/template_lifecycle/`, die zugehörigen Alt-Tests, `.template/`, alte Repository-IDs und
+  Template-URLs sind nicht mehr vorhanden.
 
-### Phase 3 – neues Integrationsmodell
-
-- `tools/template_lifecycle/` existiert nicht mehr.
-- `tools/tests/template_lifecycle/` existiert nicht mehr.
-- `.template/` und das alte Template-Commit-/Baseline-Modell sind entfernt.
-- Es gibt keine Referenz mehr auf die alte Repository-ID oder URL.
-- Die erhaltenen Sicherheitsmechanismen liegen in `tools/core/` und
-  `tools/integration/`.
-- Die Transaktion besitzt Staging, Preimage-Prüfung, Backup, Nachverifikation,
-  Rollback und Journal/Report.
-- Der Planner vergleicht erkannten Projektzustand mit gewünschtem Profilzustand und
-  führt keinen Drei-Wege-Merge über Produktdateien mehr aus.
-
-### Phase 4 – Profile und Adapter
+### Profile, Adapter und Integrationsablauf
 
 - Alle fünf Profile werden aus `tools/resources/profiles/` geladen:
-  `web-only`, `web-cloud`, `desktop-local`, `desktop-cloud`, `full-platform`.
-- Features werden zentral validiert und aufgelöst.
-- Die Adapter-Registry bündelt Detektion, Planung, Transaktionsübergabe und
-  Verifikation.
-- Frontend, Backend, Tauri, Datenbank, Container, Quality, Testing,
-  Dokumentation, CI und Release sind als Adapterbereiche vorhanden.
+  `web-only`, `web-cloud`, `desktop-local`, `desktop-cloud` und `full-platform`.
+- Adapter kapseln Detektion, Planung, Apply, Verifikation sowie freigegebene Live-Capabilities.
+- `integrate --check` ist bytegenau read-only und erzeugt weder State noch Reports, Bytecode oder
+  Cachedateien.
+- `integrate --full-fix` prüft Preimages, arbeitet in Staging, sichert betroffene Dateien,
+  verifiziert den Kandidaten, veröffentlicht State zuletzt und rollt Fehler zurück.
+- Ein zweiter Check und ein zweiter Full-Fix sind nach erfolgreicher Integration echte No-ops.
+- Live-Aktionen sind feste profilabhängige Capabilities; frei konfigurierte Shellfragmente werden
+  nicht ausgeführt.
 
-Wichtige Einschränkung: Die Built-in-Adapter sind derzeit überwiegend konservative
-Detektionsadapter. Ihre `capabilities` sind leer, ihre Produktanforderungen sind optional,
-und sie erzeugen noch keine konkreten strukturierten Integrationsoperationen für
-`package.json`, `Cargo.toml`, `pyproject.toml`, `tauri.conf.json` oder Workflows. Die
-Adapterarchitektur ist vorhanden; die gewünschte echte Profilintegration ist noch zu
-implementieren und mit kundeneigenen Fremdschlüsseln zu testen.
+### Austausch und Migration
 
-### Phase 5 – sicherer Check-/Full-Fix-Kern
+- Die direkte manuelle Kopie von `tools/` und `docs/toolingdocs/` bleibt unterstützt.
+- `project-tooling.toml`, `.tooling-state/` und Produktdateien überleben den vollständigen Austausch
+  beider verwalteter Verzeichnisse.
+- Die Registry behält die historischen Pfade `0.1.0 → 0.2.0`, `0.1.0 → 0.3.0` und
+  `0.2.0 → 0.3.0`.
+- Für das aktuelle Release existieren direkte, nicht implizit verkettete Reconciliations:
+  `0.1.0 → 0.4.0`, `0.2.0 → 0.4.0` und `0.3.0 → 0.4.0`.
+- Echte, per Commit sowie `tools`- und `docs/toolingdocs`-Tree-ID gepinnte historische Payloads
+  aller drei Vorgängerversionen wurden erfolgreich migriert.
+- Manipulierte oder gemischte Payloads, nicht registrierte Versionssprünge und persistierter
+  Managed-Tree-Drift schlagen fehl, statt still neu baselined zu werden.
 
-- `python tools/control.py integrate --check` ist als lesender Ablauf implementiert.
-- `python tools/control.py integrate --full-fix` plant erneut und wendet unterstützte
-  Änderungen innerhalb einer Rollback-Grenze an.
-- Ein schmutziger Git-Worktree wird vor Mutation abgelehnt; geerbte `GIT_*`-Variablen
-  werden dabei entfernt.
-- Tooling-, projekt- und strukturiert verwaltete Pfade besitzen getrennte Regeln.
-- Produktquellen und unbekannte Dateien werden nicht automatisch überschrieben.
-- Persistierter Managed-Tree-Drift wird nicht still neu baselined.
-- Tooling-Upgrades benötigen eine registrierte Migration.
-- Tooling-Pythonquellen werden vor Mutation read-only kompiliert.
-- Synthetische Erfolgsmeldungen für nicht ausgeführte Aktionen wurden entfernt.
+### Dokumentation und Fallstudie
 
-Wichtige Einschränkung: Benötigt ein Plan echte Dependency-, Quality- oder
-Testaktionen, bricht der Workflow aktuell absichtlich vor jeder Mutation mit
-`Transactional dependency/quality/test action execution is unsupported` ab. Das ist
-sicheres Fail-Closed-Verhalten, erfüllt aber den endgültigen Phase-5-/DoD-Anspruch noch
-nicht. Diese Lücke muss vor der finalen Dokumentation geschlossen werden.
+- `docs/toolingdocs/` enthält 30 verlinkte Seiten zu Architektur, Integration, Guides, Referenz,
+  Entwicklung, Acceptance und Fallstudie.
+- Das Root-`README.md` ist ausdrücklich repository-only und nicht Bestandteil des Exports.
+- Deutsche Quellen liegen unter `docs/toolingdocs/case-study/source/de/`, englische unter
+  `docs/toolingdocs/case-study/source/en/`.
+- Gliederung, Text, Diagramme und Buildlogik wurden neu für das portable Tooling erstellt.
+- Der Build verwendet externe temporäre Verzeichnisse, zwei `pdflatex`-Durchläufe,
+  `SOURCE_DATE_EPOCH`, deaktivierte variable PDF-Metadaten und atomare Ausgabe mit Rollback.
+- Keine PDFs, Aux-, Log- oder sonstigen LaTeX-Buildartefakte liegen im Quellbestand.
 
-### Phase 6 – unabhängige Copy- und Austauschbarkeitstests
+### Deterministischer Export
 
-`tools/tests/acceptance/test_copy_matrix.py` enthält Fixtures für:
+Der produktive Befehl lautet:
 
-- leeres Projekt;
-- Vite;
-- FastAPI;
-- Tauri;
-- bestehendes `desktop-local`;
-- bestehendes `web-cloud`;
-- vollständiges `full-platform`;
-- abweichende Verzeichnisnamen;
-- zusätzliche unbekannte Dateien.
-
-Die Matrix prüft unter anderem:
-
-- Kopie von `tools/` und `docs/` in ein unabhängiges Projekt;
-- `integrate --check`, `--full-fix`, erneuten Check und zweiten No-op-Full-Fix;
-- alle fünf Profile;
-- `tooling verify` und `test --suite all`;
-- unveränderte Produktdatei-Hashes;
-- bytegenaue/read-only Checks und Baum-Snapshots;
-- keine versehentlich kopierten Caches, Logs, Virtualenvs oder Buildartefakte;
-- die einzige erlaubte `dist`-Datei:
-  `tools/quality/rust_analyzer/dist/rust_quality_analyzer.wasm`.
-
-Diese Matrix ist damit bereits ein starkes Sicherheits-, Portabilitäts- und
-Idempotenznetz. Weil die Built-in-Adapter noch keine konkreten strukturierten
-Profiloperationen erzeugen, beweist sie derzeit jedoch überwiegend Config-/State-Verhalten,
-Detektion und Nichtbeschädigung – noch nicht, dass ein unvollständiges Kundenprojekt durch
-das gewählte Profil tatsächlich vollständig integriert wird.
-
-`tools/tests/acceptance/test_tooling_replacement.py` prüft zusätzlich:
-
-- integriertes Zielprojekt;
-- Löschen und erneutes Kopieren von `tools/` und `docs/toolingdocs/`;
-- Erhalt von `project-tooling.toml`, `.tooling-state/` und Produktdateien;
-- Aufruf der Migrations-CLI als gleichversionigen No-op, Verifikation und anschließende
-  Idempotenz;
-- Austausch auch in einem leeren Projekt ohne Produktcode.
-
-Der Test beweist noch kein Upgrade zwischen zwei echten Tooling-Versionen: Die produktive
-Migrations-Registry ist leer, und der aktuelle Replacement-Test erwartet keine pending oder
-applied Migration. Eine registrierte Produktionsmigration mit alter und neuer Copy-Version
-bleibt ein eigener Abnahmepunkt.
-
-Weitere abgeschlossene Härtungen:
-
-- Die versionierte Rust-Analyzer-WASM gehört trotz geschütztem `dist/` zum
-  Managed-Tree-Digest.
-- Mutation oder Löschung dieser WASM erzeugt einen schreibfreien Konflikt.
-- Die WASM wird als exakt erlaubter Snapshot in die isolierte
-  Transaktions-Staging-Kopie übernommen; andere `dist/`-Inhalte bleiben geschützt.
-- Source-repository-spezifische Tests werden über `.template-tooling-source` markiert
-  und gelangen nicht in Zielprojektprüfungen.
-- Geerbte Git-Umgebungsvariablen werden auch in verschachtelten Copy-Fixtures entfernt.
-
-## Letzte bekannte Prüfbelege
-
-Nach dem finalen WASM-Digest-/Staging-Fix:
-
-```text
-tools/tests/integration
-=> 165 passed
-
-WASM mutate/delete regression
-=> 2 passed
-
-tooling replacement acceptance
-=> 2 passed
-
-Ruff lint für alle in Phase 6 geänderten Python-Dateien,
-Ruff format check für sieben gezielt ausgewählte Kern-/Neudateien,
-git diff --check
-=> sauber
+```sh
+python tools/control.py tooling export
+python tools/control.py tooling export --output /existierender/ausgabeordner
 ```
 
-Der Formatnachweis gilt nicht für jede historische, in Phase 6 nur punktuell angepasste
-Testdatei: Ein vollständiger `ruff format --check` über alle geänderten Python-Dateien
-meldet noch sechs legacy-formatierte Dateien. Diese Formatabweichungen wurden nicht mit
-fachlichen Änderungen in denselben Commit gezogen.
-
-Vor diesem letzten, eng begrenzten WASM-Fix waren zusätzlich grün:
+Er erzeugt `Template-Tooling-0.4.0/` mit ausschließlich:
 
 ```text
-vollständige unabhängige Copy-Matrix
-=> 10 passed in 306.66s
-
-vollständige nicht-rekursive Repository-Suite
-=> 918 passed, 116 skipped
+Template-Tooling-0.4.0/
+├── tools/
+└── docs/
+    └── toolingdocs/
 ```
 
-Die Copy-Matrix muss nach dem WASM-Fix noch einmal vollständig ausgeführt werden. Die
-gezielten Regressionstests sind grün, aber der vollständige Fünf-Minuten-Lauf wurde wegen
-des angeordneten Abbruchs nicht wiederholt.
+Der Exporter:
 
-## Was als Nächstes offen ist
+- inventarisiert und hasht den vollständigen portablen Payload;
+- kopiert nur manifestierte reguläre Dateien in ein isoliertes Staging-Verzeichnis;
+- normalisiert logische Modi und Zeitstempel;
+- validiert Manifest und Quelle erneut vor der Veröffentlichung;
+- veröffentlicht atomar ohne ein vorhandenes Ziel zu ersetzen;
+- prüft Staging-Identität und den veröffentlichten Payload erneut;
+- lehnt Symlinks, Sonderdateien, Case-Folding- und Unicode-Normalisierungskollisionen,
+  Windows-ungültige Namen, Secrets, Runtime-, Cache-, Coverage-, Archiv- und Buildreste ab;
+- erlaubt nur die exakte Rust-Analyzer-WASM und das kanonische Tauri-`build/`-Quellverzeichnis als
+  enge Ausnahmen;
+- exportiert weder Root-README noch diese Übergabe, `.git/`, `.github/`, State oder Source-Tests.
 
-### 0. Phase-4-/Phase-5-Lücken schließen und Phase 6 erneut bestätigen
-
-- [ ] Pro Profil und Feature den tatsächlich gewünschten Integrationszustand definieren.
-- [ ] Built-in-Adapter konkrete, allowlist-basierte strukturierte Operationen planen
-      lassen, ohne fremde Scripts, Dependencies oder Schlüssel zu entfernen.
-- [ ] Notwendige Adapter-Capabilities wie `install`, `test` und `build` implementieren;
-      `run` und `stop` nur dort, wo das Profil sie wirklich benötigt.
-- [ ] Einen echten transaktionalen Action-Executor für Dependency-Installation,
-      Quality-Prüfungen und passende Tests entwerfen.
-- [ ] Aktionen müssen innerhalb derselben Staging-/Rollback-Grenze laufen oder ihre
-      externen Effekte explizit reversibel und verifiziert machen.
-- [ ] Keine Shell-Fragmente aus Profilen oder Migrationen ungeprüft ausführen.
-- [ ] Reale Findings statt synthetischer `PASS`-Ergebnisse erzeugen.
-- [ ] Fehlerfälle müssen Projektdateien, Konfiguration und State vollständig zurückrollen.
-- [ ] Acceptance-Fixtures müssen danach echte fehlende Integrationen erzeugen und
-      beweisen, dass Full-Fix sie strukturiert ergänzt.
-- [ ] Mindestens eine echte Produktionsmigration registrieren und einen Copy-Austausch
-      von einer älteren auf die aktuelle Tooling-Version prüfen.
-- [ ] Erst danach die komplette Copy-Matrix erneut laufen lassen.
-- [ ] Diff prüfen und einen eigenen atomaren Commit erstellen.
-
-### 1. Phase 7 – portable Dokumentation
-
-Die folgenden Bereiche müssen mit neuer, ausschließlich portabler Dokumentation gefüllt
-werden:
-
-- [ ] `docs/toolingdocs/architecture/`
-- [ ] `docs/toolingdocs/integration/`
-- [ ] `docs/toolingdocs/guides/`
-- [ ] `docs/toolingdocs/reference/`
-- [ ] `docs/toolingdocs/development/`
-- [ ] `docs/toolingdocs/acceptance/`
-- [ ] `docs/toolingdocs/case-study/`
-
-Erforderliche Inhalte:
-
-- [ ] Projektkontext und Pfadauflösung;
-- [ ] Profile, Features und Adaptermodell;
-- [ ] Eigentumsmodell und strukturierte Änderungen;
-- [ ] Check, Full-Fix, Migration und Verifikation;
-- [ ] State, Drift-Erkennung, Transaktion, Backup und Rollback;
-- [ ] Installation, Tests, Builds, Releases und Tooling-Ordneraustausch;
-- [ ] Copy-Matrix und nachvollziehbare Akzeptanzkriterien;
-- [ ] keine Darstellung als altes Full-Stack-Master-Template.
-
-Zusätzlich:
-
-- [ ] Root-`README.md` neu schreiben; er gehört nur zum Repository und niemals in den
-      portablen Export.
-- [ ] Alte Dokumentationsartefakte nicht kopieren oder nur umbenennen.
-- [ ] Dokumentationslinks, Beispiele und CLI-Ausgaben gegen die echte Implementierung
-      testen.
-
-### 2. Phase 7 – Fallstudie vollständig neu erstellen
-
-- [ ] Neue deutsche LaTeX-Quellen unter
-      `docs/toolingdocs/case-study/source/de/` erstellen.
-- [ ] Neue englische LaTeX-Quellen unter
-      `docs/toolingdocs/case-study/source/en/` erstellen.
-- [ ] Neue Gliederung, Diagramme, Texte und Bewertung erstellen.
-- [ ] Das portable Tooling-Konzept zum Hauptgegenstand machen.
-- [ ] Reproduzierbaren PDF-Build für beide Sprachen implementieren und testen.
-- [ ] Keine PDF-, Aux-, Log- oder sonstigen Buildartefakte im Quellbestand versionieren.
-- [ ] Phase-7-Diff prüfen und atomar committen.
-
-### 3. Phase 8 – Export implementieren
-
-`python tools/control.py tooling export` ist derzeit nur verdrahtet. In
-`tools/integration/service.py` liefert `run_export()` absichtlich `NOT_READY` und Exitcode 2.
-
-Offen:
-
-- [ ] Deterministischen Export unter einem Namen wie
-      `Template-Tooling-<version>/` erzeugen.
-- [ ] Ausschließlich `tools/` und `docs/` exportieren.
-- [ ] `README.md`, `WORKFLOW-HANDOFF.md`, `.git/`, `.github/`, `.tooling-state/`,
-      `.venv/`, `.runtime/`, `target/`, Caches, Logs und Zwischenstände ausschließen.
-- [ ] Innerhalb von `tools/tests/` portable Kundentests von Source-repository-only-Tests
-      trennen. Source-only-Tests entweder verlagern oder explizit vom Export ausschließen;
-      portable Runtime- und Akzeptanztests müssen vollständig erhalten bleiben.
-- [ ] `.template-tooling-source` niemals exportieren. Das aktuelle Fehlen des Markers im
-      Ziel lässt Source-only-Tests nur skippen und ist noch keine abschließende
-      Export-Policy für deren Dateien.
-- [ ] Die versionierte Rust-Analyzer-WASM exakt erlauben, ohne andere `dist/`-Artefakte
-      freizugeben.
-- [ ] Symlinks, Groß-/Kleinschreibungsvarianten, sensible Dateien und versteckte
-      Laufzeitartefakte fail-closed behandeln.
-- [ ] Exportinhalt mit einem Manifest und reproduzierbaren Hashes prüfen.
-- [ ] Direkte manuelle Kopie von `tools/` und `docs/` weiterhin unterstützen.
-
-### 4. Phase 8 – reale CI hinzufügen
-
-`.github/` existiert aktuell nicht.
-
-- [ ] `tools/tests/test_ci_workflows.py` und weitere alte Master-Repository-CI-Erwartungen
-      zuerst durch portable CI-Akzeptanztests ersetzen. Durch den Source-Marker würden
-      diese Tests beim bloßen Anlegen von `.github/workflows/` sonst wieder aktiv und
-      weiterhin alte Dateien wie `ci.yml`, `profiles.yml`, `postgres.yml`, `desktop.yml`
-      und `release.yml` verlangen.
-- [ ] Workflow auf sauberem Checkout ausführen.
-- [ ] Tooling-Umgebung außerhalb von `tools/` aufbauen.
-- [ ] Export erzeugen und dessen Ausschlussregeln prüfen.
-- [ ] Export in ein unabhängiges Fixture kopieren.
-- [ ] Check → Full-Fix → Check → alle passenden Tests → zweiter Full-Fix ausführen.
-- [ ] Produktdatei-Hashes und vollständige Idempotenz prüfen.
-- [ ] Deutsche und englische Fallstudie reproduzierbar bauen.
-- [ ] Keine Source-only-Tests als Kundennachweis zählen.
-
-### 5. Abschließende Definition of Done
-
-- [ ] Vollständige Repository-Suite grün oder jeder Skip ausdrücklich begründet.
-- [ ] Vollständige Copy-Matrix nach allen Änderungen grün.
-- [ ] Alle fünf Profile in unabhängigen Zielprojekten grün.
-- [ ] Tooling-Austausch und registrierte Migration grün.
-- [ ] `integrate --check` nachweislich bytegenau read-only.
-- [ ] Zweiter `--full-fix` nachweislich No-op.
-- [ ] Produktcode und unbekannte Dateien unverändert.
-- [ ] Keine alte Template-ID, URL, `.template/`-State oder Lifecycle-Module vorhanden.
-- [ ] Keine `.venv`, `.runtime`, `target`, Caches oder Logs versioniert oder exportiert.
-- [ ] Root-README und diese Übergabe nicht im Export.
-- [ ] Dokumentation und beide Fallstudienfassungen vollständig und aktuell.
-- [ ] Phase-8-Diff prüfen und atomar committen.
-
-## Empfohlene Fortsetzungsreihenfolge
-
-1. Arbeitsbaum und Branch prüfen:
-
-   ```sh
-   git status --short
-   git log --oneline --decorate -8
-   ```
-
-2. Konkrete Profilintegration in den Built-in-Adaptern implementieren.
-3. Phase-5-Action-Executor mit Fehler-/Rollbacktests fertigstellen.
-4. Eine reale Produktionsmigration und den versionierten Copy-Austausch ergänzen.
-5. Integrationssuite und komplette Copy-Matrix ausführen.
-6. Diff prüfen und den Lückenschluss atomar committen.
-7. Phase 7 vollständig implementieren, testen, prüfen und committen.
-8. Phase 8 vollständig implementieren, in realer CI prüfen und committen.
-9. Abschließenden Export aus einem frischen Checkout testen.
-
-Nach jedem Arbeitsblock gilt weiterhin verbindlich:
+Das Exportmanifest enthält 239 Nutzdateieinträge. Mit dem Manifest selbst umfasst der reale
+Export 240 Dateien. Sein Digest ist:
 
 ```text
-Tests ausführen
-→ Diff prüfen
-→ atomaren Commit erzeugen
-→ erst dann zum nächsten Block wechseln
+sha256:b818817d30d9df17d43f98d1f6d078e570d56ff07708724f0571471658398b49
 ```
 
-## Relevante Testbefehle
+Das Manifest ist eine Selbstkonsistenzprüfung, keine Signatur oder Herausgeberauthentisierung.
 
-Eine lokale Python-Umgebung außerhalb von `tools/` verwenden. Keine
-`tools/.venv` anlegen. `TOOLING_PYTHON` auf einen Interpreter setzen, in dessen Umgebung
-`pytest` und `ruff` installiert sind; nicht auf ein zufälliges System-Python verlassen.
+### Portable Tests und Source-Testsplit
+
+- Alle 67 portablen Testmodule liegen unter `tools/tests/` und sind im Manifest enthalten.
+- Repository-only-Tests liegen physisch unter `tests/source/` und werden nicht exportiert.
+- Der Source-Marker erscheint unter `tools/tests/` nur als Exporter-Negativfixture, nicht als
+  Skipmechanismus für Kundentests.
+- Die frühere Master-Repository-Suite wurde durch lokale Source-, Export-, Copy- und
+  Migrationsprüfungen für den realen portablen Workflow ersetzt.
+- `tests/source/portable_customer_smoke.py` verwendet ausschließlich exportierte Dateien und führt
+  Check → Full-Fix → Check → `test --suite all` → zweiten Full-Fix aus.
+- Vorher/nachher-Hashes belegen, dass Produktdateien unverändert bleiben.
+
+### Schlanke lokale Abnahme
+
+Das Repository enthält bewusst keine GitHub-Actions-Workflowdatei unter
+`.github/workflows/`. Damit startet ein Push oder Pull Request aus diesem Projekt heraus keine
+portablen Linux-/Windows-Checks mehr. Die Qualitätsbelege werden bei Bedarf explizit lokal
+ausgeführt:
+
+- die Copy-Matrix prüft alle Profile und erhält kundenbesessene Dateien;
+- der Austauschtest ersetzt `tools/` und `docs/toolingdocs/` wie im echten Einsatz;
+- die Historientests migrieren die gepinnten Versionen `0.1.0`, `0.2.0` und `0.3.0`;
+- Exporttests und Kundensmoke prüfen die unabhängige kopierte Installation;
+- der Dokumentationscheck prüft die 30 portablen Seiten.
+
+Der read-only Befehl `integrate --check` bleibt absichtlich erhalten: Er ist keine
+Pull-Request-Anforderung, sondern zeigt im bestehenden Zielprojekt vor jeder Änderung Konflikte
+und geplante Operationen an. Auch der portable `ci`-Adapter, Fixtures zum Erhalt fremder
+Kundenworkflows und der separate Release-Publisher bleiben bestehen; keiner davon startet einen
+Hosted Check dieses Repositories.
+
+Ein read-only Abruf der öffentlichen GitHub-Metadaten am 26. August 2026 meldete für `main` und
+`refactor/portable-tooling` jeweils `protected: false`, Status-Check-Enforcement `off` und
+keine Repository-Rulesets. Es gibt damit aktuell kein separates serverseitiges Required-Check-Gate.
+Die bereits gelaufenen roten Jobs bleiben lediglich historische Einträge; nach dem Push dieses
+Commits existiert keine Workflowdatei mehr, die neue Läufe startet.
+
+## Prüfbelege des Abschlussstands
+
+Alle Python-Aufrufe verwendeten die externe Umgebung
+`/tmp/template-tooling-tests.eOArwI/bin/python`, nie `tools/.venv`.
+
+```text
+Vollständige Repository-/Payload-Suite mit Nested-Schutz
+=> 1073 passed, 90 skipped in 81.98s
+
+Unabhängige Copy-Matrix, Tooling-Austausch und echte historische Migrationen
+=> 15 passed in 462.81s (10 Copy-Matrix, 2 Austausch, 3 Migration)
+
+Manifest- und Exporttests
+=> 39 passed in 0.62s
+
+Dokumentationsnavigation
+=> 30 Seiten konsistent
+
+Zwei reale Exporte
+=> jeweils 240 Dateien; Manifest, Payload und Verzeichnisinhalt bytegleich
+
+Unabhängiger lokaler Kundensmoke
+=> portable customer smoke passed
+
+Ruff für die geänderten Python-Dateien
+=> Check und Formatprüfung bestanden
+
+Payload-Manifest
+=> 239 Nutzdateien; sha256:b818817d…8398b49
+```
+
+Die 90 Skips der vollständigen lokalen Suite sind begründet:
+
+- Copy-Matrix und Austauschtest wurden im Nested-Lauf vor Rekursion geschützt und direkt danach
+  separat vollständig bestanden;
+- Tauri-Suiten sind für das aktive Source-Profil ohne Tauri deaktiviert;
+- zwei Prozessprüfungen sind Windows-spezifisch;
+- optionale Source-Baselines beziehungsweise ESLint-/TypeScript-Integrationsvoraussetzungen sind
+  in diesem abgeleiteten Repositoryprofil nicht vorhanden;
+- lokal ist `pdflatex` nicht installiert, daher wurde genau der reale PDF-Kompilationstest
+  übersprungen. Dieser Plattformbeleg ist kein Pflichtteil des schlanken Copy-Paste-Ablaufs.
+
+Zwei reale Exporte aus demselben Source-Stand waren in Dateien, Modi und Zeitstempeln identisch.
+Ein Export bestand anschließend den vollständigen unabhängigen Kundensmoke:
+
+```text
+Export: 240 Dateien, Digest sha256:b818817d…8398b49
+Kundensmoke: portable customer smoke passed
+Dokumentation: 30 Seiten konsistent
+```
+
+## Definition of Done
+
+- [x] `tools/` enthält alle Laufzeitressourcen.
+- [x] `docs/toolingdocs/` enthält die vollständige portable Dokumentation.
+- [x] Kein Laufzeitcode benötigt ein Template-Repository oder dessen Git-Historie.
+- [x] Alte Repository-ID, URL, Lifecycle-Pakete und `.template/`-State sind entfernt.
+- [x] Profile und Konfiguration werden aus `tools/resources/` geladen.
+- [x] Projektpfade sind konfigurierbar.
+- [x] Tooling-Virtualenv, Runtime, Logs, Caches und Builds liegen nicht unter `tools/`.
+- [x] Check ist read-only; Full-Fix besitzt Backup, Verifikation und Rollback.
+- [x] Produktcode und unbekannte Dateien bleiben unverändert.
+- [x] Alle fünf Profile und alle neun geforderten unabhängigen Fixture-Typen sind geprüft.
+- [x] Wiederholung ist idempotent.
+- [x] Austausch von `tools/` und `docs/toolingdocs/` ist geprüft.
+- [x] Echte Vorgängerpayloads besitzen registrierte direkte Migrationen nach `0.4.0`.
+- [x] Dokumentation und beide Fallstudienfassungen wurden neu erstellt.
+- [x] Root-README und Übergabe sind vom Export ausgeschlossen.
+- [x] Export ist deterministisch, selbstvalidierend und fail-closed.
+- [x] Source-only-Tests sind physisch vom Kundenpayload getrennt.
+- [x] Das Repository definiert keine Hosted Push-/Pull-Request-Checks.
+- [x] Der lokale Kundensmoke bildet den realen
+  Kopier-/Check-/Fix-/Test-/Wiederholungslauf ab.
+- [x] Der Abschlussdiff wurde vollständig lokal geprüft und atomar committed.
+
+## Noch offen
+
+### 1. Bestehenden Pull Request #6 in GitHub schließen
+
+Die öffentliche Repositoryansicht zeigt den bereits vorhandenen Pull Request #6 weiterhin als
+offen. Das Löschen der Workflowdatei schließt ihn nicht und entfernt auch keine historischen
+Action-Läufe. Wenn das Repository vollständig ohne Pull-Request-Ablauf betrieben werden soll, ist
+der PR in GitHub zu schließen. Diese externe Kontohandlung wurde nicht automatisch ausgeführt.
+
+### 2. Neuen Abschlusscommit nur nach ausdrücklicher Freigabe pushen
+
+Der Stand `97392e1` war vor dieser Betreiberentscheidung bereits mit
+`origin/refactor/portable-tooling` synchron. Nach diesem lokalen Abschlusscommit ist der Branch
+genau um die Verschlankung voraus. Es wurde bewusst nicht gepusht. Der nächste berechtigte Schritt
+lautet:
+
+```sh
+git push origin refactor/portable-tooling
+```
+
+### 3. Veröffentlichung bleibt eine separate Entscheidung
+
+Der Exportbefehl erstellt ein geprüftes Verzeichnis, publiziert oder signiert es aber nicht. Falls
+ein Release verteilt werden soll, müssen Archivformat, externe Checksummen, Signatur,
+Aufbewahrungsort und Releasefreigabe separat festgelegt werden. Das Payload-Manifest ersetzt diese
+Vertrauenskette nicht.
+
+## Sichere Fortsetzung
+
+```sh
+git status --short --branch
+git rev-list --left-right --count origin/refactor/portable-tooling...HEAD
+git log --oneline --decorate -10
+```
+
+Für lokale Prüfungen weiterhin eine Python-Umgebung außerhalb von `tools/` verwenden:
 
 ```sh
 TOOLING_PYTHON=/absolute/path/to/external-venv/bin/python
 
-PYTHONDONTWRITEBYTECODE=1 "$TOOLING_PYTHON" -m pytest -q -p no:cacheprovider \
-  tools/tests/integration
-
-PYTHONDONTWRITEBYTECODE=1 "$TOOLING_PYTHON" -m pytest -q -p no:cacheprovider \
-  tools/tests/acceptance/test_tooling_replacement.py
-
-PYTHONDONTWRITEBYTECODE=1 "$TOOLING_PYTHON" -m pytest -q -p no:cacheprovider \
-  tools/tests/acceptance/test_copy_matrix.py
-
 TEMPLATE_TOOLING_NESTED_TEST=1 PYTHONDONTWRITEBYTECODE=1 \
   "$TOOLING_PYTHON" -m pytest -q -p no:cacheprovider \
-  tools/tests docs/toolingdocs/case-study/tests
+  tools/tests tests/source docs/toolingdocs/case-study/tests
 
-# Geänderte Python-Dateien der aktuellen Phase explizit an Ruff übergeben.
-PHASE_BASE_COMMIT=30b318c  # Beim nächsten Block auf dessen Ausgangscommit setzen.
-git diff --name-only --diff-filter=ACMR "$PHASE_BASE_COMMIT" -- '*.py' \
-  | xargs -r "$TOOLING_PYTHON" -m ruff check
-git diff --check
+PYTHONDONTWRITEBYTECODE=1 "$TOOLING_PYTHON" -m pytest -q -p no:cacheprovider \
+  tools/tests/acceptance/test_copy_matrix.py \
+  tools/tests/acceptance/test_tooling_replacement.py \
+  tests/source/test_historical_tooling_migration.py
+
+EXPORT_PARENT=/absolute/path/to/empty-export-parent
+CUSTOMER_ROOT=/absolute/path/to/new-customer-fixture
+PYTHONDONTWRITEBYTECODE=1 "$TOOLING_PYTHON" tools/control.py tooling export \
+  --output "$EXPORT_PARENT"
+PYTHONDONTWRITEBYTECODE=1 "$TOOLING_PYTHON" tests/source/portable_customer_smoke.py \
+  --export-root "$EXPORT_PARENT/Template-Tooling-0.4.0" \
+  --work-root "$CUSTOMER_ROOT"
+
+PYTHONDONTWRITEBYTECODE=1 "$TOOLING_PYTHON" tools/control.py docs check
 ```
 
-Hinweis: `ruff check tools` besitzt auf dem historischen Gesamtbestand bekannte, nicht zu
-Phase 6 gehörende Altbefunde. Geänderte Dateien müssen trotzdem vollständig sauber sein;
-unabhängige Altbefunde nicht ungeprüft in denselben Commit ziehen.
-
-## Git- und Synchronisationsstand
-
-Bei Erstellung dieser Übergabe zeigte `origin/refactor/portable-tooling` noch auf
-`b578eb8`. Der Implementierungscommit `30b318c` und der Commit dieser Übergabedatei sind
-lokal und wurden in diesem Arbeitsgang nicht gepusht. Vor einer Übergabe an einen anderen
-Rechner oder Agenten daher ausdrücklich prüfen:
-
-```sh
-git status --short
-git rev-list --left-right --count origin/refactor/portable-tooling...HEAD
-git log --oneline --decorate -8
-```
+Vor einem Release das Manifest nach jeder Änderung innerhalb von `tools/` oder
+`docs/toolingdocs/` als letzten Payload-Schritt neu erzeugen und danach erneut validieren. Eine
+Änderung nur an Root-Dateien oder `tests/source/` gehört nicht zum Payload.
 
 ## Nicht regressieren
 
-- Nie Produktdateien durch eine Tooling-Kopie oder Full-Fix-Operation ersetzen.
-- Keine neue Abhängigkeit von einem Template-Repository, dessen Git-Historie oder
-  Template-Commits einführen.
-- Keine Virtualenv, Runtime, Logs oder Cargo-/Frontend-Buildausgaben unter `tools/`
-  erzeugen.
-- Geschützte Verzeichnisse nicht global freigeben, nur weil die eine kanonische WASM
-  unter `dist/` versioniert ist.
+- Keine Produktdatei durch Kopie, Migration oder Full-Fix vollständig ersetzen.
+- Keine Abhängigkeit von einem Template-Repository, Template-Commit oder Drei-Wege-Merge
+  einführen.
+- Keine Virtualenv, Runtime, Logs, Caches oder Buildausgaben unter `tools/` erzeugen.
+- Geschützte Verzeichnisse nicht global freigeben; WASM und Tauri-`build/` bleiben exakte
+  Ausnahmen.
 - Persistierten Managed-Tree-Drift niemals still akzeptieren oder neu baselinen.
-- Check-/Verify-Befehle dürfen keine Reports, Bytecode-Dateien, Caches oder State-Updates
-  erzeugen.
-- Den Source-only-Marker nie exportieren; Repository-only-Tests vor Phase 8 klar von
-  portablen Kundentests trennen, statt sie nur über den fehlenden Marker zu verstecken.
-- Phase 7 erst dokumentieren, wenn das tatsächliche Full-Fix-Verhalten stabil ist.
+- Read-only Befehle dürfen keine Reports, State-, Bytecode- oder Cachedateien erzeugen.
+- Source-only-Tests niemals wieder unter `tools/tests/` verstecken oder nur per Marker skippen.
+- Keine Hosted Push-/Pull-Request-Workflows wieder einführen, solange das Betriebsmodell bewusst
+  lokal und Copy-Paste-orientiert bleibt.
+- Manifest und Payload niemals aus unterschiedlichen Revisionen kombinieren.
+- Bestehende Exportziele niemals automatisch zusammenführen oder ersetzen.

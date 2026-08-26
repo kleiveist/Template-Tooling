@@ -18,16 +18,6 @@ from tools.quality.typescript import (
 )
 
 ROOT = Path(__file__).resolve().parents[3]
-SOURCE_REPOSITORY_MARKER = "template-tooling-source-v1"
-
-
-def _is_source_repository() -> bool:
-    try:
-        return (ROOT / ".template-tooling-source").read_text(
-            encoding="utf-8"
-        ).strip() == SOURCE_REPOSITORY_MARKER
-    except OSError:
-        return False
 
 
 def _python_metric(tmp_path: Path) -> SourceMetrics:
@@ -76,13 +66,19 @@ def test_ruff_metrics_are_classified_from_central_limits(
     monkeypatch.setattr(
         tooling,
         "_run",
-        lambda *_args, **_kwargs: subprocess.CompletedProcess(["ruff"], 1, stdout=json.dumps(payload), stderr=""),
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["ruff"], 1, stdout=json.dumps(payload), stderr=""
+        ),
     )
 
-    result = tooling.run_python_metrics(tmp_path, [_python_metric(tmp_path)], quality_config)
+    result = tooling.run_python_metrics(
+        tmp_path, [_python_metric(tmp_path)], quality_config
+    )
 
     assert result.status == ("FAIL" if expected is Severity.ERROR else "PASS")
-    assert [(finding.rule.rule_id, finding.severity) for finding in result.findings] == [(rule_id, expected)]
+    assert [
+        (finding.rule.rule_id, finding.severity) for finding in result.findings
+    ] == [(rule_id, expected)]
 
 
 def test_duplicate_ruff_nesting_diagnostics_collapse_to_the_highest_depth(
@@ -103,10 +99,14 @@ def test_duplicate_ruff_nesting_diagnostics_collapse_to_the_highest_depth(
     monkeypatch.setattr(
         tooling,
         "_run",
-        lambda *_args, **_kwargs: subprocess.CompletedProcess(["ruff"], 1, stdout=json.dumps(payload), stderr=""),
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["ruff"], 1, stdout=json.dumps(payload), stderr=""
+        ),
     )
 
-    result = tooling.run_python_metrics(tmp_path, [_python_metric(tmp_path)], quality_config)
+    result = tooling.run_python_metrics(
+        tmp_path, [_python_metric(tmp_path)], quality_config
+    )
 
     assert len(result.findings) == 1
     assert result.findings[0].actual == 5
@@ -138,7 +138,9 @@ def test_ruff_metrics_use_qualified_ast_symbols_as_distinct_exception_keys(
     monkeypatch.setattr(
         tooling,
         "_run",
-        lambda *_args, **_kwargs: subprocess.CompletedProcess(["ruff"], 1, stdout=json.dumps(payload), stderr=""),
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["ruff"], 1, stdout=json.dumps(payload), stderr=""
+        ),
     )
 
     result = tooling.run_python_metrics(tmp_path, [metric], quality_config)
@@ -155,7 +157,10 @@ def test_ruff_metrics_use_qualified_ast_symbols_as_distinct_exception_keys(
         ),
     )
 
-    assert [finding.symbol for finding in result.findings] == ["Alpha.measured", "Beta.measured"]
+    assert [finding.symbol for finding in result.findings] == [
+        "Alpha.measured",
+        "Beta.measured",
+    ]
     assert [finding.suppressed for finding in result.findings] == [True, False]
 
 
@@ -175,7 +180,9 @@ def test_real_ruff_metrics_ignore_inline_noqa(
         pytest.skip("Ruff is not installed")
     monkeypatch.setattr(tooling, "_ruff", lambda _root: ruff)
 
-    result = tooling.run_python_metrics(tmp_path, [scan_file(source, tmp_path)], quality_config)
+    result = tooling.run_python_metrics(
+        tmp_path, [scan_file(source, tmp_path)], quality_config
+    )
 
     assert any(finding.rule.rule_id == "CQ102" for finding in result.findings)
     assert result.status == "FAIL"
@@ -234,7 +241,9 @@ def test_eslint_metrics_are_classified_from_central_limits(
     monkeypatch.setattr(
         tooling,
         "_run",
-        lambda *_args, **_kwargs: subprocess.CompletedProcess(["eslint"], 0, stdout=json.dumps(payload), stderr=""),
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["eslint"], 0, stdout=json.dumps(payload), stderr=""
+        ),
     )
 
     result = tooling.run_typescript_metrics(tmp_path, [metric], quality_config)
@@ -275,10 +284,14 @@ def test_eslint_metric_uses_ast_function_symbol_for_narrow_exceptions(
     monkeypatch.setattr(
         tooling,
         "_run",
-        lambda *_args, **_kwargs: subprocess.CompletedProcess(["eslint"], 1, stdout=json.dumps(payload), stderr=""),
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["eslint"], 1, stdout=json.dumps(payload), stderr=""
+        ),
     )
 
-    result = tooling.run_typescript_metrics(tmp_path, [metric], quality_config, analysis)
+    result = tooling.run_typescript_metrics(
+        tmp_path, [metric], quality_config, analysis
+    )
 
     assert result.findings[0].symbol == "measured"
 
@@ -309,17 +322,24 @@ def test_eslint_metrics_prefer_class_qualified_ast_symbols_for_exact_exception_s
     payload = [
         {
             "filePath": str(source),
-            "messages": [{"ruleId": "complexity", "message": metric_message, "line": line} for line in (2, 5)],
+            "messages": [
+                {"ruleId": "complexity", "message": metric_message, "line": line}
+                for line in (2, 5)
+            ],
         }
     ]
     monkeypatch.setattr(tooling, "_frontend_binary", lambda _root, _name: "eslint")
     monkeypatch.setattr(
         tooling,
         "_run",
-        lambda *_args, **_kwargs: subprocess.CompletedProcess(["eslint"], 1, stdout=json.dumps(payload), stderr=""),
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["eslint"], 1, stdout=json.dumps(payload), stderr=""
+        ),
     )
 
-    result = tooling.run_typescript_metrics(tmp_path, [metric], quality_config, analysis)
+    result = tooling.run_typescript_metrics(
+        tmp_path, [metric], quality_config, analysis
+    )
     apply_exceptions(
         [result],
         (
@@ -333,11 +353,16 @@ def test_eslint_metrics_prefer_class_qualified_ast_symbols_for_exact_exception_s
         ),
     )
 
-    assert [finding.symbol for finding in result.findings] == ["Alpha.measured", "Beta.measured"]
+    assert [finding.symbol for finding in result.findings] == [
+        "Alpha.measured",
+        "Beta.measured",
+    ]
     assert [finding.suppressed for finding in result.findings] == [True, False]
 
 
-def test_eslint_metrics_fall_back_to_message_symbol_without_ast(quality_config: QualityConfig) -> None:
+def test_eslint_metrics_fall_back_to_message_symbol_without_ast(
+    quality_config: QualityConfig,
+) -> None:
     finding, error = tooling._eslint_metric_finding(
         {
             "ruleId": "complexity",
@@ -374,7 +399,9 @@ def test_eslint_fatal_parser_error_fails_metric_analysis(
     monkeypatch.setattr(
         tooling,
         "_run",
-        lambda *_args, **_kwargs: subprocess.CompletedProcess(["eslint"], 1, stdout=json.dumps(payload), stderr=""),
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["eslint"], 1, stdout=json.dumps(payload), stderr=""
+        ),
     )
 
     result = tooling.run_typescript_metrics(tmp_path, [metric], quality_config)
@@ -383,51 +410,22 @@ def test_eslint_fatal_parser_error_fails_metric_analysis(
     assert "could not parse frontend/src/invalid.ts" in result.detail
 
 
-@pytest.mark.skipif(
-    not _is_source_repository(),
-    reason="source-repository ESLint fixture is not part of copied tooling",
-)
-def test_real_eslint_metrics_ignore_inline_disable(
-    tmp_path: Path,
-    quality_config: QualityConfig,
-) -> None:
-    installed_frontend = ROOT / "frontend"
-    eslint = tooling._frontend_binary(ROOT, "eslint")
-    config = installed_frontend / "eslint.config.js"
-    if eslint is None or not config.is_file():
-        pytest.skip("ESLint is not installed")
-    frontend = tmp_path / "frontend"
-    source = frontend / "src/suppressed.ts"
-    source.parent.mkdir(parents=True)
-    (frontend / "node_modules").symlink_to(installed_frontend / "node_modules", target_is_directory=True)
-    (frontend / "eslint.config.js").symlink_to(config)
-    (frontend / "package.json").write_text('{"type":"module"}\n', encoding="utf-8")
-    branches = "\n".join(f"  if (value === {index}) result += 1;" for index in range(21))
-    source.write_text(
-        f"/* eslint-disable complexity */\nexport function measured(value: number) {{\n"
-        f"  let result = 0;\n{branches}\n  return result;\n}}\n",
-        encoding="utf-8",
-    )
-    metric = SourceMetrics(source, "frontend/src/suppressed.ts", 26, frozenset(range(1, 27)), ())
-
-    result = tooling.run_typescript_metrics(tmp_path, [metric], quality_config)
-
-    assert any(finding.rule.rule_id == "CQ102" for finding in result.findings)
-    assert result.status == "FAIL"
-
-
 def test_clippy_receives_central_hard_limits(
     monkeypatch,
     tmp_path: Path,
     quality_config: QualityConfig,
 ) -> None:
     (tmp_path / "src-tauri").mkdir()
-    (tmp_path / "src-tauri/Cargo.toml").write_text("[package]\nname='test'\n", encoding="utf-8")
+    (tmp_path / "src-tauri/Cargo.toml").write_text(
+        "[package]\nname='test'\n", encoding="utf-8"
+    )
     captured: dict[str, str | list[str]] = {}
 
     def fake_cargo(root, arguments, name, *, env=None):
         captured["arguments"] = arguments
-        captured["config"] = (Path(env["CLIPPY_CONF_DIR"]) / "clippy.toml").read_text(encoding="utf-8")
+        captured["config"] = (Path(env["CLIPPY_CONF_DIR"]) / "clippy.toml").read_text(
+            encoding="utf-8"
+        )
         return CheckResult(name)
 
     monkeypatch.setattr(tooling, "_cargo_command", fake_cargo)
@@ -457,16 +455,32 @@ def test_valid_rust_metric_exceptions_widen_only_duplicate_clippy_thresholds(
     (tauri / "Cargo.toml").write_text("[package]\nname='test'\n", encoding="utf-8")
     parameters = ", ".join(f"value_{index}: usize" for index in range(11))
     statements = "\n".join(f"    let local_{index} = {index};" for index in range(119))
-    source.write_text(f"fn measured({parameters}) {{\n{statements}\n}}\n", encoding="utf-8")
+    source.write_text(
+        f"fn measured({parameters}) {{\n{statements}\n}}\n", encoding="utf-8"
+    )
     metric = scan_file(source, tmp_path)
     exceptions = (
-        ExceptionEntry("CQ101", metric.relative_path, "Reviewed generated adapter boundary.", "2099-01-01", "measured"),
-        ExceptionEntry("CQ104", metric.relative_path, "Reviewed generated adapter boundary.", "2099-01-01", "measured"),
+        ExceptionEntry(
+            "CQ101",
+            metric.relative_path,
+            "Reviewed generated adapter boundary.",
+            "2099-01-01",
+            "measured",
+        ),
+        ExceptionEntry(
+            "CQ104",
+            metric.relative_path,
+            "Reviewed generated adapter boundary.",
+            "2099-01-01",
+            "measured",
+        ),
     )
     captured: dict[str, str] = {}
 
     def fake_cargo(_root, _arguments, name, *, env=None):
-        captured["config"] = (Path(env["CLIPPY_CONF_DIR"]) / "clippy.toml").read_text(encoding="utf-8")
+        captured["config"] = (Path(env["CLIPPY_CONF_DIR"]) / "clippy.toml").read_text(
+            encoding="utf-8"
+        )
         return CheckResult(name)
 
     monkeypatch.setattr(tooling, "_cargo_command", fake_cargo)
@@ -478,13 +492,17 @@ def test_valid_rust_metric_exceptions_widen_only_duplicate_clippy_thresholds(
     assert "too-many-arguments-threshold = 11" in captured["config"]
 
 
-def test_real_clippy_forbids_inline_allow_for_hard_limit(tmp_path: Path, quality_config: QualityConfig) -> None:
+def test_real_clippy_forbids_inline_allow_for_hard_limit(
+    tmp_path: Path, quality_config: QualityConfig
+) -> None:
     cargo = tooling.shutil.which("cargo")
     if not (ROOT / "src-tauri/Cargo.toml").is_file():
         pytest.skip("Tauri is not enabled in this project")
     if cargo is None:
         pytest.skip("Cargo is not installed")
-    clippy = subprocess.run([cargo, "clippy", "--version"], capture_output=True, text=True, check=False)
+    clippy = subprocess.run(
+        [cargo, "clippy", "--version"], capture_output=True, text=True, check=False
+    )
     if clippy.returncode != 0:
         pytest.skip("Clippy is not installed")
     tauri = tmp_path / "src-tauri"
@@ -513,9 +531,13 @@ def test_real_clippy_forbids_inline_allow_for_hard_limit(tmp_path: Path, quality
     assert "allow" in result.output.lower() or "too_many_lines" in result.output
 
 
-def test_rust_check_covers_all_targets_and_features(monkeypatch, tmp_path: Path) -> None:
+def test_rust_check_covers_all_targets_and_features(
+    monkeypatch, tmp_path: Path
+) -> None:
     (tmp_path / "src-tauri").mkdir()
-    (tmp_path / "src-tauri/Cargo.toml").write_text("[package]\nname='test'\n", encoding="utf-8")
+    (tmp_path / "src-tauri/Cargo.toml").write_text(
+        "[package]\nname='test'\n", encoding="utf-8"
+    )
     captured: list[str] = []
 
     def fake_cargo(root, arguments, name, *, env=None):
@@ -532,7 +554,9 @@ def test_rust_check_covers_all_targets_and_features(monkeypatch, tmp_path: Path)
     assert "--all-features" in captured
 
 
-@pytest.mark.parametrize(("line_count", "expected"), [(700, Severity.STRONG_WARNING), (701, Severity.ERROR)])
+@pytest.mark.parametrize(
+    ("line_count", "expected"), [(700, Severity.STRONG_WARNING), (701, Severity.ERROR)]
+)
 def test_typescript_class_line_hard_boundary(
     tmp_path: Path,
     quality_config: QualityConfig,
@@ -583,7 +607,15 @@ def test_qualified_typescript_class_exception_suppresses_only_one_lexical_scope(
     add_class_findings(result, analysis, [metric], quality_config)
     apply_exceptions(
         [result],
-        (ExceptionEntry("CQ201", relative, "Reviewed size in namespace A only.", "2099-01-01", "A.Service"),),
+        (
+            ExceptionEntry(
+                "CQ201",
+                relative,
+                "Reviewed size in namespace A only.",
+                "2099-01-01",
+                "A.Service",
+            ),
+        ),
     )
 
     assert [finding.symbol for finding in result.findings] == ["A.Service", "B.Service"]

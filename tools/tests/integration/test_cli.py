@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
+from types import SimpleNamespace
+
 import pytest
 
 from tools import control
+from tools.adapters import AdapterActionResult, AdapterCapability
 from tools.integration import service
 
 
@@ -48,6 +52,7 @@ def test_bare_tooling_prints_maintenance_map(capsys) -> None:
     output = capsys.readouterr().out
     assert "migrate" in output
     assert "verify" in output
+    assert "action" in output
     assert "export" in output
 
 
@@ -58,6 +63,7 @@ def test_bare_tooling_prints_maintenance_map(capsys) -> None:
         (["integrate", "--full-fix"], "run_full_fix"),
         (["tooling", "migrate", "--check"], "run_migrate"),
         (["tooling", "verify"], "run_verify"),
+        (["tooling", "action", "frontend", "test"], "run_adapter_action"),
         (["tooling", "export"], "run_export"),
     ),
 )
@@ -76,3 +82,68 @@ def test_phase_five_commands_dispatch_to_the_portable_service(
 
     assert control.main(arguments) == 0
     assert len(calls) == 1
+
+
+def test_adapter_action_dispatch_carries_only_typed_fixed_arguments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_service(**kwargs: object) -> int:
+        calls.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(service, "run_adapter_action", fake_service)
+
+    assert control.main(["tooling", "action", "frontend", "build", "--json"]) == 0
+    assert calls == [
+        {
+            "adapter_name": "frontend",
+            "capability": "build",
+            "json_output": True,
+        }
+    ]
+
+
+def test_adapter_action_service_invokes_only_a_profile_selected_capability(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    class _Adapter:
+        name = "frontend"
+        capabilities = frozenset({AdapterCapability.TEST})
+
+        def test(self, context: object) -> AdapterActionResult:
+            assert context is fake_context
+            return AdapterActionResult(
+                adapter=self.name,
+                capability=AdapterCapability.TEST,
+                ok=True,
+                message="frontend tests passed",
+            )
+
+    fake_context = SimpleNamespace(project_root=tmp_path)
+    assessment = SimpleNamespace(
+        adapters=(_Adapter(),),
+        context=fake_context,
+        profile=SimpleNamespace(profile_id="web-only"),
+    )
+    monkeypatch.setattr(service, "assess_project", lambda *_args, **_kwargs: assessment)
+
+    code = service.run_adapter_action(
+        adapter_name="frontend",
+        capability="test",
+        json_output=True,
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert code == 0
+    assert payload == {
+        "action": "tooling-adapter-action",
+        "adapter": "frontend",
+        "capability": "test",
+        "message": "frontend tests passed",
+        "schema_version": 1,
+        "status": "OK",
+    }

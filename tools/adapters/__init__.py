@@ -36,6 +36,7 @@ from tools.adapters.registry import (
 from tools.adapters.release import ReleaseAdapter
 from tools.adapters.tauri import TauriAdapter
 from tools.adapters.testing import TestingAdapter
+from tools.integration.model import StructuredChange
 
 
 def default_adapters(
@@ -104,6 +105,7 @@ __all__ = [
     "ReleaseAdapter",
     "RunCapability",
     "StopCapability",
+    "StructuredChange",
     "TauriAdapter",
     "TestCapability",
     "TestingAdapter",
