@@ -1,0 +1,78 @@
+schema_version = 1
+
+[core]
+paths = [
+  "AGENTS.md",
+  "LICENSE",
+  "README.md",
+  "VERSION",
+  ".gitattributes",
+  ".gitignore",
+  "config",
+  "docs",
+  "profiles",
+  "shared",
+  "tools",
+]
+
+[features.frontend]
+name = "Frontend"
+description = "Vite and TypeScript browser frontend"
+paths = ["frontend"]
+
+[features.backend]
+name = "Backend"
+description = "FastAPI backend service"
+paths = [
+  "backend/app/__init__.py",
+  "backend/app/api",
+  "backend/app/config",
+  "backend/app/main.py",
+  "backend/app/services",
+  "backend/pytest.ini",
+  "backend/requirements.txt",
+  "backend/requirements-production.txt",
+  "backend/requirements-production.lock",
+  "backend/tests/api",
+  "backend/tests/config",
+]
+
+[features.tauri]
+name = "Tauri"
+description = "Tauri desktop shell and Rust application scaffold"
+paths = ["src-tauri"]
+requires = ["frontend"]
+
+[features.cloud]
+name = "Cloud"
+description = "Cloud-ready deployment profile metadata"
+paths = [".dockerignore", "deployment"]
+requires = ["backend"]
+
+[features.database]
+name = "SQL database"
+description = "SQLAlchemy 2.x database infrastructure and Alembic migrations"
+paths = [
+  "backend/alembic",
+  "backend/alembic.ini",
+  "backend/app/db",
+  "backend/requirements-database.txt",
+  "backend/requirements-database-production.txt",
+  "backend/requirements-database-production.lock",
+  "backend/tests/db",
+]
+requires = ["backend"]
+optional = true
+
+[features.postgres]
+name = "PostgreSQL"
+description = "PostgreSQL support through the Psycopg 3 driver"
+paths = [
+  "backend/requirements-postgres.txt",
+  "backend/requirements-postgres-production.txt",
+  "backend/requirements-postgres-production.lock",
+  "backend/tests/integration",
+]
+requires = ["database"]
+optional = true
+selectable = true
