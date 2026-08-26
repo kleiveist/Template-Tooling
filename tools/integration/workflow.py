@@ -66,6 +66,27 @@ _MIGRATION_STRUCTURED_NAMES = {
     "pyproject.toml",
     "tauri.conf.json",
 }
+_ACTION_RELEVANT_STRUCTURED_NAMES = _MIGRATION_STRUCTURED_NAMES - {
+    "project-tooling.toml"
+}
+_DEPENDENCY_MANIFEST_NAMES = {
+    "cargo.lock",
+    "cargo.toml",
+    "package-lock.json",
+    "package.json",
+    "pipfile",
+    "pipfile.lock",
+    "pnpm-lock.yaml",
+    "poetry.lock",
+    "pylock.toml",
+    "pyproject.toml",
+    "uv.lock",
+    "yarn.lock",
+}
+_TRANSACTIONAL_ACTION_ORDER = ("dependencies", "quality", "tests")
+_RUST_ANALYZER_RUNTIME = PurePosixPath(
+    "quality/rust_analyzer/dist/rust_quality_analyzer.wasm"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +169,7 @@ def assess_project(
     applied_migrations: tuple[str, ...] | None = None,
     _additional_operations: tuple[Operation, ...] = (),
     _state_observation_override: _StateObservation | None = None,
+    _allow_registered_tooling_upgrade: bool = False,
 ) -> IntegrationAssessment:
     """Detect, resolve, plan, and verify without changing any filesystem entry."""
 
@@ -175,6 +197,16 @@ def assess_project(
     state_observation = _state_observation_override or _observe_state(context)
     if state_observation.conflict is not None:
         conflicts.append(state_observation.conflict)
+    else:
+        drift_conflict = _managed_state_drift_conflict(
+            initial,
+            state_observation,
+            actual_version=actual_version,
+            allow_registered_tooling_upgrade=_allow_registered_tooling_upgrade,
+        )
+        if drift_conflict is not None:
+            conflicts.append(drift_conflict)
+            state_observation = replace(state_observation, conflict=drift_conflict)
 
     migration_ids = (
         tuple(applied_migrations)
@@ -250,6 +282,7 @@ def run_full_fix(
     """Replan and apply all required changes through one rollback boundary."""
 
     initial = assess_project(project_root, tools_root=tools_root)
+    _ensure_tooling_python_sources_valid(initial)
     if initial.plan.conflicts:
         raise IntegrationError(
             "Integration plan contains conflicts; nothing was changed."
@@ -265,11 +298,13 @@ def run_full_fix(
             (*initial.notices, "No changes or actions were required."),
         )
 
+    _ensure_transactional_actions_supported(initial)
     preflight = ensure_clean_git(initial.context.project_root)
     replanned = assess_project(
         initial.context.project_root,
         tools_root=initial.context.tools_root,
     )
+    _ensure_tooling_python_sources_valid(replanned)
     if replanned.plan.conflicts:
         raise IntegrationError(
             "Integration plan contains conflicts after preflight; nothing was changed."
@@ -289,6 +324,7 @@ def run_full_fix(
             ),
         )
 
+    _ensure_transactional_actions_supported(replanned)
     tools_relative = _relative_path(
         replanned.context.project_root,
         replanned.context.tools_root,
@@ -328,6 +364,7 @@ def run_full_fix(
         report_finalizer=finalizer,
         managed_roots=managed_roots,
         post_apply=post_apply,
+        staging_snapshot_paths=(_tooling_runtime_path(tools_relative),),
     )
     if published_reports:
         result = replace(result, report_path=published_reports[-1])
@@ -409,6 +446,11 @@ def assess_migrations(
         applied_migrations=run.resulting_applied_ids,
         _additional_operations=run.operations,
         _state_observation_override=state_override,
+        _allow_registered_tooling_upgrade=_migration_explains_tooling_upgrade(
+            initial,
+            source,
+            run,
+        ),
     )
     if run.migrations:
         pending = ", ".join(migration.migration_id for migration in run.migrations)
@@ -439,6 +481,7 @@ def run_migrations(
         registry=selected_registry,
     )
     assessment = initial.assessment
+    _ensure_tooling_python_sources_valid(assessment)
     if assessment.plan.conflicts:
         raise IntegrationError(
             "Migration plan contains conflicts; nothing was changed."
@@ -455,6 +498,7 @@ def run_migrations(
         )
         return AppliedMigration(applied, ())
 
+    _ensure_transactional_actions_supported(assessment)
     preflight = ensure_clean_git(assessment.context.project_root)
     replanned = assess_migrations(
         assessment.context.project_root,
@@ -462,6 +506,7 @@ def run_migrations(
         registry=selected_registry,
     )
     assessment = replanned.assessment
+    _ensure_tooling_python_sources_valid(assessment)
     if assessment.plan.conflicts:
         raise IntegrationError(
             "Migration plan contains conflicts after preflight; nothing was changed."
@@ -482,6 +527,7 @@ def run_migrations(
         )
         return AppliedMigration(applied, ())
 
+    _ensure_transactional_actions_supported(assessment)
     tools_relative = _relative_path(
         assessment.context.project_root,
         assessment.context.tools_root,
@@ -536,6 +582,7 @@ def run_migrations(
         structured_key_allowlist=_migration_structured_allowlist(
             replanned.run.migrations
         ),
+        staging_snapshot_paths=(_tooling_runtime_path(tools_relative),),
     )
     if published_reports:
         result = replace(result, report_path=published_reports[-1])
@@ -588,6 +635,9 @@ def ensure_clean_git(project_root: Path) -> GitPreflight:
         )
 
     environment = os.environ.copy()
+    for key in tuple(environment):
+        if key.startswith("GIT_"):
+            environment.pop(key)
     environment["GIT_OPTIONAL_LOCKS"] = "0"
     try:
         top = subprocess.run(
@@ -750,6 +800,52 @@ def _observe_state(context: ProjectContext) -> _StateObservation:
     return _StateObservation(state, content, digest, None)
 
 
+def _managed_state_drift_conflict(
+    initial: ProjectContext,
+    observation: _StateObservation,
+    *,
+    actual_version: str,
+    allow_registered_tooling_upgrade: bool,
+) -> Conflict | None:
+    """Reject an unexplained re-baseline of the persisted managed-tree digest."""
+
+    state = observation.state
+    if state is None:
+        return None
+    if not initial.config_exists:
+        return Conflict(
+            STATE_RELATIVE_PATH,
+            Ownership.TOOLING,
+            "tooling state exists without its persisted project configuration",
+            "unverified-managed-tree",
+        )
+
+    baseline_config = replace(
+        initial.config,
+        tooling_version=state.tooling_version,
+        profile=state.profile,
+        optional_features=state.optional_features,
+    )
+    baseline_context = initial.with_config(baseline_config, exists=True)
+    observed_digest = _integration_digest(
+        baseline_context,
+        config=baseline_config,
+        applied_migrations=state.applied_migrations,
+        operations=(),
+    )
+    if observed_digest == state.integration_digest:
+        return None
+    if allow_registered_tooling_upgrade and state.tooling_version != actual_version:
+        return None
+    return Conflict(
+        STATE_RELATIVE_PATH,
+        Ownership.TOOLING,
+        "managed tools, documentation, or configuration differ from the last "
+        "verified state; restore them or run a registered tooling migration",
+        "unverified-managed-tree",
+    )
+
+
 def _migration_state_source(
     context: ProjectContext,
 ) -> _MigrationStateSource | None:
@@ -801,6 +897,29 @@ def _migration_state_source(
             "Migration-source tooling state has invalid applied_migrations."
         )
     return _MigrationStateSource(version, schema, tuple(applied), observation)
+
+
+def _migration_explains_tooling_upgrade(
+    assessment: IntegrationAssessment,
+    source: _MigrationStateSource,
+    run: migration_model.MigrationRun,
+) -> bool:
+    """Allow changed copied tooling only when a managed upgrade operation is registered."""
+
+    if (
+        source.observation.state is None
+        or source.tooling_version == assessment.actual_tooling_version
+        or not run.migrations
+    ):
+        return False
+    managed_payload_roots = tuple(
+        root for root in _managed_roots(assessment.context) if root != ".tooling-state"
+    )
+    return any(
+        operation.ownership is Ownership.TOOLING
+        and any(_path_within(operation.path, root) for root in managed_payload_roots)
+        for operation in run.operations
+    )
 
 
 def _observe_migration_conditions(
@@ -977,6 +1096,12 @@ def _integration_digest(
         for _, manifest in current_manifests
         for entry in manifest.files
     }
+    tooling_runtime = _tooling_runtime_manifest_entry(
+        context,
+        tools_relative=managed_roots[0],
+    )
+    if tooling_runtime is not None:
+        entries[tooling_runtime.path] = tooling_runtime
     _simulate_managed_operations(entries, tuple(sorted(set(managed_roots))), operations)
     manifests = [
         (
@@ -1007,6 +1132,42 @@ def _integration_digest(
         ensure_ascii=False,
     ).encode("utf-8")
     return "sha256:" + hashlib.sha256(serialized).hexdigest()
+
+
+def _tooling_runtime_manifest_entry(
+    context: ProjectContext,
+    *,
+    tools_relative: str,
+) -> ManifestEntry | None:
+    """Inventory the one versioned runtime that lives below protected ``dist``."""
+
+    relative = _tooling_runtime_path(tools_relative)
+    try:
+        path = safe_join(context.project_root, relative)
+        try:
+            metadata = path.lstat()
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise FilesystemSafetyError(
+                f"Could not inspect tooling runtime safely: {relative}."
+            ) from exc
+        content = read_regular_bytes(
+            path,
+            root=context.project_root,
+            label=f"Tooling runtime {relative}",
+        )
+    except FilesystemSafetyError as exc:
+        raise IntegrationError(f"Could not inventory portable tooling: {exc}") from exc
+    return _manifest_entry(
+        relative,
+        content,
+        executable=bool(metadata.st_mode & 0o111),
+    )
+
+
+def _tooling_runtime_path(tools_relative: str) -> str:
+    return (PurePosixPath(tools_relative) / _RUST_ANALYZER_RUNTIME).as_posix()
 
 
 def _simulate_managed_operations(
@@ -1227,6 +1388,14 @@ def _verification(
     registry = build_default_registry()
     selected = registry.select_names(adapter.name for adapter in adapters)
     adapter_result = registry.verify(context, selected)
+    tooling_python_result = _tooling_python_verification(context)
+    state_matches = (
+        state_observation.state is not None
+        and state_observation.conflict is None
+        and not any(
+            operation.path == STATE_RELATIVE_PATH for operation in plan.operations
+        )
+    )
     findings: list[Finding] = [
         Finding(
             "tooling-version",
@@ -1246,22 +1415,10 @@ def _verification(
         ),
         Finding(
             "tooling-state",
-            (
-                FindingStatus.PASS
-                if state_observation.state is not None
-                and not any(
-                    operation.path == STATE_RELATIVE_PATH
-                    for operation in plan.operations
-                )
-                else FindingStatus.FAIL
-            ),
+            FindingStatus.PASS if state_matches else FindingStatus.FAIL,
             (
                 "tooling state matches the managed integration"
-                if state_observation.state is not None
-                and not any(
-                    operation.path == STATE_RELATIVE_PATH
-                    for operation in plan.operations
-                )
+                if state_matches
                 else "tooling state is missing, invalid, or stale"
             ),
             path=STATE_RELATIVE_PATH,
@@ -1276,29 +1433,187 @@ def _verification(
         )
         for conflict in plan.conflicts
     )
-    return aggregate_results((adapter_result, findings))
+    return aggregate_results((adapter_result, tooling_python_result, findings))
+
+
+def _tooling_python_verification(context: ProjectContext) -> VerificationResult:
+    """Compile every managed Python source without imports, execution, or bytecode."""
+
+    tools_relative = _relative_path(
+        context.project_root,
+        context.tools_root,
+        label="Tooling root",
+    )
+    try:
+        manifest = create_manifest(context.project_root, scope=tools_relative)
+    except ManifestError as exc:
+        return VerificationResult(
+            (
+                Finding(
+                    "tooling-python-syntax",
+                    FindingStatus.FAIL,
+                    f"Tooling sources could not be inventoried safely: {exc}",
+                    path=tools_relative,
+                ),
+            )
+        )
+
+    findings: list[Finding] = []
+    source_count = 0
+    for entry in manifest.files:
+        if PurePosixPath(entry.path).suffix.casefold() != ".py":
+            continue
+        source_count += 1
+        if entry.kind != "text":
+            findings.append(
+                Finding(
+                    "tooling-python-syntax",
+                    FindingStatus.FAIL,
+                    "Tooling Python source must be a regular UTF-8 text file.",
+                    path=entry.path,
+                )
+            )
+            continue
+        try:
+            path = safe_join(context.project_root, entry.path, require_exists=True)
+            source = read_regular_text(
+                path,
+                root=context.project_root,
+                label=f"Tooling Python source {entry.path}",
+            )
+            compile(source, entry.path, "exec", dont_inherit=True, optimize=0)
+        except FilesystemSafetyError as exc:
+            findings.append(
+                Finding(
+                    "tooling-python-syntax",
+                    FindingStatus.FAIL,
+                    str(exc),
+                    path=entry.path,
+                )
+            )
+        except (OverflowError, SyntaxError, ValueError) as exc:
+            line = getattr(exc, "lineno", None)
+            location = f" at line {line}" if isinstance(line, int) else ""
+            message = getattr(exc, "msg", str(exc))
+            findings.append(
+                Finding(
+                    "tooling-python-syntax",
+                    FindingStatus.FAIL,
+                    f"Tooling Python source is invalid{location}: {message}",
+                    path=entry.path,
+                )
+            )
+    if findings:
+        return VerificationResult(tuple(findings))
+    return VerificationResult(
+        (
+            Finding(
+                "tooling-python-syntax",
+                FindingStatus.PASS,
+                f"Compiled {source_count} tooling Python source file(s) read-only.",
+                path=tools_relative,
+            ),
+        )
+    )
+
+
+def _ensure_tooling_python_sources_valid(
+    assessment: IntegrationAssessment,
+) -> None:
+    failures = tuple(
+        finding
+        for finding in assessment.verification.findings
+        if finding.check == "tooling-python-syntax"
+        and finding.status is FindingStatus.FAIL
+    )
+    if not failures:
+        return
+    first = failures[0]
+    location = f"{first.path}: " if first.path else ""
+    remaining = f" (+{len(failures) - 1} more)" if len(failures) > 1 else ""
+    raise IntegrationError(
+        "Tooling Python source validation failed before mutation: "
+        f"{location}{first.message}{remaining}"
+    )
 
 
 def _planned_action_findings(
     assessment: IntegrationAssessment,
 ) -> tuple[Finding, ...]:
+    """Return findings only for actions that this workflow actually executed."""
+
     del assessment
-    return (
-        Finding(
-            "dependencies",
-            FindingStatus.PASS,
-            "Dependency installation not required by this filesystem-only plan.",
-        ),
-        Finding(
-            "quality",
-            FindingStatus.PASS,
-            "Quality action not required; structural verification is authoritative.",
-        ),
-        Finding(
-            "tests",
-            FindingStatus.PASS,
-            "Test action not required; no product or dependency content changed.",
-        ),
+    return ()
+
+
+def _ensure_transactional_actions_supported(
+    assessment: IntegrationAssessment,
+) -> None:
+    requirements = _plan_action_requirements(assessment)
+    if not requirements:
+        return
+    details = "; ".join(
+        f"{path}: {', '.join(actions)}" for path, actions in requirements
+    )
+    raise IntegrationError(
+        "Transactional dependency/quality/test action execution is unsupported "
+        f"for this plan ({details}); nothing was changed."
+    )
+
+
+def _plan_action_requirements(
+    assessment: IntegrationAssessment,
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """Classify plan paths whose follow-up actions must share the rollback boundary."""
+
+    tools_relative = _relative_path(
+        assessment.context.project_root,
+        assessment.context.tools_root,
+        label="Tooling root",
+    )
+    by_path: dict[str, set[str]] = {}
+    for operation in assessment.plan.operations:
+        touched_paths = (operation.path,) + (
+            (operation.source_path,) if operation.source_path is not None else ()
+        )
+        for path in touched_paths:
+            required: set[str] = set()
+            candidate = PurePosixPath(path)
+            dependency_manifest = _is_dependency_manifest(candidate)
+            if _path_within(path, tools_relative):
+                if dependency_manifest:
+                    required.add("dependencies")
+                if operation.kind is not OperationKind.ENSURE_DIRECTORY:
+                    required.update(("quality", "tests"))
+            if (
+                path == operation.path
+                and operation.ownership is Ownership.STRUCTURED
+                and (
+                    candidate.name in _ACTION_RELEVANT_STRUCTURED_NAMES
+                    or path.startswith(".github/workflows/")
+                )
+            ):
+                if dependency_manifest:
+                    required.add("dependencies")
+                required.update(("quality", "tests"))
+            if required:
+                by_path.setdefault(path, set()).update(required)
+    return tuple(
+        (
+            path,
+            tuple(
+                action for action in _TRANSACTIONAL_ACTION_ORDER if action in actions
+            ),
+        )
+        for path, actions in sorted(by_path.items())
+    )
+
+
+def _is_dependency_manifest(path: PurePosixPath) -> bool:
+    name = path.name.casefold()
+    return name in _DEPENDENCY_MANIFEST_NAMES or (
+        name.startswith("requirements")
+        and path.suffix.casefold() in {".in", ".lock", ".txt"}
     )
 
 

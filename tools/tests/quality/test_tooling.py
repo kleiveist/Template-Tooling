@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from tools.quality import tooling
 from tools.quality.exceptions import apply_exceptions
 from tools.quality.model import CheckResult, ExceptionEntry, QualityConfig, Severity
 from tools.quality.scanner import ScopeMetric, SourceMetrics, scan_file
-from tools.quality import tooling
 from tools.quality.typescript import (
     TypeScriptAnalysis,
     TypeScriptClass,
@@ -18,6 +18,16 @@ from tools.quality.typescript import (
 )
 
 ROOT = Path(__file__).resolve().parents[3]
+SOURCE_REPOSITORY_MARKER = "template-tooling-source-v1"
+
+
+def _is_source_repository() -> bool:
+    try:
+        return (ROOT / ".template-tooling-source").read_text(
+            encoding="utf-8"
+        ).strip() == SOURCE_REPOSITORY_MARKER
+    except OSError:
+        return False
 
 
 def _python_metric(tmp_path: Path) -> SourceMetrics:
@@ -373,6 +383,10 @@ def test_eslint_fatal_parser_error_fails_metric_analysis(
     assert "could not parse frontend/src/invalid.ts" in result.detail
 
 
+@pytest.mark.skipif(
+    not _is_source_repository(),
+    reason="source-repository ESLint fixture is not part of copied tooling",
+)
 def test_real_eslint_metrics_ignore_inline_disable(
     tmp_path: Path,
     quality_config: QualityConfig,

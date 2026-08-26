@@ -366,9 +366,10 @@ def test_tauri_installappimage_module_delegates_to_appimage_installer(monkeypatc
 def test_tauri_install_appimage_packages_existing_appdir_when_final_file_is_missing(monkeypatch, tmp_path) -> None:
     root = tmp_path / "repo"
     home = tmp_path / "home"
+    app_name = "Fixture App"
     tauri_dir = root / "src-tauri"
     appimage_dir = tauri_dir / "target" / "release" / "bundle" / "appimage"
-    appdir = appimage_dir / f"{paths.APP_NAME}.AppDir"
+    appdir = appimage_dir / f"{app_name}.AppDir"
     icon_dir = tauri_dir / "icons"
     appdir.mkdir(parents=True)
     icon_dir.mkdir(parents=True)
@@ -377,11 +378,12 @@ def test_tauri_install_appimage_packages_existing_appdir_when_final_file_is_miss
 
     def fake_package_existing_appdir(dry_run: bool = False) -> int:
         packaged.append(dry_run)
-        (appimage_dir / f"{paths.APP_NAME}_1.0.0_amd64.AppImage").write_bytes(b"appimage")
+        (appimage_dir / f"{app_name}_1.0.0_amd64.AppImage").write_bytes(b"appimage")
         return 0
 
     monkeypatch.setattr(paths, "ROOT", root)
     monkeypatch.setattr(paths, "TAURI_DIR", tauri_dir)
+    monkeypatch.setattr(paths, "APP_NAME", app_name)
     monkeypatch.setattr(appimage, "_home", lambda: home)
     monkeypatch.setattr(appimage, "package_existing_appdir", fake_package_existing_appdir)
 
@@ -389,7 +391,7 @@ def test_tauri_install_appimage_packages_existing_appdir_when_final_file_is_miss
 
     assert code == 0
     assert packaged == [False]
-    assert (home / "Applications" / f"{paths.APP_NAME}.AppImage").read_bytes() == b"appimage"
+    assert (home / "Applications" / f"{app_name}.AppImage").read_bytes() == b"appimage"
 
 
 def test_tauri_build_appimage_dry_run_does_not_install(monkeypatch) -> None:

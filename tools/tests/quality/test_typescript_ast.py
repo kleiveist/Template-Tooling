@@ -12,10 +12,25 @@ from tools.quality.typescript import analyze_typescript
 
 ROOT = Path(__file__).resolve().parents[3]
 TYPESCRIPT_RUNTIME = ROOT / "frontend" / "node_modules" / "typescript"
+TYPESCRIPT_SCRIPT = ROOT / "frontend" / "scripts" / "quality-ast.mjs"
+SOURCE_REPOSITORY_MARKER = "template-tooling-source-v1"
+
+
+def _is_source_repository() -> bool:
+    try:
+        return (ROOT / ".template-tooling-source").read_text(
+            encoding="utf-8"
+        ).strip() == SOURCE_REPOSITORY_MARKER
+    except OSError:
+        return False
+
 
 pytestmark = pytest.mark.skipif(
-    shutil.which("node") is None or not TYPESCRIPT_RUNTIME.exists(),
-    reason="real TypeScript AST integration requires Node.js and installed frontend dependencies",
+    not _is_source_repository()
+    or shutil.which("node") is None
+    or not TYPESCRIPT_RUNTIME.exists()
+    or not TYPESCRIPT_SCRIPT.is_file(),
+    reason="source-only TypeScript AST integration prerequisites are unavailable",
 )
 
 

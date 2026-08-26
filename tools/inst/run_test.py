@@ -19,6 +19,7 @@ from tools.core.filesystem import FilesystemSafetyError
 from tools.inst import e2e as e2e_runtime
 from tools.inst import report as report_writer
 from tools.inst import stop as service_cleanup
+from tools.inst.tooling_runtime import TOOLING_RUNTIME_PROBE
 from tools.process import prepare_command
 from tools.profiles import runtime as profile_runtime
 
@@ -72,6 +73,15 @@ class SuiteResult:
             "stderr_tail": self.stderr_tail,
             "detail": self.detail,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class _ToolingRuntimeProbe:
+    python: Path
+    ready: bool
+    detail: str
+    command: list[str] | None = None
+    completed: subprocess.CompletedProcess[str] | None = None
 
 
 def _tail_lines(text: str, limit: int) -> list[str]:
@@ -130,6 +140,69 @@ def _expand_suites(value: str) -> list[str]:
     return [value]
 
 
+def _unconfigured_suite_reason(suite: str) -> str | None:
+    """Explain why an optional product suite has no runnable fixture."""
+
+    context = _context()
+    if suite == "tools":
+        return None
+    if suite == "schema":
+        required = (
+            context.project_root / "shared" / "schema" / "input.schema.json",
+            context.project_root / "shared" / "examples" / "valid.json",
+            context.project_root / "shared" / "examples" / "invalid.json",
+        )
+        return (
+            None
+            if all(path.is_file() for path in required)
+            else "schema tests are not configured"
+        )
+    if suite in {"api", "database", "postgres"}:
+        backend = context.paths.backend
+        relative = {
+            "api": Path("tests/api"),
+            "database": Path("tests/db"),
+            "postgres": Path("tests/integration"),
+        }[suite]
+        return (
+            None
+            if backend is not None and (backend / relative).is_dir()
+            else f"{suite} tests are not configured"
+        )
+    if suite == "frontend":
+        package = context.paths.frontend / "package.json"
+        if not package.is_file():
+            return "frontend tests are not configured"
+        try:
+            payload = json.loads(package.read_text(encoding="utf-8"))
+            scripts = payload.get("scripts", {}) if isinstance(payload, dict) else {}
+            test_script = scripts.get("test") if isinstance(scripts, dict) else None
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            return None
+        return (
+            None
+            if isinstance(test_script, str) and test_script.strip()
+            else "frontend test script is not configured"
+        )
+    if suite == "e2e":
+        return None if _e2e_configured() else "Playwright E2E is not configured"
+    if suite == "tauri":
+        tauri_root = context.paths.tauri
+        required = (
+            context.paths.frontend / "package.json",
+            tauri_root / "Cargo.toml",
+            tauri_root / "Cargo.lock",
+            tauri_root / "tauri.conf.json",
+            tauri_root / "src" / "main.rs",
+        )
+        return (
+            None
+            if all(path.is_file() for path in required)
+            else "Tauri tests are not configured"
+        )
+    return None
+
+
 def _backend_python() -> Path:
     context = _context()
     backend_dir = context.paths.backend
@@ -146,7 +219,237 @@ def _tooling_python() -> Path:
     unix_python = tooling_venv / "bin" / "python"
     if windows_python.exists():
         return windows_python
-    return unix_python
+    if unix_python.exists():
+        return unix_python
+    return windows_python if sys.platform == "win32" else unix_python
+
+
+def _probe_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    environment.pop("PYTHONPYCACHEPREFIX", None)
+    for key in tuple(environment):
+        if key.startswith("GIT_"):
+            environment.pop(key)
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    environment["PYTHONNOUSERSITE"] = "1"
+    return environment
+
+
+def _inside_backend_venv(python: Path, context: ProjectContext) -> bool:
+    candidates = [python.absolute()]
+    try:
+        candidates.append(python.resolve(strict=False))
+    except OSError:
+        pass
+    project_root = context.project_root.absolute()
+    tooling_venv = context.venv_root.absolute()
+    for candidate in candidates:
+        if candidate.is_relative_to(tooling_venv):
+            continue
+        try:
+            relative = candidate.relative_to(project_root)
+        except ValueError:
+            continue
+        if ".venv" in relative.parts:
+            return True
+    return False
+
+
+def _probe_tooling_runtime(
+    python: Path,
+    *,
+    context: ProjectContext,
+    label: str,
+    reject_backend: bool = False,
+) -> _ToolingRuntimeProbe:
+    if reject_backend and _inside_backend_venv(python, context):
+        return _ToolingRuntimeProbe(
+            python,
+            False,
+            f"{label} is inside the product backend virtualenv and cannot run tooling tests",
+        )
+    if not python.exists() or not python.is_file():
+        return _ToolingRuntimeProbe(
+            python,
+            False,
+            f"{label} python is missing at {python}",
+        )
+
+    command = [str(python), "-c", TOOLING_RUNTIME_PROBE]
+    completed = _run(command, cwd=ROOT, env=_probe_environment())
+    if completed.returncode == 0:
+        return _ToolingRuntimeProbe(
+            python,
+            True,
+            f"{label} passed the tooling runtime probe",
+            command,
+            completed,
+        )
+    output = ((completed.stderr or "") + "\n" + (completed.stdout or "")).strip()
+    detail = _tail_text(output, CONSOLE_TAIL_LINES)
+    if not detail:
+        detail = f"exit code {completed.returncode}"
+    return _ToolingRuntimeProbe(
+        python,
+        False,
+        f"{label} failed the tooling runtime probe: {detail}",
+        command,
+        completed,
+    )
+
+
+def _tooling_install_python(
+    context: ProjectContext, current_python: Path
+) -> Path | None:
+    """Choose a bootstrap interpreter that never belongs to the backend venv."""
+
+    if not _inside_backend_venv(current_python, context):
+        return current_python
+
+    candidates: list[Path] = []
+    base_executable = getattr(sys, "_base_executable", "")
+    if base_executable:
+        candidates.append(Path(base_executable))
+    base_prefix = Path(sys.base_prefix)
+    if sys.platform == "win32":
+        candidates.append(base_prefix / "python.exe")
+    else:
+        candidates.extend(
+            [base_prefix / "bin" / "python3", base_prefix / "bin" / "python"]
+        )
+    candidates.extend(
+        Path(found)
+        for name in ("python3", "python")
+        if (found := shutil.which(name)) is not None
+    )
+    for candidate in candidates:
+        if (
+            candidate.exists()
+            and candidate.is_file()
+            and not _inside_backend_venv(candidate, context)
+        ):
+            return candidate
+    return None
+
+
+def _tools_runtime_failure(
+    *,
+    message: str,
+    started: float,
+    command: list[str],
+    completed: subprocess.CompletedProcess[str],
+    detail: str,
+) -> SuiteResult:
+    return SuiteResult(
+        "tools",
+        "FAIL",
+        message,
+        time.monotonic() - started,
+        command=command,
+        cwd=str(ROOT),
+        exit_code=completed.returncode,
+        stdout=completed.stdout or "",
+        stderr=completed.stderr or "",
+        stdout_tail=_tail_text(completed.stdout),
+        stderr_tail=_tail_text(completed.stderr),
+        detail=detail,
+    )
+
+
+def _ensure_tools_runtime() -> tuple[Path | None, SuiteResult | None]:
+    """Select or install an isolated runtime for the portable tools suite."""
+
+    started = time.monotonic()
+    context = _context()
+    state_probe = _probe_tooling_runtime(
+        _tooling_python(),
+        context=context,
+        label="tooling state venv",
+        reject_backend=True,
+    )
+    if state_probe.ready:
+        return state_probe.python, None
+
+    current_python = Path(sys.executable)
+    if current_python.absolute() == state_probe.python.absolute():
+        current_probe = state_probe
+    else:
+        current_probe = _probe_tooling_runtime(
+            current_python,
+            context=context,
+            label="current interpreter",
+            reject_backend=True,
+        )
+    if current_probe.ready:
+        return current_probe.python, None
+
+    install_python = _tooling_install_python(context, current_python)
+    install_command = [
+        str(install_python or current_python),
+        str(context.tools_root / "control.py"),
+        "install",
+        "--skip-frontend",
+        "--skip-backend",
+        "--skip-playwright",
+    ]
+    action = f"Run '{shlex.join(install_command)}' and retry the tools suite."
+    initial_detail = f"{state_probe.detail}; {current_probe.detail}"
+    if install_python is None:
+        detail = (
+            "No Python interpreter outside the configured backend virtualenv is "
+            "available to bootstrap the isolated tooling runtime. Run the tooling-only "
+            "install with a system Python."
+        )
+        unavailable = subprocess.CompletedProcess(
+            install_command,
+            1,
+            stdout="",
+            stderr=detail,
+        )
+        return None, _tools_runtime_failure(
+            message="no safe Python is available for tooling runtime installation",
+            started=started,
+            command=install_command,
+            completed=unavailable,
+            detail=f"{initial_detail}. {detail} {action}",
+        )
+
+    installed = _run(
+        install_command,
+        cwd=ROOT,
+        env=_probe_environment(),
+    )
+    if installed.returncode != 0:
+        return None, _tools_runtime_failure(
+            message="tooling-only runtime installation failed before tools tests",
+            started=started,
+            command=install_command,
+            completed=installed,
+            detail=f"{initial_detail}. {action}",
+        )
+
+    repaired_probe = _probe_tooling_runtime(
+        _tooling_python(),
+        context=context,
+        label="post-install tooling state venv",
+        reject_backend=True,
+    )
+    if not repaired_probe.ready:
+        probe_completed = repaired_probe.completed or subprocess.CompletedProcess(
+            repaired_probe.command or [str(repaired_probe.python)],
+            1,
+            stdout="",
+            stderr=repaired_probe.detail,
+        )
+        return None, _tools_runtime_failure(
+            message="tooling state runtime is still unavailable after installation",
+            started=started,
+            command=repaired_probe.command or install_command,
+            completed=probe_completed,
+            detail=f"{initial_detail}; {repaired_probe.detail}. {action}",
+        )
+    return repaired_probe.python, None
 
 
 def _needs_backend_runtime(selected_suites: list[str]) -> bool:
@@ -543,13 +846,37 @@ def _run_tools_suite() -> SuiteResult:
             "tools", "FAIL", "tools/tests missing", time.monotonic() - started
         )
 
-    python = str(_tooling_python())
+    tooling_python, runtime_failure = _ensure_tools_runtime()
+    if runtime_failure is not None:
+        return runtime_failure
+    if tooling_python is None:  # pragma: no cover - defensive contract guard
+        return SuiteResult(
+            "tools",
+            "FAIL",
+            "tooling runtime preflight returned no Python interpreter",
+            time.monotonic() - started,
+        )
+
+    python = str(tooling_python)
     test_paths = [tests_dir]
     case_study_tests = context.docs_root / "case-study" / "tests"
     if case_study_tests.exists():
         test_paths.append(case_study_tests)
-    command = [python, "-m", "pytest", "-q", *(str(path) for path in test_paths)]
-    completed = _run(command, cwd=ROOT)
+    command = [
+        python,
+        "-m",
+        "pytest",
+        "-p",
+        "no:cacheprovider",
+        "-q",
+        *(str(path) for path in test_paths),
+    ]
+    environment = _probe_environment()
+    # Acceptance tests launch this complete copied suite themselves.  Mark the
+    # nested run so that those outer orchestration tests skip instead of
+    # recursively starting another copy matrix.
+    environment["TEMPLATE_TOOLING_NESTED_TEST"] = "1"
+    completed = _run(command, cwd=ROOT, env=environment)
     return _result_from_completed(
         name="tools",
         completed=completed,
@@ -898,7 +1225,16 @@ def _bootstrap_failure_result(suite: str) -> SuiteResult:
     )
 
 
-def _run_selected_suite(suite: str, *, bootstrap_failed: bool) -> SuiteResult:
+def _run_selected_suite(
+    suite: str,
+    *,
+    bootstrap_failed: bool,
+    skip_unconfigured: bool = False,
+) -> SuiteResult:
+    if skip_unconfigured:
+        reason = _unconfigured_suite_reason(suite)
+        if reason is not None:
+            return SuiteResult(suite, "SKIP", reason, 0.0)
     if suite == "e2e" and bootstrap_failed:
         return _bootstrap_failure_result(suite)
     runners = {
@@ -933,7 +1269,17 @@ def main(args: argparse.Namespace) -> int:
 
     selected_suites = _expand_suites(args.suite)
 
-    preflight = _ensure_backend_runtime(selected_suites)
+    complete_run = args.suite == "all"
+    preflight_suites = (
+        [
+            suite
+            for suite in selected_suites
+            if _unconfigured_suite_reason(suite) is None
+        ]
+        if complete_run
+        else selected_suites
+    )
+    preflight = _ensure_backend_runtime(preflight_suites)
     started_by_runner, bootstrap = _start_services_if_needed(
         selected_suites, args.no_start
     )
@@ -944,7 +1290,11 @@ def main(args: argparse.Namespace) -> int:
 
     try:
         results.extend(
-            _run_selected_suite(suite, bootstrap_failed=bootstrap.status == "FAIL")
+            _run_selected_suite(
+                suite,
+                bootstrap_failed=bootstrap.status == "FAIL",
+                skip_unconfigured=complete_run,
+            )
             for suite in selected_suites
         )
     finally:

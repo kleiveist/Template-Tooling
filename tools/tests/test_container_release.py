@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from tools import control
+from tools.core.context import load_context
 from tools.core.project_config import (
     ProjectConfig,
     ProjectPathConfig,
@@ -17,6 +18,18 @@ from tools.inst import container, release
 from tools.profiles.model import ProjectProfile
 
 ROOT = Path(__file__).resolve().parents[2]
+SOURCE_REPOSITORY_MARKER = "template-tooling-source-v1"
+
+
+def _is_source_repository() -> bool:
+    """Distinguish repository baselines from independently copied tooling."""
+
+    try:
+        return (ROOT / ".template-tooling-source").read_text(
+            encoding="utf-8"
+        ).strip() == SOURCE_REPOSITORY_MARKER
+    except OSError:
+        return False
 
 
 def _profile(*features: str) -> ProjectProfile:
@@ -30,8 +43,8 @@ def _profile(*features: str) -> ProjectProfile:
 
 
 @pytest.mark.skipif(
-    not (ROOT / "deployment").exists(),
-    reason="Cloud deployment is absent from this derived project",
+    not _is_source_repository() or not (ROOT / "deployment").exists(),
+    reason="Repository container baselines are outside the portable payload",
 )
 def test_container_baseline_is_non_root_and_profiled() -> None:
     backend = (ROOT / "deployment" / "docker" / "backend.Dockerfile").read_text(
@@ -59,19 +72,31 @@ def test_container_baseline_is_non_root_and_profiled() -> None:
 
 
 def test_production_locks_match_container_python_runtime() -> None:
+    if not _is_source_repository():
+        pytest.skip("Repository production-lock policy is outside copied tooling")
     profile = container.profile_runtime.active_profile(ROOT)
     if not profile.has_feature("backend"):
         pytest.skip("Backend production locks are absent from this derived project")
+
+    backend = load_context(
+        project_root=ROOT,
+        tools_root=ROOT / "tools",
+    ).paths.backend
+    assert backend is not None, "active backend profile must configure a backend path"
 
     lock_names = ["requirements-production.lock"]
     if profile.has_feature("database"):
         lock_names.append("requirements-database-production.lock")
     if profile.has_feature("postgres"):
         lock_names.append("requirements-postgres-production.lock")
-    locks = {
-        name: (ROOT / "backend" / name).read_text(encoding="utf-8")
-        for name in lock_names
-    }
+    lock_paths = tuple(backend / name for name in lock_names)
+    missing = tuple(
+        path.relative_to(ROOT).as_posix() for path in lock_paths if not path.is_file()
+    )
+    assert not missing, (
+        f"source repository is missing production lock(s): {', '.join(missing)}"
+    )
+    locks = {path.name: path.read_text(encoding="utf-8") for path in lock_paths}
 
     assert all("pip-compile with Python 3.11" in content for content in locks.values())
     if profile.has_feature("database"):
@@ -308,6 +333,8 @@ def test_version_checks_honor_configured_frontend_path(
 
 
 def test_template_tauri_capability_is_least_privilege() -> None:
+    if not _is_source_repository():
+        pytest.skip("Repository Tauri capability policy is outside copied tooling")
     capability_path = ROOT / "src-tauri" / "capabilities" / "default.json"
     if not capability_path.is_file():
         pytest.skip("Tauri capability is absent from this derived project")

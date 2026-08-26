@@ -15,6 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 ARTIFACT = Path("tools/quality/rust_analyzer/dist/rust_quality_analyzer.wasm")
+SOURCE_REPOSITORY_MARKER = "template-tooling-source-v1"
 BUILDER_PATH = ROOT / "tools" / "quality" / "rust_analyzer" / "build.py"
 
 
@@ -51,10 +52,20 @@ def _git_check_ignore(root: Path, relative: Path) -> subprocess.CompletedProcess
 
 def test_only_checked_in_rust_analyzer_wasm_is_not_gitignored(tmp_path: Path) -> None:
     assert (ROOT / ARTIFACT).is_file()
+    try:
+        is_source_repository = (
+            ROOT / ".template-tooling-source"
+        ).read_text(encoding="utf-8").strip() == SOURCE_REPOSITORY_MARKER
+    except OSError:
+        is_source_repository = False
+    if not is_source_repository:
+        pytest.skip("source-repository ignore policy is outside the portable payload")
+
+    repository_ignore = ROOT / ".gitignore"
 
     isolated_root = tmp_path / "project"
     isolated_root.mkdir()
-    shutil.copy2(ROOT / ".gitignore", isolated_root / ".gitignore")
+    shutil.copy2(repository_ignore, isolated_root / ".gitignore")
     isolated_artifact = isolated_root / ARTIFACT
     isolated_artifact.parent.mkdir(parents=True)
     shutil.copy2(ROOT / ARTIFACT, isolated_artifact)
