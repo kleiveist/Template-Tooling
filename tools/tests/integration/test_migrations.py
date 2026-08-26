@@ -27,8 +27,8 @@ from tools.integration.model import (
 from tools.integration.planner import ObservedResource
 
 DIGEST = "a" * 64
-TARGET_VERSION_DIGEST = (
-    "1f930dd1f133c1f97a94fe3acb8db34372cf4c01ffdb2b3ff4ca72f9494121e9"
+CURRENT_TARGET_VERSION_DIGEST = (
+    "d915cc95d6ca8f47ae297713ed46d4e5c5d99ddd29fc3c61e263bdf305f2b5b0"
 )
 
 
@@ -103,14 +103,18 @@ def test_registry_order_and_applied_idempotency() -> None:
 
 
 def test_productive_registry_reconciles_exact_managed_payload_upgrade() -> None:
-    assert (Path(__file__).resolve().parents[2] / "VERSION").read_bytes() == b"0.2.0\n"
-    assert REGISTRY.ids == ("reconcile-managed-payload-0-1-0-to-0-2-0",)
+    assert (Path(__file__).resolve().parents[2] / "VERSION").read_bytes() == b"0.3.0\n"
+    assert REGISTRY.ids == (
+        "reconcile-managed-payload-0-1-0-to-0-2-0",
+        "reconcile-managed-payload-0-1-0-to-0-3-0",
+        "reconcile-managed-payload-0-2-0-to-0-3-0",
+    )
 
-    migration = REGISTRY.migrations[0]
+    migration = REGISTRY.migrations[1]
     run = build_migration_run(
         REGISTRY,
         source_tooling_version="0.1.0",
-        target_tooling_version="0.2.0",
+        target_tooling_version="0.3.0",
         source_state_schema=1,
         target_state_schema=1,
     )
@@ -118,13 +122,13 @@ def test_productive_registry_reconciles_exact_managed_payload_upgrade() -> None:
     assert migration.reconciles_managed_payload
     assert migration.operations == ()
     assert migration.applies.source_tooling_versions == ("0.1.0",)
-    assert migration.applies.target_tooling_version == "0.2.0"
+    assert migration.applies.target_tooling_version == "0.3.0"
     assert migration.applies.source_state_schemas == (1,)
     assert migration.applies.target_state_schema == 1
     assert migration.preconditions == migration.postconditions
     assert migration.preconditions[0].kind is ConditionKind.SHA256_EQUALS
     assert migration.preconditions[0].path == "tools/VERSION"
-    assert migration.preconditions[0].value == TARGET_VERSION_DIGEST
+    assert migration.preconditions[0].value == CURRENT_TARGET_VERSION_DIGEST
     assert migration.preconditions[1] == MigrationCondition(
         ConditionKind.PATH_EXISTS,
         "tools/PORTABLE-PAYLOAD.json",
@@ -140,7 +144,7 @@ def test_productive_registry_reconciles_exact_managed_payload_upgrade() -> None:
         ObservedResource(
             "tools/VERSION",
             Ownership.TOOLING,
-            sha256=TARGET_VERSION_DIGEST,
+            sha256=CURRENT_TARGET_VERSION_DIGEST,
         ),
         ObservedResource(
             "tools/PORTABLE-PAYLOAD.json",
@@ -153,10 +157,10 @@ def test_productive_registry_reconciles_exact_managed_payload_upgrade() -> None:
 
 def test_productive_reconciliation_is_exactly_version_and_schema_scoped() -> None:
     cases = (
-        ("0.1.1", "0.2.0", 1, 1),
-        ("0.1.0", "0.2.1", 1, 1),
-        ("0.1.0", "0.2.0", 2, 1),
-        ("0.1.0", "0.2.0", 1, 2),
+        ("0.1.1", "0.3.0", 1, 1),
+        ("0.1.0", "0.3.1", 1, 1),
+        ("0.1.0", "0.3.0", 2, 1),
+        ("0.1.0", "0.3.0", 1, 2),
     )
 
     for source_version, target_version, source_schema, target_schema in cases:
@@ -167,6 +171,23 @@ def test_productive_reconciliation_is_exactly_version_and_schema_scoped() -> Non
             source_state_schema=source_schema,
             target_state_schema=target_schema,
         ).is_noop
+
+
+def test_productive_registry_has_direct_paths_to_current_payload() -> None:
+    expected = {
+        "0.1.0": "reconcile-managed-payload-0-1-0-to-0-3-0",
+        "0.2.0": "reconcile-managed-payload-0-2-0-to-0-3-0",
+    }
+
+    for source_version, migration_id in expected.items():
+        run = build_migration_run(
+            REGISTRY,
+            source_tooling_version=source_version,
+            target_tooling_version="0.3.0",
+            source_state_schema=1,
+            target_state_schema=1,
+        )
+        assert tuple(item.migration_id for item in run.migrations) == (migration_id,)
 
 
 def test_only_strict_managed_payload_reconciliation_may_have_no_operations() -> None:

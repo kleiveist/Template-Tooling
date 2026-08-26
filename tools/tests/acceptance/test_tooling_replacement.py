@@ -28,7 +28,7 @@ SOURCE_MARKER = REPOSITORY_ROOT / ".template-tooling-source"
 HISTORICAL_RELEASE_COMMIT = "30b318c48d8c3d214b208620c8d21f9490136e9b"
 HISTORICAL_TOOLS_TREE = "f8e9ed0908b186f2fd08ac24318c08c9d2737a4c"
 HISTORICAL_DOCS_TREE = "c486f99fb535ef45fe224163630e75d454fa9210"
-PAYLOAD_RECONCILIATION_ID = "reconcile-managed-payload-0-1-0-to-0-2-0"
+PAYLOAD_RECONCILIATION_ID = "reconcile-managed-payload-0-1-0-to-0-3-0"
 _ALLOWED_RUNTIME_DIST = TOOLS_SOURCE / "quality" / "rust_analyzer" / "dist"
 _ALLOWED_RUNTIME_FILE = _ALLOWED_RUNTIME_DIST / "rust_quality_analyzer.wasm"
 _ALLOWED_SOURCE_BUILD = TOOLS_SOURCE / "tauri" / "build"
@@ -511,7 +511,7 @@ def test_real_historical_payload_upgrades_through_registered_migration(
     _replace_fixture_payload(project_root, tmp_path)
 
     assert (project_root / "tools" / "VERSION").read_text(encoding="utf-8") == (
-        "0.2.0\n"
+        "0.3.0\n"
     )
     assert config.read_bytes() == config_before_copy
     assert state.read_bytes() == state_before_copy
@@ -588,9 +588,9 @@ def test_real_historical_payload_upgrades_through_registered_migration(
 
     config_payload = tomllib.loads(config.read_text(encoding="utf-8"))
     state_payload = tomllib.loads(state.read_text(encoding="utf-8"))
-    assert config_payload["tooling"]["version"] == "0.2.0"
+    assert config_payload["tooling"]["version"] == "0.3.0"
     assert config_payload["project"]["profile"] == "web-only"
-    assert state_payload["tooling_version"] == "0.2.0"
+    assert state_payload["tooling_version"] == "0.3.0"
     assert state_payload["applied_migrations"] == [PAYLOAD_RECONCILIATION_ID]
 
     before_verified = _tree_snapshot(project_root)

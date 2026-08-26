@@ -1,3 +1,7 @@
+<!-- AUTO-GENERATED:backlink START -->
+[← Development](development.md)
+<!-- AUTO-GENERATED:backlink END -->
+
 # Refactor inventory
 
 Status: Phase 1 baseline for `refactor/portable-tooling`

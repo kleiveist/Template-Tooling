@@ -652,39 +652,52 @@ def _validate_digest(migration_id: str, operation: Operation) -> None:
 MigrationRange = MigrationApplicability
 select_migrations = build_migration_run
 
-_TARGET_0_2_0_VERSION_DIGEST = hashlib.sha256(b"0.2.0\n").hexdigest()
-_TARGET_0_2_0_VERSION_CONDITION = MigrationCondition(
-    ConditionKind.SHA256_EQUALS,
-    _MANAGED_PAYLOAD_VERSION_PATH,
-    Ownership.TOOLING,
-    value=_TARGET_0_2_0_VERSION_DIGEST,
+
+def _managed_payload_reconciliation(
+    source_version: str,
+    target_version: str,
+    *,
+    order: int,
+) -> Migration:
+    target_conditions = (
+        MigrationCondition(
+            ConditionKind.SHA256_EQUALS,
+            _MANAGED_PAYLOAD_VERSION_PATH,
+            Ownership.TOOLING,
+            value=hashlib.sha256(f"{target_version}\n".encode()).hexdigest(),
+        ),
+        MigrationCondition(
+            ConditionKind.PATH_EXISTS,
+            _MANAGED_PAYLOAD_MANIFEST_PATH,
+            Ownership.TOOLING,
+        ),
+    )
+    source_slug = source_version.replace(".", "-")
+    target_slug = target_version.replace(".", "-")
+    return Migration(
+        migration_id=(f"reconcile-managed-payload-{source_slug}-to-{target_slug}"),
+        description=(
+            "Reconcile the externally replaced managed tooling payload with "
+            f"tooling {target_version}"
+        ),
+        order=order,
+        applies=MigrationApplicability(
+            source_tooling_versions=(source_version,),
+            target_tooling_version=target_version,
+            source_state_schemas=(1,),
+            target_state_schema=1,
+        ),
+        operations=(),
+        preconditions=target_conditions,
+        postconditions=target_conditions,
+        reconciles_managed_payload=True,
+    )
+
+
+REGISTRY = MigrationRegistry(
+    (
+        _managed_payload_reconciliation("0.1.0", "0.2.0", order=10),
+        _managed_payload_reconciliation("0.1.0", "0.3.0", order=20),
+        _managed_payload_reconciliation("0.2.0", "0.3.0", order=30),
+    )
 )
-_TARGET_0_2_0_MANIFEST_CONDITION = MigrationCondition(
-    ConditionKind.PATH_EXISTS,
-    _MANAGED_PAYLOAD_MANIFEST_PATH,
-    Ownership.TOOLING,
-)
-_RECONCILE_0_1_0_TO_0_2_0 = Migration(
-    migration_id="reconcile-managed-payload-0-1-0-to-0-2-0",
-    description=(
-        "Reconcile the externally replaced managed tooling payload with tooling 0.2.0"
-    ),
-    order=10,
-    applies=MigrationApplicability(
-        source_tooling_versions=("0.1.0",),
-        target_tooling_version="0.2.0",
-        source_state_schemas=(1,),
-        target_state_schema=1,
-    ),
-    operations=(),
-    preconditions=(
-        _TARGET_0_2_0_VERSION_CONDITION,
-        _TARGET_0_2_0_MANIFEST_CONDITION,
-    ),
-    postconditions=(
-        _TARGET_0_2_0_VERSION_CONDITION,
-        _TARGET_0_2_0_MANIFEST_CONDITION,
-    ),
-    reconciles_managed_payload=True,
-)
-REGISTRY = MigrationRegistry((_RECONCILE_0_1_0_TO_0_2_0,))

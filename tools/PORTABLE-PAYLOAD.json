@@ -1,81 +1,256 @@
 {
   "schema_version": 1,
-  "tooling_version": "0.2.0",
+  "tooling_version": "0.3.0",
   "files": [
     {
-      "path": "docs/toolingdocs/acceptance/.gitkeep",
-      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "size": 0,
+      "path": "docs/toolingdocs/acceptance/acceptance.md",
+      "sha256": "sha256:8471bd5bd4695e6cdc51eb5c5630bbf0b22f067575d871e62bba238bd2887755",
+      "size": 1026,
       "kind": "file",
       "executable": false
     },
     {
-      "path": "docs/toolingdocs/architecture/.gitkeep",
-      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "size": 0,
+      "path": "docs/toolingdocs/acceptance/copy-matrix.md",
+      "sha256": "sha256:b27ebddeea29a7dd9b9493d52e6a8944be6b102d80cf0b53abf91eb53d2b83e2",
+      "size": 4305,
       "kind": "file",
       "executable": false
     },
     {
-      "path": "docs/toolingdocs/case-study/assets/.gitkeep",
-      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "size": 0,
+      "path": "docs/toolingdocs/acceptance/definition-of-done.md",
+      "sha256": "sha256:d77bebf82b0874a55632cf23a7806992906f1b90dff2865c8d808bfa8147e5e0",
+      "size": 5725,
       "kind": "file",
       "executable": false
     },
     {
-      "path": "docs/toolingdocs/case-study/source/de/.gitkeep",
-      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "size": 0,
+      "path": "docs/toolingdocs/architecture/architecture.md",
+      "sha256": "sha256:d94786ee6afb6bda3425b7393346aa652fb5a30b52a0f5be5be14a4a74bee2a2",
+      "size": 1871,
       "kind": "file",
       "executable": false
     },
     {
-      "path": "docs/toolingdocs/case-study/source/en/.gitkeep",
-      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "size": 0,
+      "path": "docs/toolingdocs/architecture/ownership-and-state.md",
+      "sha256": "sha256:5581ac4945a7726eac3be95ae9b573b8bd62c86edf4d6b8942271debef2e03e4",
+      "size": 3022,
       "kind": "file",
       "executable": false
     },
     {
-      "path": "docs/toolingdocs/case-study/tests/.gitkeep",
-      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "size": 0,
+      "path": "docs/toolingdocs/architecture/profiles-features-and-adapters.md",
+      "sha256": "sha256:0662c852ca34cb797d747ed2c0eba9e02ba37df1c8eb0dcb18e25fc947948ce4",
+      "size": 3151,
       "kind": "file",
       "executable": false
     },
     {
-      "path": "docs/toolingdocs/development/.gitkeep",
-      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "size": 0,
+      "path": "docs/toolingdocs/architecture/project-context-and-paths.md",
+      "sha256": "sha256:cf51137749b412c35816a46f275cbfc05e2642edb4587988d53080b3d91b5c3e",
+      "size": 2540,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/architecture-pipeline.tex",
+      "sha256": "sha256:709e88f32e9d24150f720688cae975ea2becec5fd7e55ed2756bdac7bc69a70e",
+      "size": 809,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/ownership-boundary.tex",
+      "sha256": "sha256:7b01288399829e9e3953628cbc6badccd397360c3dc2ff32a51fc7852558a517",
+      "size": 852,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/build.py",
+      "sha256": "sha256:5a617146cea5a94099b1e12eef5860b9122a28892e4517c01c7963b64aada0b3",
+      "size": 10482,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/case-study.md",
+      "sha256": "sha256:c21122ea726feb14b50f05b14b9530e21985ee65166736e7f44cb9d884eaa9ad",
+      "size": 3210,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/main.tex",
+      "sha256": "sha256:03023576e0bd3c6c6802ca4f8df6284e1130a589e971a2224b33cb1680cd159b",
+      "size": 15596,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/main.tex",
+      "sha256": "sha256:4017504385ec3cd216df8838427cd5469875ce377435895e81d0f43f4f47b969",
+      "size": 14315,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/tests/test_reproducible_build.py",
+      "sha256": "sha256:9291f03e590269eba24237ae3fcc05c383de675b56c1419c77f6a3a11a0a49f3",
+      "size": 8314,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/development/contribution.md",
+      "sha256": "sha256:e901dc48e02ade1e97cb8caca32b0ba5d52b70c8d907283d53aef9c184851dcf",
+      "size": 4325,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/development/development.md",
+      "sha256": "sha256:63f84e48364132cfc77e03fd6bb353c0ead30d9dd06cf19d059c44b85b0559ac",
+      "size": 1203,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/development/refactor-inventory.md",
-      "sha256": "sha256:8abd101a163449787cbb5b96e8b3a4fb0256bccf39a44fbf56aafe76a52d1f15",
-      "size": 14529,
+      "sha256": "sha256:f16c3495f82d99649b0404c168c317f53297d7ce758937ede416cbc4c99900e0",
+      "size": 14640,
       "kind": "file",
       "executable": false
     },
     {
-      "path": "docs/toolingdocs/guides/.gitkeep",
-      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "size": 0,
+      "path": "docs/toolingdocs/development/security-boundaries.md",
+      "sha256": "sha256:cc977b57ba2e9c124b04c54dfef507cb9eb4a55428acb79dde92f7de3fa03a01",
+      "size": 5770,
       "kind": "file",
       "executable": false
     },
     {
-      "path": "docs/toolingdocs/integration/.gitkeep",
-      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "size": 0,
+      "path": "docs/toolingdocs/guides/builds.md",
+      "sha256": "sha256:b4924c7dc85e8dc7aa881e9292deaec7de5db7559cd612330c2b6b6e0b3881b5",
+      "size": 2550,
       "kind": "file",
       "executable": false
     },
     {
-      "path": "docs/toolingdocs/reference/.gitkeep",
-      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "size": 0,
+      "path": "docs/toolingdocs/guides/folder-replacement.md",
+      "sha256": "sha256:123a9e8268a55a932be9e576e8105cfdc1e328112e3d4a876eeafcc9dc620d5e",
+      "size": 5188,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/guides/guides.md",
+      "sha256": "sha256:44e0593fcbfd33b9fc3b140b72cafbd5366d0f89347d46c5ff2b399f21c4f30d",
+      "size": 837,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/guides/install.md",
+      "sha256": "sha256:214cf8c4e0acfd00f503b38ff73c0241d154dbb4068124978c285623d26b91cf",
+      "size": 3049,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/guides/releases.md",
+      "sha256": "sha256:4178cb33f965bbc948c48b98193d84be8914b7a1dd8acefaa488b6ef04dfd0fe",
+      "size": 2218,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/guides/tests.md",
+      "sha256": "sha256:d78004ed70c327199174c814c4440f7edc3e19ea2d9e1cac3d00fda17d3eb5be",
+      "size": 3264,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/index.md",
+      "sha256": "sha256:08d4760496926b2ae3a4fda9ee2db7664bd29f2f966538ac76ac7d720439b6ba",
+      "size": 2786,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/integration/check.md",
+      "sha256": "sha256:6ccd407870d6703c4b9c1d3550b0b5b496499034f67bafc5d3edb496f3177d5a",
+      "size": 2012,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/integration/full-fix-and-actions.md",
+      "sha256": "sha256:fa36236fc4cf38199bc47324bdf3c3b0ee26bf9bc00a2b1c27644a0ffe0c2f9b",
+      "size": 4148,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/integration/integration.md",
+      "sha256": "sha256:0fdf0652c2eebc7c2223c167d9fb17effe99b52a7af76ad5ce7c7a2e5bd01517",
+      "size": 1567,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/integration/migration-verification-and-drift.md",
+      "sha256": "sha256:8f70ab5956d6cfda471a2859685da3dc3fcec8298ef3b2a5b42ab3233a2b3b2f",
+      "size": 3514,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/reference/adapter-capabilities.md",
+      "sha256": "sha256:68541aaa453d1d2aa23b1da3d9d9d48179f3f111f8c56ca6cd65c3c10cd816a1",
+      "size": 2504,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/reference/cli.md",
+      "sha256": "sha256:85208e2797cef7b192bfd55996e3d569a5cc71b303ebd21e6acf353909607c96",
+      "size": 2370,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/reference/profiles-and-features.md",
+      "sha256": "sha256:6b52335939463382db78ba82796b57867ea9e26999e655acbaa5bb18eb84f892",
+      "size": 1955,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/reference/project-configuration.md",
+      "sha256": "sha256:56cdbf6360828d580dc55c7ae6e49df2b9853af55a2e1047cabd812e4b61d69b",
+      "size": 1868,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/reference/reference.md",
+      "sha256": "sha256:86fc0efcaae62f186b4d4f33b35136c06f9598e89da77b16a4fbdae2626816ba",
+      "size": 763,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/reference/reports.md",
+      "sha256": "sha256:9af1a5e88b2cba866c2eb0e6c73a56dd293cb8de5bd577fdd8f82b41db9e6ab5",
+      "size": 1683,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/reference/tooling-state.md",
+      "sha256": "sha256:bcbb2fe11d12e17def06c9994bc9f137b8d3287ace40c3a01f5defb8ef02c407",
+      "size": 1866,
       "kind": "file",
       "executable": false
     },
@@ -88,7 +263,7 @@
     },
     {
       "path": "tools/VERSION",
-      "sha256": "sha256:1f930dd1f133c1f97a94fe3acb8db34372cf4c01ffdb2b3ff4ca72f9494121e9",
+      "sha256": "sha256:d915cc95d6ca8f47ae297713ed46d4e5c5d99ddd29fc3c61e263bdf305f2b5b0",
       "size": 6,
       "kind": "file",
       "executable": false
@@ -459,8 +634,8 @@
     },
     {
       "path": "tools/integration/migrations.py",
-      "sha256": "sha256:4fe19409005d4892fbb76c1492e8371267db42940610b4e8d852e06d6d4b5ab9",
-      "size": 25403,
+      "sha256": "sha256:644271348ee187500cb9e0d589e1f0230ea2b24ce138daea7a6cf2ca44bb41eb",
+      "size": 25803,
       "kind": "file",
       "executable": false
     },
@@ -788,7 +963,7 @@
     },
     {
       "path": "tools/resources/examples/project-tooling.example.toml",
-      "sha256": "sha256:c9d2f1bd97eea3f466ba70063bf571e6e8d38f1f6134a55c56ded743f7fe16a4",
+      "sha256": "sha256:b8893a828cd568752fe0aa18c92f15b01cd3b665d1912964942affe12c3fbba7",
       "size": 225,
       "kind": "file",
       "executable": false
@@ -1033,7 +1208,7 @@
     },
     {
       "path": "tools/tests/acceptance/test_tooling_replacement.py",
-      "sha256": "sha256:c30b4f0a51451901121ddff51301c542304364aefd047f23b2f8eaa276962b80",
+      "sha256": "sha256:91b3a7d31f5072fc827b02ef74d2da38de0147eedc8ec3553ca8934b76b0d40a",
       "size": 21838,
       "kind": "file",
       "executable": false
@@ -1166,15 +1341,15 @@
     },
     {
       "path": "tools/tests/integration/test_migration_workflow.py",
-      "sha256": "sha256:2437660e8a63ca647a2c3d9eb7c4e4b4b8063628f319f1ff521532faf6373e45",
-      "size": 11862,
+      "sha256": "sha256:f9ef32aa04ff0fdb98a7dce4d127fe0342ecd28a6f2d7d06a43e4978a8de765b",
+      "size": 12189,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tests/integration/test_migrations.py",
-      "sha256": "sha256:3e6c04da699301288d4ae5c33c243f6706851c91740abbbe9d9c6a9861a12c7b",
-      "size": 12457,
+      "sha256": "sha256:53a649f8fcb0067c5997ae4c27e1baf1bd221cb403010382dd3b649cdbb55fb3",
+      "size": 13199,
       "kind": "file",
       "executable": false
     },
@@ -1410,6 +1585,13 @@
       "executable": false
     },
     {
+      "path": "tools/tests/test_portable_documentation.py",
+      "sha256": "sha256:61fa2b234b29c9fbf5160763dac6a05553ce75f9acd14a9315e8dad597d2a094",
+      "size": 6698,
+      "kind": "file",
+      "executable": false
+    },
+    {
       "path": "tools/tests/test_process.py",
       "sha256": "sha256:fd682fbea85e8be1ea7fdbde0310f27a3bb55e21ac07b07b0c823ec7022faf9a",
       "size": 12939,
@@ -1494,5 +1676,5 @@
       "executable": false
     }
   ],
-  "digest": "sha256:b4f15210285864faa740a7252f70c0031b0f3f98d93c14361adfd3250f1ace72"
+  "digest": "sha256:0ea416085b70e96d8fbfaa714655a77807b888f0464405f68ef24358e8fc5531"
 }

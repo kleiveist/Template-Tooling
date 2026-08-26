@@ -1,0 +1,295 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+% Stabilize PDF metadata in addition to SOURCE_DATE_EPOCH from build.py.
+\ifdefined\pdfinfoomitdate\pdfinfoomitdate=1\fi
+\ifdefined\pdftrailerid\pdftrailerid{}\fi
+\ifdefined\pdfsuppressptexinfo\pdfsuppressptexinfo=-1\fi
+
+\setlength{\oddsidemargin}{0mm}
+\setlength{\evensidemargin}{0mm}
+\setlength{\textwidth}{159mm}
+\setlength{\topmargin}{-10mm}
+\setlength{\textheight}{235mm}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.7em}
+\raggedbottom
+\sloppy
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\PipelineObserve}{Projekt\\beobachten}
+\newcommand{\PipelinePlan}{Differenz\\planen}
+\newcommand{\PipelineStage}{isoliert\\stagen}
+\newcommand{\PipelineVerify}{Ergebnis\\prüfen}
+\newcommand{\PipelineFinish}{Commit oder\\Rollback}
+\newcommand{\PipelineFailure}{Fehler: unverändert zurück}
+\newcommand{\ProjectBoundaryTitle}{Projektbesitz}
+\newcommand{\ProjectBoundaryOne}{Anwendungsquellen}
+\newcommand{\ProjectBoundaryTwo}{Domänenkonfiguration}
+\newcommand{\ProjectBoundaryThree}{unbekannte Dateien}
+\newcommand{\ProjectBoundaryFour}{Produkt-Repositories}
+\newcommand{\ToolingBoundaryTitle}{Toolingbesitz}
+\newcommand{\ToolingBoundaryOne}{Profile und Regeln}
+\newcommand{\ToolingBoundaryTwo}{Adapter und Ressourcen}
+\newcommand{\ToolingBoundaryThree}{Migrationen und State}
+\newcommand{\ToolingBoundaryFour}{Tooling-Dokumentation}
+\newcommand{\BoundaryObserve}{Evidenz}
+\newcommand{\BoundaryProposal}{begrenzter Patch}
+\newcommand{\BoundaryContract}{expliziter Eigentumsvertrag}
+
+\title{Portable Toolingarchitektur\\Eine bilinguale Fallstudie zu kontrollierter Integration}
+\author{Fallstudie des portablen Toolings}
+\date{Reproduzierbare Ausgabe}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Diese Fallstudie untersucht ein Toolingpaket, das als direkt kopierbarer Ordner in
+unterschiedliche Softwareprojekte integriert werden kann. Anders als ein
+Produkt-Template besitzt es weder die Anwendung noch deren Lebenszyklus. Es beobachtet
+vorhandene Technologien, wählt ein Profil, plant eng begrenzte Änderungen und führt diese
+transaktional aus. Bewertet werden Portabilität, Eigentumsschutz, deterministische
+Ausführung und die Kosten eines bewusst fehlerschließenden Designs. Die Ergebnisse zeigen,
+dass die stärksten Garantien nicht aus einer großen Zahl von Generatoren entstehen, sondern
+aus expliziten Grenzen, wiederholbaren Plänen und prüfbarer Rücknahme.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Ausgangslage und Forschungsfrage}
+
+Viele interne Tooling-Repositories beginnen als vollständige Projektvorlage. Mit der Zeit
+enthalten sie Annahmen über Frontend, Backend, Datenbank, Desktop-Hülle, CI und Release.
+Solange jedes Zielprojekt dieselbe Form besitzt, ist das bequem. Sobald das Tooling jedoch
+in ein bestehendes oder anders strukturiertes Projekt kopiert wird, werden diese Annahmen zu
+Risiken: feste Pfade zeigen auf falsche Dateien, ein Generator überschreibt Produktcode und
+ein Update kann nicht mehr zwischen eigenem und fremdem Zustand unterscheiden.
+
+Der untersuchte Umbau ersetzt dieses Modell durch einen portablen Toolingordner. Seine
+zentrale Forschungsfrage lautet:
+
+\begin{quote}
+Wie kann ein kopierbares Tooling verschiedene Projektformen unterstützen, ohne
+Anwendungsquellen zu besitzen, und dabei Integration, Migration sowie Verifikation
+reproduzierbar und rücknehmbar machen?
+\end{quote}
+
+Die Fallstudie betrachtet diese Frage nicht als reine Paketierungsaufgabe. Portabilität
+bedeutet hier, dass Pfade aus einem zur Laufzeit ermittelten Projektkontext stammen, dass
+Technologiekenntnis hinter Adaptern liegt und dass jede schreibende Operation vorab als
+strukturierter Plan sichtbar wird. Ein kopierter Ordner ist erst dann wirklich portabel,
+wenn sein Verhalten nicht von der Position des ursprünglichen Repositories abhängt.
+
+\section{Architektur des portablen Kerns}
+
+\subsection{Kontext statt globaler Wurzel}
+
+Der Projektkontext trennt Projektwurzel, Toolingwurzel, Dokumentationswurzel,
+Ressourcenpfade und lokalen State. Standardwurzeln werden zentral aus dem Installationsort
+des Toolings abgeleitet, an der Grenze validiert und danach explizit weitergereicht.
+Verbraucher erraten dadurch nicht jeweils eine eigene globale Repository-Wurzel. Dieser
+kleine Unterschied ist entscheidend: Dieselbe Kopie kann unter einem Monorepo, neben einer
+Webanwendung oder in einem Desktopprojekt liegen, ohne dass Quellpfade neu kompiliert werden
+müssen.
+
+Die Projektkonfiguration beschreibt Pfade und Profilwünsche, bleibt aber Projekteigentum.
+Profile, Adapterverträge und kanonische Ressourcen liegen dagegen im Tooling. Der lokale
+Integrationszustand befindet sich außerhalb des Toolingordners in einem begrenzten
+State-Bereich. Dadurch kann der komplette Toolingordner ausgetauscht werden, ohne den
+Projektzustand mit einer alten Implementierung zu vermischen.
+
+\subsection{Profile und Adapter}
+
+Ein Profil formuliert gewünschte Fähigkeiten, nicht eine vollständige Verzeichnisstruktur.
+Beispiele sind eine reine Weboberfläche, eine Cloud-Variante oder eine Desktopkombination.
+Adapter übersetzen diese Fähigkeiten in technologiespezifische Beobachtungen und
+kontrollierte Aktionen. Ein Frontend-Adapter kann etwa vorhandene Paketmanifeste erkennen,
+während ein Datenbank-Adapter nur bei belastbaren Markern aktiv wird. Fehlt Evidenz, bleibt
+der Adapter inaktiv; bloße Vermutung reicht nicht für einen Schreibzugriff.
+
+Diese Aufteilung hält den Kern klein. Er kennt Zustände, Findings, Pläne, Transaktionen und
+Migrationen. Er kennt jedoch weder konkrete npm-Skripte noch Datenbankdateien als universelle
+Wahrheit. Neue Technologien erweitern die Adapterregistrierung, ohne den Kern auf ein neues
+Produktmodell festzulegen.
+
+\section{Eigentum als Sicherheitsgrenze}
+
+Abbildung~\ref{fig:ownership} zeigt die wichtigste Grenze des Entwurfs. Das Projekt besitzt
+seine Anwendung, domänenspezifische Konfiguration und alle unbekannten Dateien. Das Tooling
+besitzt ausschließlich seine mitgelieferten Regeln, Ressourcen, Migrationen und
+Dokumentation. Ein Adapter darf Projektdateien beobachten und eng begrenzte Änderungen
+vorschlagen; daraus folgt kein pauschales Eigentum am Zielbaum.
+
+\begin{figure}[htbp]
+  \centering
+  \input{../../assets/ownership-boundary.tex}
+  \caption{Evidenz fließt zum Tooling, Änderungen nur als begrenzte Vorschläge zurück.}
+  \label{fig:ownership}
+\end{figure}
+
+Der Eigentumsvertrag wirkt auf drei Ebenen:
+
+\begin{enumerate}
+  \item \textbf{Pfadgrenzen:} relative Pfade werden normalisiert, müssen innerhalb der
+  Projektwurzel liegen und dürfen keine symbolischen Umleitungen ausnutzen.
+  \item \textbf{Änderungsgrenzen:} strukturierte Operationen unterscheiden Erstellen,
+  Ersetzen und Entfernen. Vorbedingungen verhindern, dass ein inzwischen veränderter Inhalt
+  stillschweigend überschrieben wird.
+  \item \textbf{Wissensgrenzen:} Adapter müssen ihre Marker und Zielpfade deklarieren.
+  Unbekannte Dateien sind kein Fehler und werden nicht als aufzuräumender Rest behandelt.
+\end{enumerate}
+
+Diese Regeln sind strenger als ein klassischer Generator. Sie reduzieren den Umfang
+automatischer Reparaturen, erhöhen aber die Nachvollziehbarkeit. Für ein Tool, das in fremden
+Repositories laufen soll, ist diese Asymmetrie sinnvoll: Ein ausgelassener Komfortschritt
+ist korrigierbar, ein verlorener Produktbestand möglicherweise nicht.
+
+\section{Transaktionale Integration}
+
+Die Integrationspipeline in Abbildung~\ref{fig:pipeline} trennt Beobachtung und Schreiben.
+Zunächst entsteht aus Ist-Zustand, Profil und Adapterbefunden ein deterministischer Plan.
+Die geplanten Operationen werden anschließend in einer isolierten Staging-Kopie angewendet.
+Wenn der Plan sie erfordert, laufen feste Tooling-, Qualitäts-, Test- und
+Lockfile-Abhängigkeitsprüfungen gegen diesen Kandidaten. Erst ein vollständig erfolgreicher
+Kandidat darf in das Projekt übernommen werden.
+
+\begin{figure}[htbp]
+  \centering
+  \input{../../assets/architecture-pipeline.tex}
+  \caption{Die Integration veröffentlicht nur einen vollständig verifizierten Kandidaten.}
+  \label{fig:pipeline}
+\end{figure}
+
+Der Commit ist selbst wieder kontrolliert. Vor dem Schreiben werden die beobachteten
+Vorbedingungen erneut geprüft. Backups und ein Transaktionsjournal ermöglichen Rollback,
+wenn eine spätere Operation fehlschlägt. Der persistierte State speichert keine pauschale
+Momentaufnahme des gesamten Projekts, sondern die für Besitz und Drift notwendigen Belege.
+Damit bleibt ein manuell veränderter Projektbestand sichtbar, statt beim nächsten Lauf als
+veraltete Vorlage ersetzt zu werden.
+
+Zwei Betriebsarten ergeben sich aus demselben Planungsmodell. Eine reine Prüfung erzeugt
+Findings und einen Plan, verändert aber kein Byte. Eine vollständige Reparatur darf nur die
+im Plan autorisierten Operationen ausführen. Nach erfolgreichem Abschluss muss eine erneute
+Prüfung keinen Drift mehr melden; ein zweiter Reparaturlauf muss ein No-op sein. Diese
+Idempotenz ist ein stärkeres Akzeptanzkriterium als der einmalige Exitcode eines Generators.
+
+\section{Ausführung fremder Werkzeuge}
+
+Manche Verifikation benötigt reale Toolchains. Ein Staging-Kandidat kann vertrauenswürdige
+Tooling-Qualitäts- und Testprüfungen oder eine Lockfile-Validierung über ein offline
+ausgeführtes \code{npm ci --ignore-scripts} benötigen. Getrennt davon kann der Benutzer eine
+feste Live-Capability eines vorhandenen Produkts ausdrücklich auslösen. Das Tooling kann
+diesen Code nicht semantisch ersetzen, muss seine Ausführung aber begrenzen; frei
+konfigurierte Shellfragmente gehören nicht zum Vertrag.
+
+Beide Aktionspfade laufen ohne Shell, mit beschränkter Ausgabe, Timeout und temporären Home-,
+Cache- und Konfigurationsverzeichnissen. Die Staging-Validierung erzwingt für unterstützte
+Werkzeuge zusätzlich den Offline-Modus und deaktiviert Lifecycle-Skripte; eine explizite
+Live-Aktion darf dagegen bewusst Registries kontaktieren und Projektartefakte erzeugen.
+Prozessgruppen beziehungsweise Job-Objekte beenden Nachfahren nach Abschluss. Diese
+Maßnahmen sind keine Betriebssystem-Sandbox: Ausgeführter Code besitzt weiterhin die Rechte
+des lokalen Benutzers. Sie machen die verbleibende Vertrauensannahme explizit; nur die
+Staging-Validierung gehört zur Rollback-Grenze der Integration.
+
+\section{Evaluation}
+
+\subsection{Versuchsaufbau}
+
+Die Architektur wird mit fünf Projektprofilen und unabhängigen temporären Zielprojekten
+bewertet. Für jedes Profil gilt dieselbe Sequenz: Tooling kopieren, Projektzustand erkennen,
+prüfen, vollständig integrieren, erneut prüfen, passende Tests ausführen und die Integration
+ein zweites Mal starten. Ein ergänzender Versuch integriert die fest referenzierte historische
+Version 0.1.0 und ersetzt danach beide verwalteten Verzeichnisse durch das aktuelle Release,
+um eine registrierte Migration und die Trennung von Tooling- und Projektstate zu prüfen.
+
+Die Messgrößen sind bewusst binär und byteorientiert:
+
+\begin{itemize}
+  \item Hashes aller unbekannten und produktbesessenen Dateien bleiben unverändert.
+  \item Eine reine Prüfung verändert weder Dateien noch Verzeichnisstruktur.
+  \item Nach erfolgreicher Integration liefert die zweite Integration keine Operation.
+  \item Ein absichtlich fehlschlagender Verifikationsschritt stellt den Ausgangszustand her.
+  \item Dieselbe portable Nutzlast besitzt nach direkter Kopie dieselbe Manifestidentität.
+\end{itemize}
+
+\subsection{Ergebnis und Interpretation}
+
+\begin{center}
+\begin{tabular}{|p{43mm}|p{48mm}|p{55mm}|}
+\hline
+\textbf{Kriterium} & \textbf{Beobachtbarer Nachweis} & \textbf{Interpretation} \\
+\hline
+Relokation & Kontextpfade zeigen nur auf das temporäre Ziel & Keine Bindung an das
+Quellrepository \\
+\hline
+Eigentumsschutz & Produkt- und unbekannte Hashes bleiben gleich & Adapterwissen begrenzt
+statt erweitert Besitz \\
+\hline
+Idempotenz & Zweiter vollständiger Lauf plant null Operationen & State und gewünschter
+Zustand stimmen überein \\
+\hline
+Rollback & Fehlerkandidat hinterlässt keine Teiländerung & Verifikation liegt vor
+Veröffentlichung \\
+\hline
+Toolingtausch & Migration läuft gegen erhaltenen Projektstate & Implementierung und State
+sind getrennt \\
+\hline
+\end{tabular}
+\end{center}
+
+Die Evaluation belegt nicht, dass jeder denkbare Adapter korrekt ist. Sie belegt die
+Architektureigenschaften, die für alle Adapter gelten müssen. Der Transaktionskern kann
+Ausführungs- und Verifikationsfehler zurückrollen, aber nicht beweisen, dass eine formal gültige
+Änderung an einem erlaubten Domänenschlüssel fachlich erwünscht ist. Umgekehrt kann ein
+inhaltlich guter Adapter die Portabilität verletzen, wenn er feste Wurzelpfade verwendet.
+Darum kombinieren die Tests Profilmatrizen mit Vertragsprüfungen für Pfade, Marker,
+Eigentumsbereiche und Aktionsdefinitionen.
+
+\section{Trade-offs und Grenzen}
+
+\textbf{Mehr Vorarbeit, kleinere Fehlerfläche.} Ein Adapter benötigt deklarierte Marker,
+Operationen und Tests. Das ist aufwendiger als das Kopieren eines fertigen Verzeichnisbaums,
+verhindert aber implizite Besitzannahmen.
+
+\textbf{Fail-closed kann Verfügbarkeit kosten.} Fehlt ein Lockfile, ein Compiler oder eine
+sichere Pfadauflösung, verweigert das Tooling die automatische Änderung. Teams müssen solche
+Befunde bewusst beheben. Der Vorteil ist, dass Unsicherheit nicht als Erlaubnis interpretiert
+wird.
+
+\textbf{Reproduzierbarkeit ist umgebungsgebunden.} Fixierte Zeit, Locale, Offline-Schalter
+und bereinigte Caches beseitigen viele Quellen von Drift. Unterschiedliche Compiler- oder
+Toolchainversionen können trotzdem andere Artefakte erzeugen. Vollständige
+Byte-Reproduzierbarkeit benötigt daher zusätzlich eine versionierte Buildumgebung.
+
+\textbf{Prozessbegrenzung ist keine Sandbox.} Timeouts und Prozessbäume verhindern typische
+Lecks, isolieren aber nicht die Dateisystemrechte eines bösartigen Tests. Für nicht
+vertrauenswürdige Projekte ist eine externe VM- oder Containergrenze erforderlich.
+
+\textbf{Das Manifest ist eine Grenze der Selbstkonsistenz.} Eine exakte Nutzlastliste erkennt
+gemischte oder veränderte Toolingkopien nur, solange das mitgelieferte Manifest als
+vertrauenswürdig gilt. Koordinierte Änderungen an Nutzlast und Manifest werden nicht
+authentifiziert. Nach jeder legitimen Änderung muss es neu erzeugt werden; ein veraltetes
+Manifest blockiert portable Integration und Verifikation, während ein Release-Gate diese
+Prüfung ausdrücklich aufrufen muss.
+
+\section{Schlussfolgerung}
+
+Der Wechsel vom Master-Template zum portablen Tooling ist vor allem ein Wechsel des
+Eigentumsmodells. Profile beschreiben Fähigkeiten, Adapter liefern begrenztes
+Technologiewissen und der Kern veröffentlicht nur verifizierte Transaktionen. Portabilität
+entsteht durch expliziten Kontext; Sicherheit entsteht durch enge Pfade und fehlerschließende
+Entscheidungen; Wartbarkeit entsteht durch die Trennung von Projektstate und austauschbarer
+Toolingimplementierung.
+
+Die Fallstudie zeigt zugleich die Grenze dieser Aussage. Das System kann fremden Code nicht
+magisch vertrauenswürdig machen und Toolchainversionen nicht ohne Buildumgebung vereinheitlichen.
+Es kann aber jede dieser Annahmen sichtbar machen, den Änderungsumfang beweisen und bei Fehlern
+zum bekannten Ausgangszustand zurückkehren. Für ein Tool, das in vielen unterschiedlich
+gewachsenen Projekten arbeiten soll, ist genau diese kontrollierte Bescheidenheit die
+entscheidende Architekturleistung.
+
+\end{document}
