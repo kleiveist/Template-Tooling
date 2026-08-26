@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from tools import logger
+from tools.core.context import ProjectContext, load_context
 from tools.profiles.generator import (
     GenerationError,
     ScaffoldPlan,
@@ -17,17 +18,12 @@ from tools.profiles.validator import (
     ProfileLookupError,
     resolve_optional_features,
 )
-from tools.template_lifecycle.model import LifecycleError
-from tools.template_lifecycle.scaffold import finalize_generated_project
-
-ROOT = Path(__file__).resolve().parents[2]
 
 
-def main(args: argparse.Namespace) -> int:
+def main(args: argparse.Namespace, *, context: ProjectContext | None = None) -> int:
+    selected_context = context or load_context()
     try:
-        # Derived projects retain presets whose source modules may be absent.
-        # The selected plan validates its own source paths before generation.
-        catalog = load_catalog(ROOT / "profiles", validate_paths=False)
+        catalog = load_catalog(context=selected_context)
         explicit_profile = getattr(args, "profile", None)
         profile = _resolve_profile_choice(catalog, explicit_profile)
         requested_features = _parse_optional_features(getattr(args, "optional_features", []))
@@ -37,16 +33,18 @@ def main(args: argparse.Namespace) -> int:
             getattr(args, "target_dir", None),
             profile.id,
             requested_features,
+            project_root=selected_context.project_root,
         )
         plan = build_scaffold_plan(
             catalog,
-            project_root=ROOT,
+            project_root=selected_context.project_root,
             target_dir=target_dir,
             profile_id=profile.id,
             optional_features=requested_features,
             project_name=getattr(args, "project_name", None),
             project_slug=getattr(args, "project_slug", None),
             identifier=getattr(args, "identifier", None),
+            context=selected_context,
         )
     except ProfileLookupError as exc:
         logger.fail(str(exc))
@@ -59,9 +57,7 @@ def main(args: argparse.Namespace) -> int:
     dry_run = bool(getattr(args, "dry_run", False))
     try:
         scaffold_project(plan, dry_run=dry_run)
-        if not dry_run:
-            finalize_generated_project(plan)
-    except (GenerationError, LifecycleError, OSError) as exc:
+    except (GenerationError, OSError) as exc:
         logger.fail(str(exc))
         return 1
 
@@ -93,14 +89,14 @@ def _prompt_for_profile(catalog: ProfileCatalog) -> ProfileDefinition:
     for index, profile in enumerate(options, start=1):
         print(f"{index}. {profile.name} ({profile.id})")
         print(f"   {profile.description}")
-    print("")
+    print()
 
     while True:
         try:
             choice = input(f"Selection [1-{len(options)} or q]: ").strip().lower()
         except EOFError:
             choice = "q"
-            print("")
+            print()
 
         if choice in {"q", "quit", "exit"}:
             raise GenerationError("Initialization cancelled.")
@@ -149,14 +145,14 @@ def _prompt_for_optional_features(
     for index, feature in enumerate(compatible, start=1):
         print(f"{index}. {feature.name} ({feature.id})")
         print(f"   {feature.description}")
-    print("")
+    print()
 
     while True:
         try:
             choice = input("Selection [comma-separated numbers, Enter for none, or q]: ").strip().lower()
         except EOFError:
             choice = "q"
-            print("")
+            print()
         if not choice:
             return ()
         if choice in {"q", "quit", "exit"}:
@@ -176,11 +172,14 @@ def _resolve_target_dir(
     explicit_target: str | None,
     profile_id: str,
     optional_features: tuple[str, ...],
+    *,
+    project_root: Path | None = None,
 ) -> Path:
     if explicit_target:
         return Path(explicit_target).expanduser()
     suffix = "" if not optional_features else "-" + "-".join(optional_features)
-    return ROOT / ".generated" / f"{profile_id}{suffix}"
+    root = project_root or load_context().project_root
+    return root / ".generated" / f"{profile_id}{suffix}"
 
 
 def _print_plan(plan: ScaffoldPlan) -> None:

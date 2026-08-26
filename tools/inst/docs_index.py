@@ -10,8 +10,10 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from tools import logger
+from tools.core.context import load_context
 
-ROOT = Path(__file__).resolve().parents[2]
+CONTEXT = load_context()
+ROOT = CONTEXT.project_root
 INDEX_START = "<!-- AUTO-GENERATED:docs-index START -->"
 INDEX_END = "<!-- AUTO-GENERATED:docs-index END -->"
 BACKLINK_START = "<!-- AUTO-GENERATED:backlink START -->"
@@ -68,7 +70,12 @@ def _translate_generated_block(text: str) -> str:
 
 
 def normalize_generated_english(project_root: Path = ROOT) -> int:
-    candidates = [project_root / "README.md", *(project_root / "docs").rglob("*.md")]
+    docs_root = (
+        CONTEXT.docs_root
+        if project_root.resolve() == CONTEXT.project_root
+        else project_root / CONTEXT.config.paths.docs / "toolingdocs"
+    )
+    candidates = [project_root / "README.md", *docs_root.rglob("*.md")]
     changed = 0
     for path in candidates:
         if not path.is_file():
@@ -251,7 +258,8 @@ def _check_root_index(
 
 
 def _documentation_root(project_root: Path, docs_dir: str) -> Path | None:
-    docs_root = (project_root / docs_dir).resolve()
+    configured = project_root.resolve() == CONTEXT.project_root and docs_dir == CONTEXT.config.paths.docs
+    docs_root = (CONTEXT.docs_root if configured else project_root / docs_dir).resolve()
     try:
         docs_root.relative_to(project_root)
     except ValueError:
@@ -285,7 +293,10 @@ def check(args: argparse.Namespace) -> int:
 
 
 def _command_for(script: Path, args: argparse.Namespace) -> list[str]:
-    command = [sys.executable, str(script), "--docs-dir", args.docs_dir]
+    docs_dir = args.docs_dir
+    if ROOT.resolve() == CONTEXT.project_root and docs_dir == CONTEXT.config.paths.docs:
+        docs_dir = CONTEXT.docs_root.relative_to(ROOT).as_posix()
+    command = [sys.executable, str(script), "--docs-dir", docs_dir]
     if args.dry_run:
         command.append("--dry-run")
     if args.force:

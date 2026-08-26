@@ -481,7 +481,7 @@ def _add_service_parsers(subparsers: argparse._SubParsersAction) -> None:
     run_parser.add_argument(
         "--detach",
         action="store_true",
-        help="run in background and write logs to tools/.runtime",
+        help="run in background and write logs to .tooling-state/runtime",
     )
     _add_examples(
         run_parser,

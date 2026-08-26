@@ -14,13 +14,19 @@ from typing import Any
 
 from tools import logger
 from tools.config import ConfigLoadError, resolve_configuration, validate_configuration
-from tools.inst import report as report_writer
+from tools.core.context import load_context
 from tools.inst import e2e as e2e_runtime
+from tools.inst import report as report_writer
 from tools.inst import stop as service_cleanup
 from tools.process import prepare_command
 from tools.profiles import runtime as profile_runtime
 
-ROOT = Path(__file__).resolve().parents[2]
+CONTEXT = load_context()
+ROOT = CONTEXT.project_root
+TOOLS_ROOT = CONTEXT.tools_root
+FRONTEND_DIR = CONTEXT.paths.frontend
+BACKEND_DIR = CONTEXT.paths.backend
+REPORT_ROOT = CONTEXT.state_root
 CONSOLE_TAIL_LINES = 12
 REPORT_TAIL_LINES = 80
 
@@ -113,14 +119,16 @@ def _expand_suites(value: str) -> list[str]:
 
 
 def _backend_python() -> Path:
-    windows_python = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
-    unix_python = ROOT / "backend" / ".venv" / "bin" / "python"
+    if BACKEND_DIR is None:
+        return CONTEXT.state_root / "unconfigured-backend" / "python"
+    windows_python = BACKEND_DIR / ".venv" / "Scripts" / "python.exe"
+    unix_python = BACKEND_DIR / ".venv" / "bin" / "python"
     return windows_python if windows_python.exists() else unix_python
 
 
 def _tooling_python() -> Path:
-    windows_python = ROOT / "tools" / ".venv" / "Scripts" / "python.exe"
-    unix_python = ROOT / "tools" / ".venv" / "bin" / "python"
+    windows_python = CONTEXT.venv_root / "Scripts" / "python.exe"
+    unix_python = CONTEXT.venv_root / "bin" / "python"
     if windows_python.exists():
         return windows_python
     return unix_python
@@ -174,7 +182,7 @@ def _ensure_backend_runtime(selected_suites: list[str]) -> SuiteResult | None:
     started = time.monotonic()
     command = [
         sys.executable,
-        str(ROOT / "tools" / "control.py"),
+        str(TOOLS_ROOT / "control.py"),
         "install",
         "--skip-frontend",
         "--skip-playwright",
@@ -351,7 +359,9 @@ def _run_api_suite() -> SuiteResult:
     if not profile_runtime.feature_enabled("backend", ROOT):
         return SuiteResult("api", "SKIP", "backend feature disabled", time.monotonic() - started)
 
-    api_tests = ROOT / "backend" / "tests" / "api"
+    if BACKEND_DIR is None:
+        return SuiteResult("api", "FAIL", "backend path is not configured", time.monotonic() - started)
+    api_tests = BACKEND_DIR / "tests" / "api"
     if not api_tests.exists():
         return SuiteResult("api", "FAIL", "backend/tests/api missing", time.monotonic() - started)
 
@@ -385,7 +395,9 @@ def _run_database_suite() -> SuiteResult:
             time.monotonic() - started,
         )
 
-    tests_dir = ROOT / "backend" / "tests" / "db"
+    if BACKEND_DIR is None:
+        return SuiteResult("database", "FAIL", "backend path is not configured", time.monotonic() - started)
+    tests_dir = BACKEND_DIR / "tests" / "db"
     if not tests_dir.exists():
         return SuiteResult("database", "FAIL", "backend/tests/db missing", time.monotonic() - started)
     command = [str(_backend_python()), "-m", "pytest", "-q", str(tests_dir)]
@@ -419,7 +431,9 @@ def _run_postgres_suite() -> SuiteResult:
             time.monotonic() - started,
         )
 
-    tests_dir = ROOT / "backend" / "tests" / "integration"
+    if BACKEND_DIR is None:
+        return SuiteResult("postgres", "FAIL", "backend path is not configured", time.monotonic() - started)
+    tests_dir = BACKEND_DIR / "tests" / "integration"
     if not tests_dir.exists():
         return SuiteResult(
             "postgres",
@@ -445,7 +459,7 @@ def _run_frontend_suite() -> SuiteResult:
     if not profile_runtime.feature_enabled("frontend", ROOT):
         return SuiteResult("frontend", "SKIP", "frontend feature disabled", time.monotonic() - started)
 
-    frontend_dir = ROOT / "frontend"
+    frontend_dir = FRONTEND_DIR
     package_json = frontend_dir / "package.json"
     if not package_json.exists():
         return SuiteResult(
@@ -474,13 +488,13 @@ def _run_frontend_suite() -> SuiteResult:
 
 def _run_tools_suite() -> SuiteResult:
     started = time.monotonic()
-    tests_dir = ROOT / "tools" / "tests"
+    tests_dir = TOOLS_ROOT / "tests"
     if not tests_dir.exists():
         return SuiteResult("tools", "FAIL", "tools/tests missing", time.monotonic() - started)
 
     python = str(_tooling_python())
     test_paths = [tests_dir]
-    case_study_tests = ROOT / "case-study" / "tests"
+    case_study_tests = CONTEXT.docs_root / "case-study" / "tests"
     if case_study_tests.exists():
         test_paths.append(case_study_tests)
     command = [python, "-m", "pytest", "-q", *(str(path) for path in test_paths)]
@@ -498,7 +512,7 @@ def _run_tools_suite() -> SuiteResult:
 
 def _run_e2e_suite() -> SuiteResult:
     started = time.monotonic()
-    e2e_tests = ROOT / "frontend" / "tests" / "e2e"
+    e2e_tests = FRONTEND_DIR / "tests" / "e2e"
     if not e2e_tests.exists():
         return SuiteResult(
             "e2e",
@@ -523,13 +537,13 @@ def _run_e2e_suite() -> SuiteResult:
         )
 
     command = [npm, "run", "test:e2e"]
-    completed = _run(command, cwd=ROOT / "frontend", env=environment)
+    completed = _run(command, cwd=FRONTEND_DIR, env=environment)
     return _result_from_completed(
         name="e2e",
         completed=completed,
         started=started,
         command=command,
-        cwd=ROOT / "frontend",
+        cwd=FRONTEND_DIR,
         ok_message="playwright e2e suite passed",
         fail_message="playwright e2e suite failed",
     )
@@ -542,7 +556,7 @@ def _run_tauri_suite() -> SuiteResult:
 
     command = [
         sys.executable,
-        str(ROOT / "tools" / "control.py"),
+        str(TOOLS_ROOT / "control.py"),
         "tauri",
         "test",
         "--cargo",
@@ -604,7 +618,7 @@ def _run_e2e_cleanup(started: float) -> SuiteResult | None:
 
 
 def _e2e_configured() -> bool:
-    frontend_dir = ROOT / "frontend"
+    frontend_dir = FRONTEND_DIR
     return (frontend_dir / "tests" / "e2e").exists() or any(frontend_dir.glob("playwright.config.*"))
 
 
@@ -620,7 +634,7 @@ def _start_services_if_needed(selected_suites: list[str], no_start: bool) -> tup
     if cleanup_failure is not None:
         return False, cleanup_failure
 
-    command = [sys.executable, str(ROOT / "tools" / "control.py"), "run", "--detach"]
+    command = [sys.executable, str(TOOLS_ROOT / "control.py"), "run", "--detach"]
     completed = _run(command, cwd=ROOT)
     if completed.returncode == 0:
         return True, SuiteResult(
@@ -656,7 +670,7 @@ def _stop_services_if_started(started: bool) -> SuiteResult:
     teardown_started = time.monotonic()
     if not started:
         return SuiteResult("service-teardown", "SKIP", "not required", 0.0)
-    command = [sys.executable, str(ROOT / "tools" / "control.py"), "stop", "--tracked-only"]
+    command = [sys.executable, str(TOOLS_ROOT / "control.py"), "stop", "--tracked-only"]
     completed = _run(command, cwd=ROOT)
     return _result_from_completed(
         name="service-teardown",
@@ -685,10 +699,10 @@ def _print_suite_guide() -> None:
     print()
     print("Useful options:")
     print("  --no-start       Do not start frontend/backend automatically for E2E")
-    print("  --report         Write a Markdown report to .report")
-    print("  --report json    Write a JSON report to .report")
-    print("  --report all     Write Markdown and JSON reports to .report")
-    print("  --report done    Remove the .report folder")
+    print("  --report         Write a Markdown report below .tooling-state")
+    print("  --report json    Write a JSON report below .tooling-state")
+    print("  --report all     Write Markdown and JSON reports below .tooling-state")
+    print("  --report done    Remove generated reports from .tooling-state")
 
 
 def _print_tail(label: str, text: str) -> None:
@@ -778,7 +792,7 @@ def _write_report_if_requested(
         overall=overall,
     )
     try:
-        written_paths = report_writer.write_test_report(ROOT, payload, report_mode)
+        written_paths = report_writer.write_test_report(REPORT_ROOT, payload, report_mode)
     except (OSError, ValueError) as exc:
         logger.fail(f"failed to write test report: {exc}")
         return False
@@ -816,7 +830,7 @@ def _run_selected_suite(suite: str, *, bootstrap_failed: bool) -> SuiteResult:
 
 def main(args: argparse.Namespace) -> int:
     if getattr(args, "report", None) == "done":
-        removed = report_writer.clean_reports(ROOT)
+        removed = report_writer.clean_reports(REPORT_ROOT)
         if removed:
             logger.ok("removed .report")
         else:

@@ -17,12 +17,11 @@ from tools.config.model import (
     VariableDefinition,
 )
 from tools.config.validation import to_runtime_config
+from tools.core.context import ProjectContext, load_context
 
 if TYPE_CHECKING:
     from tools.profiles.model import ProjectProfile
 
-ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CONTRACT_PATH = ROOT / "config" / "environment.toml"
 KEY_PATTERN = re.compile(r"[A-Z][A-Z0-9_]*")
 LEGACY_ALIASES = {"BACKEND_CORS_ORIGINS": ("CORS_ORIGINS",)}
 SUPPORTED_KINDS = {
@@ -157,8 +156,18 @@ def _parse_variable_definition(
     )
 
 
-def load_contract(path: Path | None = None) -> ConfigContract:
-    contract_path = (path or DEFAULT_CONTRACT_PATH).resolve()
+def load_contract(
+    path: Path | None = None,
+    *,
+    context: ProjectContext | None = None,
+) -> ConfigContract:
+    """Load an explicit contract or the contract packaged with ``tools/``."""
+
+    contract_path = (
+        path.resolve()
+        if path is not None
+        else (context or load_context()).resources.config.joinpath("environment.toml").resolve()
+    )
     try:
         with contract_path.open("rb") as handle:
             payload = tomllib.load(handle)
@@ -235,16 +244,18 @@ def resolve_configuration(
     profile: ProjectProfile,
     *,
     project_root: Path | None = None,
+    context: ProjectContext | None = None,
     environ: Mapping[str, str] | None = None,
     cli_overrides: Mapping[str, object | None] | None = None,
     contract: ConfigContract | None = None,
 ) -> ResolvedConfiguration:
-    root = (project_root or ROOT).resolve()
-    selected_contract = contract or load_contract(root / "config" / "environment.toml")
+    selected_context = context or load_context(project_root=project_root)
+    root = selected_context.project_root
+    selected_contract = contract or load_contract(context=selected_context)
     active_variables = [variable for variable in selected_contract.variables if variable.is_enabled(profile.features)]
     values: dict[str, str | None] = {variable.name: variable.default for variable in active_variables}
     sources: dict[str, str] = {
-        variable.name: "template default" for variable in active_variables if variable.default is not None
+        variable.name: "tooling default" for variable in active_variables if variable.default is not None
     }
 
     dotenv_values = load_dotenv(root / ".env")
@@ -320,6 +331,7 @@ def load_runtime_config(
     profile: ProjectProfile,
     *,
     project_root: Path | None = None,
+    context: ProjectContext | None = None,
     environ: Mapping[str, str] | None = None,
     cli_overrides: Mapping[str, object | None] | None = None,
     contract: ConfigContract | None = None,
@@ -327,6 +339,7 @@ def load_runtime_config(
     resolved = resolve_configuration(
         profile,
         project_root=project_root,
+        context=context,
         environ=environ,
         cli_overrides=cli_overrides,
         contract=contract,

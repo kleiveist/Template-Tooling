@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from pathlib import Path
 
 from tools import logger
 from tools.config import (
@@ -11,9 +10,11 @@ from tools.config import (
     resolve_configuration,
     validate_configuration,
 )
+from tools.core.context import load_context
 from tools.profiles import runtime as profile_runtime
 
-ROOT = Path(__file__).resolve().parents[2]
+CONTEXT = load_context()
+ROOT = CONTEXT.project_root
 
 
 @dataclass(frozen=True, slots=True)

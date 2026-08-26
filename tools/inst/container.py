@@ -9,9 +9,12 @@ from pathlib import Path
 
 from tools import logger
 from tools.config import ConfigLoadError, resolve_configuration
+from tools.core.context import load_context
 from tools.profiles import runtime as profile_runtime
 
-ROOT = Path(__file__).resolve().parents[2]
+CONTEXT = load_context()
+ROOT = CONTEXT.project_root
+FRONTEND_DIR = CONTEXT.paths.frontend
 DEPLOYMENT_DIR = ROOT / "deployment"
 COMPOSE_FILE = DEPLOYMENT_DIR / "compose.yaml"
 
@@ -121,7 +124,7 @@ def _tail(value: str, limit: int = 6) -> str:
 
 
 def _image_prefix() -> str:
-    package_path = ROOT / "frontend" / "package.json"
+    package_path = FRONTEND_DIR / "package.json"
     try:
         import json
 
@@ -134,10 +137,14 @@ def _image_prefix() -> str:
 
 
 def _version() -> str:
-    try:
-        return (ROOT / "VERSION").read_text(encoding="utf-8").strip()
-    except OSError:
-        return "local"
+    for path in (ROOT / "VERSION", CONTEXT.tools_root / "VERSION"):
+        try:
+            value = path.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if value:
+            return value
+    return "local"
 
 
 def _build_component(component: str, *, no_cache: bool = False) -> int:

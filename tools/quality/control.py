@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from tools.core.context import load_context
 from tools.quality.architecture import architecture_result
 from tools.quality.config import (
     DEFAULT_CONFIG_PATH,
@@ -32,7 +33,7 @@ from tools.quality.typescript import (
     analyze_typescript,
 )
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = load_context().project_root
 ACTIONS = ("check", "size", "complexity", "architecture", "lint", "format")
 
 
@@ -49,7 +50,7 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
         type=Path,
         default=DEFAULT_CONFIG_PATH,
         metavar="PATH",
-        help="quality policy path (default: config/code-quality.toml)",
+        help="quality policy path (default: tools/resources/config/code-quality.toml)",
     )
     parser.add_argument(
         "--format",

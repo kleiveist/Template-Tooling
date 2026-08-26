@@ -3,10 +3,12 @@ from __future__ import annotations
 import importlib
 import subprocess
 import sys
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-CONTROL = ROOT / "tools" / "control.py"
+from tools.core.context import load_context
+
+CONTEXT = load_context()
+ROOT = CONTEXT.project_root
+CONTROL = CONTEXT.tools_root / "control.py"
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -120,7 +122,7 @@ def _services_menu() -> None:
     while True:
         _print_menu(
             "Development services",
-            "Start Vite and FastAPI together. Detached runs write state and logs to tools/.runtime.",
+            "Start Vite and FastAPI together. Detached runs write state and logs below .tooling-state/runtime.",
             [
                 ("1", "Start services in the foreground (Ctrl+C stops both)"),
                 ("2", "Start services in the background"),
@@ -174,7 +176,7 @@ def _tests_menu() -> None:
         elif choice == "4":
             _run_control(["test", "--suite", "all", "--report"])
         elif choice == "5":
-            if _confirm("Remove the generated .report directory?"):
+            if _confirm("Remove generated reports from .tooling-state?"):
                 _run_control(["test", "--report", "done"])
         elif choice == "6":
             _run_control(["test"])

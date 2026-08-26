@@ -14,12 +14,17 @@ from pathlib import Path
 
 from tools import logger
 from tools.config import ConfigLoadError, resolve_configuration, validate_configuration
+from tools.core.context import load_context
 from tools.inst import configuration, container
 from tools.inst.tooling_runtime import TOOLING_RUNTIME_PROBE
 from tools.process import prepare_command
 from tools.profiles import runtime as profile_runtime
 
-ROOT = Path(__file__).resolve().parents[2]
+CONTEXT = load_context()
+ROOT = CONTEXT.project_root
+FRONTEND_DIR = CONTEXT.paths.frontend
+BACKEND_DIR = CONTEXT.paths.backend
+TOOLS_VENV = CONTEXT.venv_root
 
 
 @dataclass(slots=True)
@@ -78,9 +83,11 @@ def _check_current_python() -> CheckResult:
 
 
 def _backend_python() -> Path:
+    if BACKEND_DIR is None:
+        return CONTEXT.state_root / "unconfigured-backend" / "python"
     candidates = [
-        ROOT / "backend" / ".venv" / "Scripts" / "python.exe",
-        ROOT / "backend" / ".venv" / "bin" / "python",
+        BACKEND_DIR / ".venv" / "Scripts" / "python.exe",
+        BACKEND_DIR / ".venv" / "bin" / "python",
     ]
     for candidate in candidates:
         if candidate.exists():
@@ -90,8 +97,8 @@ def _backend_python() -> Path:
 
 def _tooling_python() -> Path:
     candidates = [
-        ROOT / "tools" / ".venv" / "Scripts" / "python.exe",
-        ROOT / "tools" / ".venv" / "bin" / "python",
+        TOOLS_VENV / "Scripts" / "python.exe",
+        TOOLS_VENV / "bin" / "python",
     ]
     for candidate in candidates:
         if candidate.exists():
@@ -127,8 +134,8 @@ def _check_project_structure() -> list[CheckResult]:
     results: list[CheckResult] = []
     profile = profile_runtime.active_profile(ROOT)
 
-    frontend = ROOT / "frontend"
-    backend = ROOT / "backend"
+    frontend = FRONTEND_DIR
+    backend = BACKEND_DIR
     shared = ROOT / "shared"
 
     if profile.has_feature("frontend"):
@@ -149,13 +156,13 @@ def _check_project_structure() -> list[CheckResult]:
         results.append(CheckResult("frontend-deps", "OK", "frontend dependencies not required for this profile"))
 
     if profile.has_feature("backend"):
-        if backend.exists() and (backend / "app" / "main.py").exists():
+        if backend is not None and backend.exists() and (backend / "app" / "main.py").exists():
             results.append(CheckResult("backend", "OK", "backend scaffold is present"))
         else:
             results.append(CheckResult("backend", "FAIL", "backend scaffold missing (expected backend/app/main.py)"))
 
-        backend_venv = backend / ".venv"
-        if backend_venv.exists():
+        backend_venv = backend / ".venv" if backend is not None else None
+        if backend_venv is not None and backend_venv.exists():
             results.append(CheckResult("backend-venv", "OK", "backend/.venv found"))
         else:
             fastapi_available = importlib.util.find_spec("fastapi") is not None
@@ -225,7 +232,7 @@ def _check_tooling_runtime() -> CheckResult:
         return CheckResult(
             "tooling-runtime",
             "WARN",
-            "dedicated tools/.venv Python is missing. Action: run 'python tools/control.py install'.",
+            f"dedicated tooling Python is missing at {TOOLS_VENV}. Action: run 'python tools/control.py install'.",
         )
 
     check = subprocess.run(
@@ -254,7 +261,7 @@ def _check_playwright_browser() -> CheckResult:
     if not profile.has_feature("frontend"):
         return CheckResult(name="playwright", status="OK", message="frontend disabled by active profile")
 
-    frontend_dir = ROOT / "frontend"
+    frontend_dir = FRONTEND_DIR
     if not (frontend_dir / "package.json").exists():
         return CheckResult(name="playwright", status="WARN", message="frontend/package.json missing; check skipped")
     if not _playwright_configured():
@@ -293,7 +300,7 @@ def _check_playwright_browser() -> CheckResult:
 
 
 def _playwright_configured() -> bool:
-    frontend_dir = ROOT / "frontend"
+    frontend_dir = FRONTEND_DIR
     if (frontend_dir / "tests" / "e2e").exists() or any(frontend_dir.glob("playwright.config.*")):
         return True
     try:

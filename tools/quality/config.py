@@ -6,6 +6,7 @@ from typing import Any
 
 import tomllib
 
+from tools.core.context import load_context
 from tools.quality.model import (
     EXCEPTION_RULE_IDS,
     BackendArchitectureConfig,
@@ -17,7 +18,7 @@ from tools.quality.model import (
     SourceConfig,
 )
 
-DEFAULT_CONFIG_PATH = Path("config/code-quality.toml")
+DEFAULT_CONFIG_PATH = load_context().resources.config / "code-quality.toml"
 
 
 class QualityConfigError(ValueError):

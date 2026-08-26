@@ -13,11 +13,13 @@ from pathlib import Path
 
 from tools import logger
 from tools.config import ConfigLoadError, resolve_configuration, validate_configuration
+from tools.core.context import load_context
 from tools.process import process_start_token
 from tools.profiles import runtime as profile_runtime
 
-ROOT = Path(__file__).resolve().parents[2]
-RUNTIME_DIR = ROOT / "tools" / ".runtime"
+CONTEXT = load_context()
+ROOT = CONTEXT.project_root
+RUNTIME_DIR = CONTEXT.runtime_root
 STATE_FILE = RUNTIME_DIR / "run_state.json"
 
 
