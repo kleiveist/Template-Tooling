@@ -12,7 +12,7 @@ def test_console_can_exit_from_main_menu(monkeypatch, capsys) -> None:
     _answers(monkeypatch, ["q"])
 
     assert console.main() == 0
-    assert "Template Project Console" in capsys.readouterr().out
+    assert "Project Tooling Console" in capsys.readouterr().out
 
 
 def test_console_can_exit_from_a_nested_menu(monkeypatch) -> None:

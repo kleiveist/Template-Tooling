@@ -4,13 +4,18 @@ import argparse
 import subprocess
 from pathlib import Path
 
+import pytest
+
+from tools.core.context import ProjectContext, load_context
+from tools.core.filesystem import FilesystemSafetyError
+from tools.core.project_config import ProjectConfig, ProjectPathConfig
 from tools.inst import docs_index
 
 
 def _args(script: Path, **overrides) -> argparse.Namespace:
     values = {
         "script": str(script),
-        "docs_dir": "docs",
+        "docs_dir": None,
         "dry_run": False,
         "force": False,
         "compact": False,
@@ -28,11 +33,21 @@ def _page(title: str, backlink: str, index: str | None = None) -> str:
     return text
 
 
+def _project_context(root: Path, *, docs: str = "docs") -> ProjectContext:
+    config = ProjectConfig(
+        tooling_version="0.1.0",
+        project_name="Docs Fixture",
+        profile="web-only",
+        paths=ProjectPathConfig(docs=docs),
+    )
+    return load_context(root, tools_root=root / "tools", config=config)
+
+
 def test_generated_empty_labels_are_translated_but_authored_text_is_preserved(
     tmp_path,
 ) -> None:
     root = tmp_path / "project"
-    docs = root / "docs"
+    docs = root / "docs" / "toolingdocs"
     docs.mkdir(parents=True)
     readme = root / "README.md"
     readme.write_text(
@@ -48,22 +63,47 @@ def test_generated_empty_labels_are_translated_but_authored_text_is_preserved(
         encoding="utf-8",
     )
 
-    assert docs_index.normalize_generated_english(root) == 2
-    assert "(no Markdown files in the project root)" in readme.read_text(encoding="utf-8")
+    assert docs_index.normalize_generated_english(root) == 1
+    assert "(keine Markdown-Dateien im Projekt-Root)" in readme.read_text(
+        encoding="utf-8"
+    )
     assert "Authored phrase: keine Seiten" in readme.read_text(encoding="utf-8")
     assert "(no pages)" in index.read_text(encoding="utf-8")
 
 
-def test_index_command_uses_explicit_pygitindex_and_normalizes_output(monkeypatch, tmp_path) -> None:
+def test_normalize_rejects_symlinked_tooling_document(tmp_path: Path) -> None:
     root = tmp_path / "project"
-    docs = root / "docs"
+    docs = root / "docs" / "toolingdocs"
+    docs.mkdir(parents=True)
+    external = tmp_path / "external.md"
+    original = (
+        "<!-- AUTO-GENERATED:docs-index START -->\n"
+        "- ⏭️ (keine Seiten)\n"
+        "<!-- AUTO-GENERATED:docs-index END -->\n"
+    )
+    external.write_text(original, encoding="utf-8")
+    (docs / "linked.md").symlink_to(external)
+
+    with pytest.raises(FilesystemSafetyError):
+        docs_index.normalize_generated_english(root)
+
+    assert external.read_text(encoding="utf-8") == original
+
+
+def test_index_command_uses_explicit_pygitindex_and_normalizes_output(
+    monkeypatch, tmp_path
+) -> None:
+    root = tmp_path / "project"
+    docs = root / "docs" / "toolingdocs"
     docs.mkdir(parents=True)
     script = tmp_path / "PyGitIndex.py"
     script.write_text("# fake", encoding="utf-8")
     (root / "README.md").write_text("# Project\n", encoding="utf-8")
     calls: list[tuple[list[str], Path]] = []
 
-    def fake_run(command: list[str], cwd: Path, check: bool) -> subprocess.CompletedProcess[str]:
+    def fake_run(
+        command: list[str], cwd: Path, check: bool
+    ) -> subprocess.CompletedProcess[str]:
         calls.append((command, cwd))
         (docs / "index.md").write_text(
             "<!-- AUTO-GENERATED:docs-index START -->\n- ⏭️ (keine Seiten)\n<!-- AUTO-GENERATED:docs-index END -->\n",
@@ -77,12 +117,16 @@ def test_index_command_uses_explicit_pygitindex_and_normalizes_output(monkeypatc
     assert docs_index.main(_args(script)) == 0
     assert calls[0][1] == root
     assert calls[0][0][1] == str(script.resolve())
+    assert calls[0][0][2:4] == ["--docs-dir", "docs/toolingdocs"]
+    assert "--no-readme" in calls[0][0]
+    assert "--no-root-backlinks" in calls[0][0]
+    assert (root / "README.md").read_text(encoding="utf-8") == "# Project\n"
     assert "(no pages)" in (docs / "index.md").read_text(encoding="utf-8")
 
 
 def test_index_dry_run_does_not_normalize_files(monkeypatch, tmp_path) -> None:
     root = tmp_path / "project"
-    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "toolingdocs").mkdir(parents=True)
     script = tmp_path / "PyGitIndex.py"
     script.write_text("# fake", encoding="utf-8")
     monkeypatch.setattr(docs_index, "ROOT", root)
@@ -102,7 +146,9 @@ def test_index_dry_run_does_not_normalize_files(monkeypatch, tmp_path) -> None:
     assert normalized == []
 
 
-def test_navigation_check_accepts_complete_indices_and_backlinks(monkeypatch, tmp_path) -> None:
+def test_navigation_check_accepts_complete_indices_and_backlinks(
+    monkeypatch, tmp_path
+) -> None:
     root = tmp_path / "project"
     docs = root / "docs"
     section = docs / "guide"
@@ -127,7 +173,9 @@ def test_navigation_check_accepts_complete_indices_and_backlinks(monkeypatch, tm
     assert docs_index.check(argparse.Namespace(docs_dir="docs")) == 0
 
 
-def test_navigation_check_accepts_url_encoded_unicode_targets(monkeypatch, tmp_path) -> None:
+def test_navigation_check_accepts_url_encoded_unicode_targets(
+    monkeypatch, tmp_path
+) -> None:
     root = tmp_path / "project"
     docs = root / "docs"
     docs.mkdir(parents=True)
@@ -149,7 +197,9 @@ def test_navigation_check_accepts_url_encoded_unicode_targets(monkeypatch, tmp_p
     assert docs_index.check(argparse.Namespace(docs_dir="docs")) == 0
 
 
-def test_navigation_check_reports_invalid_url_encoded_targets(monkeypatch, tmp_path) -> None:
+def test_navigation_check_reports_invalid_url_encoded_targets(
+    monkeypatch, tmp_path
+) -> None:
     root = tmp_path / "project"
     docs = root / "docs"
     docs.mkdir(parents=True)
@@ -169,7 +219,9 @@ def test_navigation_check_reports_invalid_url_encoded_targets(monkeypatch, tmp_p
     assert "generated link target is invalid: %00.md" in "\n".join(messages)
 
 
-def test_navigation_check_accepts_child_pages_in_a_nested_section_index(monkeypatch, tmp_path) -> None:
+def test_navigation_check_accepts_child_pages_in_a_nested_section_index(
+    monkeypatch, tmp_path
+) -> None:
     root = tmp_path / "project"
     docs = root / "docs"
     section = docs / "section"
@@ -193,22 +245,21 @@ def test_navigation_check_accepts_child_pages_in_a_nested_section_index(monkeypa
         ),
         encoding="utf-8",
     )
-    (child / "active.md").write_text(_page("Active", "../section.md", "[ATP](ATP-0001.md)"), encoding="utf-8")
+    (child / "active.md").write_text(
+        _page("Active", "../section.md", "[ATP](ATP-0001.md)"), encoding="utf-8"
+    )
     (child / "ATP-0001.md").write_text(_page("ATP", "active.md"), encoding="utf-8")
     monkeypatch.setattr(docs_index, "ROOT", root)
 
     assert docs_index.check(argparse.Namespace(docs_dir="docs")) == 0
 
 
-def test_navigation_check_includes_root_markdown_pages(monkeypatch, tmp_path) -> None:
+def test_navigation_check_excludes_root_markdown_pages(monkeypatch, tmp_path) -> None:
     root = tmp_path / "project"
     docs = root / "docs"
     docs.mkdir(parents=True)
-    (root / "README.md").write_text(
-        f"# Project\n{docs_index.INDEX_START}\n[Agents](AGENTS.md)\n[Docs](docs/index.md)\n{docs_index.INDEX_END}\n",
-        encoding="utf-8",
-    )
-    (root / "AGENTS.md").write_text(_page("Agents", "README.md"), encoding="utf-8")
+    (root / "README.md").write_text("invalid generated markers", encoding="utf-8")
+    (root / "AGENTS.md").write_text("also outside docs scope", encoding="utf-8")
     (docs / "index.md").write_text(
         _page("Docs", "../README.md", "- (no pages)"),
         encoding="utf-8",
@@ -218,7 +269,9 @@ def test_navigation_check_includes_root_markdown_pages(monkeypatch, tmp_path) ->
     assert docs_index.check(argparse.Namespace(docs_dir="docs")) == 0
 
 
-def test_navigation_check_reports_missing_and_stale_index_entries(monkeypatch, tmp_path) -> None:
+def test_navigation_check_reports_missing_and_stale_index_entries(
+    monkeypatch, tmp_path
+) -> None:
     root = tmp_path / "project"
     docs = root / "docs"
     docs.mkdir(parents=True)
@@ -263,7 +316,9 @@ def test_navigation_check_rejects_wrong_backlink(monkeypatch, tmp_path) -> None:
     assert "backlink must target docs/index.md" in "\n".join(messages)
 
 
-def test_navigation_check_reports_escaping_generated_link_without_traceback(monkeypatch, tmp_path) -> None:
+def test_navigation_check_ignores_escaping_link_in_root_readme(
+    monkeypatch, tmp_path
+) -> None:
     root = tmp_path / "project"
     docs = root / "docs"
     docs.mkdir(parents=True)
@@ -281,5 +336,148 @@ def test_navigation_check_reports_escaping_generated_link_without_traceback(monk
     messages: list[str] = []
     monkeypatch.setattr(docs_index.logger, "fail", messages.append)
 
+    assert docs_index.check(argparse.Namespace(docs_dir="docs")) == 0
+    assert messages == []
+
+
+def test_navigation_check_rejects_escaping_link_inside_docs(
+    monkeypatch, tmp_path
+) -> None:
+    root = tmp_path / "project"
+    docs = root / "docs"
+    docs.mkdir(parents=True)
+    (docs / "index.md").write_text(
+        _page("Docs", "../README.md", "[Escape](../../outside.md)"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(docs_index, "ROOT", root)
+    messages: list[str] = []
+    monkeypatch.setattr(docs_index.logger, "fail", messages.append)
+
     assert docs_index.check(argparse.Namespace(docs_dir="docs")) == 1
     assert "generated link escapes the project root" in "\n".join(messages)
+
+
+def test_default_check_is_read_only_and_ignores_root_markdown(
+    monkeypatch, tmp_path
+) -> None:
+    root = tmp_path / "project"
+    docs = root / "docs" / "toolingdocs"
+    docs.mkdir(parents=True)
+    (root / "README.md").write_text("# Product README\n", encoding="utf-8")
+    (root / "NOTES.md").write_text("product notes\n", encoding="utf-8")
+    (docs / "index.md").write_text(
+        _page("Tooling docs", "../../README.md", "- (no pages)"),
+        encoding="utf-8",
+    )
+    before = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+    monkeypatch.setattr(docs_index, "ROOT", root)
+
+    assert docs_index.check(argparse.Namespace(docs_dir=None)) == 0
+
+    after = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
+
+
+def test_index_uses_custom_configured_docs_root_without_touching_readme(
+    tmp_path,
+) -> None:
+    root = tmp_path / "project"
+    docs = root / "handbook" / "toolingdocs"
+    docs.mkdir(parents=True)
+    readme = root / "README.md"
+    readme.write_text("# Product-owned\n", encoding="utf-8")
+    script = tmp_path / "PyGitIndex.py"
+    script.write_text("# fake", encoding="utf-8")
+    context = _project_context(root, docs="handbook")
+    calls: list[tuple[list[str], Path]] = []
+
+    def fake_run(
+        command: list[str], cwd: Path, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((command, cwd))
+        (docs / "index.md").write_text(
+            f"{docs_index.INDEX_START}\n- (no pages)\n{docs_index.INDEX_END}\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0)
+
+    original_run = docs_index.subprocess.run
+    docs_index.subprocess.run = fake_run
+    try:
+        assert docs_index.main(_args(script), context=context) == 0
+    finally:
+        docs_index.subprocess.run = original_run
+
+    assert calls[0][1] == root
+    assert calls[0][0][2:4] == ["--docs-dir", "handbook/toolingdocs"]
+    assert "--no-readme" in calls[0][0]
+    assert "--no-root-backlinks" in calls[0][0]
+    assert readme.read_text(encoding="utf-8") == "# Product-owned\n"
+
+
+def test_docs_scope_rejects_escape_before_invoking_index(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "project"
+    (root / "docs" / "toolingdocs").mkdir(parents=True)
+    script = tmp_path / "PyGitIndex.py"
+    script.write_text("# fake", encoding="utf-8")
+    monkeypatch.setattr(docs_index, "ROOT", root)
+    invoked: list[bool] = []
+    monkeypatch.setattr(
+        docs_index.subprocess,
+        "run",
+        lambda *args, **kwargs: invoked.append(True),
+    )
+
+    assert docs_index.check(argparse.Namespace(docs_dir="../outside")) == 1
+    assert docs_index.main(_args(script, docs_dir="../outside")) == 1
+    assert invoked == []
+
+
+def test_docs_scope_rejects_configured_symlink(tmp_path) -> None:
+    root = tmp_path / "project"
+    real_docs = root / "real-handbook" / "toolingdocs"
+    real_docs.mkdir(parents=True)
+    (root / "handbook").symlink_to(root / "real-handbook", target_is_directory=True)
+    context = _project_context(root, docs="handbook")
+
+    assert docs_index.check(argparse.Namespace(docs_dir=None), context=context) == 1
+
+
+def test_navigation_check_rejects_nested_symlink(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "project"
+    docs = root / "docs" / "toolingdocs"
+    docs.mkdir(parents=True)
+    (docs / "index.md").write_text(
+        _page("Tooling docs", "../../README.md", "- (no pages)"),
+        encoding="utf-8",
+    )
+    external = tmp_path / "external.md"
+    external.write_text("secret\n", encoding="utf-8")
+    (docs / "linked.md").symlink_to(external)
+    monkeypatch.setattr(docs_index, "ROOT", root)
+
+    assert docs_index.check(argparse.Namespace(docs_dir=None)) == 1
+    assert external.read_text(encoding="utf-8") == "secret\n"
+
+
+def test_index_command_always_disables_root_writes(tmp_path) -> None:
+    script = tmp_path / "PyGitIndex.py"
+    command = docs_index._command_for(
+        script,
+        _args(script, compact=True, no_readme=False, no_backlinks=True),
+        docs_dir="docs/toolingdocs",
+    )
+
+    assert "--readme-compact-docs" not in command
+    assert command.count("--no-readme") == 1
+    assert command.count("--no-root-backlinks") == 1
+    assert command.count("--no-docs-backlinks") == 1

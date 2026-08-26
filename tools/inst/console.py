@@ -3,12 +3,21 @@ from __future__ import annotations
 import importlib
 import subprocess
 import sys
+from pathlib import Path
 
-from tools.core.context import load_context
+from tools.core.context import ProjectContext, load_context
 
-CONTEXT = load_context()
-ROOT = CONTEXT.project_root
-CONTROL = CONTEXT.tools_root / "control.py"
+TOOLS_ROOT = Path(__file__).resolve().parents[1]
+ROOT = TOOLS_ROOT.parent
+
+
+def _context(context: ProjectContext | None = None) -> ProjectContext:
+    """Resolve the control entrypoint for the current target project."""
+
+    if context is not None:
+        return context
+    return load_context(project_root=ROOT, tools_root=TOOLS_ROOT)
+
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -16,7 +25,13 @@ if str(ROOT) not in sys.path:
 logger = importlib.import_module("tools.logger")
 
 SUITES = {"schema", "api", "database", "postgres", "frontend", "e2e", "tools", "all"}
-DESKTOP_TARGETS = {"linux", "windows", "windows-portable", "windows-cross-linux", "macos"}
+DESKTOP_TARGETS = {
+    "linux",
+    "windows",
+    "windows-portable",
+    "windows-cross-linux",
+    "macos",
+}
 
 
 class ConsoleExit(Exception):
@@ -24,7 +39,7 @@ class ConsoleExit(Exception):
 
 
 def _run_control(args: list[str]) -> int:
-    command = [sys.executable, str(CONTROL), *args]
+    command = [sys.executable, str(_context().tools_root / "control.py"), *args]
     logger.info(f"Executing: {' '.join(command)}")
     try:
         completed = subprocess.run(command, cwd=ROOT, check=False)
@@ -32,7 +47,7 @@ def _run_control(args: list[str]) -> int:
         logger.status(status, f"Command finished with exit code {completed.returncode}")
         return completed.returncode
     except KeyboardInterrupt:
-        logger.warn("Execution interrupted by user")
+        logger.status("WARN", "Execution interrupted by user")
         return 130
 
 
@@ -54,7 +69,7 @@ def _confirm(prompt: str) -> bool:
             return False
         if answer in {"y", "yes"}:
             return True
-        logger.warn("Enter 'y' to continue or 'n' to cancel")
+        logger.status("WARN", "Enter 'y' to continue or 'n' to cancel")
 
 
 def _print_menu(title: str, description: str, entries: list[tuple[str, str]]) -> None:
@@ -69,15 +84,25 @@ def _print_menu(title: str, description: str, entries: list[tuple[str, str]]) ->
 def _prompt_suite() -> str | None:
     value = _read("Suite (schema/api/database/postgres/frontend/e2e/tools/all): ")
     if value not in SUITES:
-        logger.warn("Unknown suite. Use the test map to review available suites.")
+        logger.status(
+            "WARN", "Unknown suite. Use the test map to review available suites."
+        )
         return None
     return value
 
 
 def _prompt_desktop_target() -> str | None:
-    value = _read("Target (linux/windows/windows-portable/windows-cross-linux/macos) [linux]: ") or "linux"
+    value = (
+        _read(
+            "Target (linux/windows/windows-portable/windows-cross-linux/macos) [linux]: "
+        )
+        or "linux"
+    )
     if value not in DESKTOP_TARGETS:
-        logger.warn("Unknown desktop target. Open the build map for supported strategies.")
+        logger.status(
+            "WARN",
+            "Unknown desktop target. Open the build map for supported strategies.",
+        )
         return None
     return value
 
@@ -115,7 +140,7 @@ def _environment_menu() -> None:
         elif choice == "q":
             raise ConsoleExit
         else:
-            logger.warn("Unknown option")
+            logger.status("WARN", "Unknown option")
 
 
 def _services_menu() -> None:
@@ -145,7 +170,7 @@ def _services_menu() -> None:
         elif choice == "q":
             raise ConsoleExit
         else:
-            logger.warn("Unknown option")
+            logger.status("WARN", "Unknown option")
 
 
 def _tests_menu() -> None:
@@ -185,7 +210,7 @@ def _tests_menu() -> None:
         elif choice == "q":
             raise ConsoleExit
         else:
-            logger.warn("Unknown option")
+            logger.status("WARN", "Unknown option")
 
 
 def _builds_menu() -> None:
@@ -208,7 +233,9 @@ def _builds_menu() -> None:
             _run_control(["build", "desktop", "--dry-run", "--no-clean"])
         elif choice == "3":
             target = _prompt_desktop_target()
-            if target and _confirm(f"Start the real desktop build for target '{target}'?"):
+            if target and _confirm(
+                f"Start the real desktop build for target '{target}'?"
+            ):
                 _run_control(["build", "desktop", "--target", target])
         elif choice == "4":
             _run_control(["build"])
@@ -217,7 +244,7 @@ def _builds_menu() -> None:
         elif choice == "q":
             raise ConsoleExit
         else:
-            logger.warn("Unknown option")
+            logger.status("WARN", "Unknown option")
 
 
 def _tauri_menu() -> None:
@@ -263,7 +290,7 @@ def _tauri_menu() -> None:
         elif choice == "q":
             raise ConsoleExit
         else:
-            logger.warn("Unknown option")
+            logger.status("WARN", "Unknown option")
 
 
 def _documentation_menu() -> None:
@@ -295,12 +322,12 @@ def _documentation_menu() -> None:
         elif choice == "q":
             raise ConsoleExit
         else:
-            logger.warn("Unknown option")
+            logger.status("WARN", "Unknown option")
 
 
 def _print_main_menu() -> None:
     _print_menu(
-        "Template Project Console",
+        "Project Tooling Console",
         "Guided access to the complete project lifecycle. Every section explains its effects before running commands.",
         [
             ("1", "Environment and dependency setup"),
@@ -316,7 +343,9 @@ def _print_main_menu() -> None:
 
 
 def main() -> int:
-    logger.info("Interactive console ready. Choose a section; 'b' returns and 'q' exits.")
+    logger.info(
+        "Interactive console ready. Choose a section; 'b' returns and 'q' exits."
+    )
 
     try:
         while True:
@@ -339,7 +368,7 @@ def main() -> int:
             elif choice in {"q", "9"}:
                 raise ConsoleExit
             else:
-                logger.warn("Unknown option")
+                logger.status("WARN", "Unknown option")
     except ConsoleExit:
         logger.ok("Console closed")
         return 0

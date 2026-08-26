@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from pathlib import Path
 
 from tools import logger
 from tools.config import (
@@ -10,11 +11,19 @@ from tools.config import (
     resolve_configuration,
     validate_configuration,
 )
-from tools.core.context import load_context
+from tools.core.context import ProjectContext, load_context
 from tools.profiles import runtime as profile_runtime
 
-CONTEXT = load_context()
-ROOT = CONTEXT.project_root
+TOOLS_ROOT = Path(__file__).resolve().parents[1]
+ROOT = TOOLS_ROOT.parent
+
+
+def _context(context: ProjectContext | None = None) -> ProjectContext:
+    """Resolve configuration against the current target project."""
+
+    if context is not None:
+        return context
+    return load_context(project_root=ROOT, tools_root=TOOLS_ROOT)
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,12 +45,18 @@ def _add_override_arguments(parser: argparse.ArgumentParser) -> None:
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(config_parser=parser)
-    subparsers = parser.add_subparsers(dest="config_command", title="configuration actions", metavar="<action>")
+    subparsers = parser.add_subparsers(
+        dest="config_command", title="configuration actions", metavar="<action>"
+    )
 
-    show = subparsers.add_parser("show", help="display effective profile-aware configuration")
+    show = subparsers.add_parser(
+        "show", help="display effective profile-aware configuration"
+    )
     _add_override_arguments(show)
 
-    doctor = subparsers.add_parser("doctor", help="validate effective configuration without changing it")
+    doctor = subparsers.add_parser(
+        "doctor", help="validate effective configuration without changing it"
+    )
     _add_override_arguments(doctor)
 
 
@@ -58,11 +73,12 @@ def overrides_from_args(args: argparse.Namespace) -> dict[str, object | None]:
 
 
 def collect_checks(args: argparse.Namespace | None = None) -> list[ConfigurationCheck]:
-    profile = profile_runtime.active_profile(ROOT)
+    project_root = _context().project_root
+    profile = profile_runtime.active_profile(project_root)
     try:
         resolved = resolve_configuration(
             profile,
-            project_root=ROOT,
+            project_root=project_root,
             cli_overrides=overrides_from_args(args) if args is not None else None,
         )
     except ConfigLoadError as exc:
@@ -70,16 +86,22 @@ def collect_checks(args: argparse.Namespace | None = None) -> list[Configuration
 
     issues = validate_configuration(resolved)
     if issues:
-        return [ConfigurationCheck(f"config:{issue.name}", "FAIL", issue.message) for issue in issues]
-    return [ConfigurationCheck("configuration", "OK", "effective configuration is valid")]
+        return [
+            ConfigurationCheck(f"config:{issue.name}", "FAIL", issue.message)
+            for issue in issues
+        ]
+    return [
+        ConfigurationCheck("configuration", "OK", "effective configuration is valid")
+    ]
 
 
 def _show(args: argparse.Namespace) -> int:
-    profile = profile_runtime.active_profile(ROOT)
+    project_root = _context().project_root
+    profile = profile_runtime.active_profile(project_root)
     try:
         resolved = resolve_configuration(
             profile,
-            project_root=ROOT,
+            project_root=project_root,
             cli_overrides=overrides_from_args(args),
         )
     except ConfigLoadError as exc:
@@ -100,7 +122,7 @@ def _show(args: argparse.Namespace) -> int:
         )
         source = resolved.sources.get(variable.name, "not set")
         print(f"  {variable.name}: {value} [{source}]")
-    print("")
+    print()
     issues = validate_configuration(resolved)
     for issue in issues:
         logger.fail(f"{issue.name}: {issue.message}")

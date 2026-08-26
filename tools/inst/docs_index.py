@@ -10,10 +10,18 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from tools import logger
-from tools.core.context import load_context
+from tools.core.context import ProjectContext, load_context
+from tools.core.filesystem import (
+    FilesystemSafetyError,
+    atomic_write_text,
+    read_regular_text,
+    safe_join,
+    safe_relative_path,
+)
+from tools.core.project_config import ProjectConfigError
 
-CONTEXT = load_context()
-ROOT = CONTEXT.project_root
+TOOLS_ROOT = Path(__file__).resolve().parents[1]
+ROOT = TOOLS_ROOT.parent
 INDEX_START = "<!-- AUTO-GENERATED:docs-index START -->"
 INDEX_END = "<!-- AUTO-GENERATED:docs-index END -->"
 BACKLINK_START = "<!-- AUTO-GENERATED:backlink START -->"
@@ -25,6 +33,18 @@ ENGLISH_REPLACEMENTS = {
     "(keine Seiten)": "(no pages)",
     "(keine Markdown-Dateien im Projekt-Root)": "(no Markdown files in the project root)",
 }
+
+
+def _context(
+    context: ProjectContext | None = None,
+    *,
+    project_root: Path | None = None,
+) -> ProjectContext:
+    """Resolve documentation paths for a target without import-time bindings."""
+
+    if context is not None:
+        return context
+    return load_context(project_root=project_root or ROOT, tools_root=TOOLS_ROOT)
 
 
 def _script_candidates(explicit: str | None = None) -> list[Path]:
@@ -58,7 +78,9 @@ def find_script(explicit: str | None = None) -> Path | None:
 
 
 def _translate_generated_block(text: str) -> str:
-    pattern = re.compile(re.escape(INDEX_START) + r".*?" + re.escape(INDEX_END), re.DOTALL)
+    pattern = re.compile(
+        re.escape(INDEX_START) + r".*?" + re.escape(INDEX_END), re.DOTALL
+    )
 
     def translate(match: re.Match[str]) -> str:
         block = match.group(0)
@@ -69,28 +91,52 @@ def _translate_generated_block(text: str) -> str:
     return pattern.sub(translate, text)
 
 
-def normalize_generated_english(project_root: Path = ROOT) -> int:
-    docs_root = (
-        CONTEXT.docs_root
-        if project_root.resolve() == CONTEXT.project_root
-        else project_root / CONTEXT.config.paths.docs / "toolingdocs"
+def normalize_generated_english(
+    project_root: Path | None = None,
+    *,
+    context: ProjectContext | None = None,
+) -> int:
+    selected_context = _context(
+        context,
+        project_root=(project_root or ROOT).resolve(),
     )
-    candidates = [project_root / "README.md", *docs_root.rglob("*.md")]
+    docs_root = _documentation_root(selected_context, None)
+    if docs_root is None:
+        raise FilesystemSafetyError("Configured tooling documentation root is unsafe.")
+    documents = [
+        (
+            path,
+            read_regular_text(
+                path,
+                root=docs_root,
+                label="Tooling documentation page",
+            ),
+        )
+        for path in _documentation_files(docs_root)
+    ]
     changed = 0
-    for path in candidates:
-        if not path.is_file():
-            continue
-        original = path.read_text(encoding="utf-8")
+    for path, original in documents:
         updated = _translate_generated_block(original)
         if updated == original:
             continue
-        path.write_text(updated, encoding="utf-8", newline="\n")
+        atomic_write_text(path, updated, root=docs_root)
         changed += 1
     return changed
 
 
-def _generated_block(path: Path, start: str, end: str, issues: list[str]) -> str | None:
-    text = path.read_text(encoding="utf-8")
+def _generated_block(
+    path: Path,
+    start: str,
+    end: str,
+    issues: list[str],
+    *,
+    docs_root: Path,
+) -> str | None:
+    text = read_regular_text(
+        path,
+        root=docs_root,
+        label="Tooling documentation page",
+    )
     start_count = text.count(start)
     end_count = text.count(end)
     if start_count != 1 or end_count != 1:
@@ -106,9 +152,15 @@ def _generated_block(path: Path, start: str, end: str, issues: list[str]) -> str
     return block
 
 
-def _resolve_markdown_target(path: Path, target: str, project_root: Path) -> Path | None:
+def _resolve_markdown_target(
+    path: Path, target: str, project_root: Path
+) -> Path | None:
     clean_target = unquote(target.split("#", maxsplit=1)[0].split("?", maxsplit=1)[0])
-    if not clean_target or "://" in clean_target or clean_target.startswith(("mailto:", "#")):
+    if (
+        not clean_target
+        or "://" in clean_target
+        or clean_target.startswith(("mailto:", "#"))
+    ):
         return None
     candidate = (path.parent / clean_target).resolve()
     try:
@@ -118,7 +170,9 @@ def _resolve_markdown_target(path: Path, target: str, project_root: Path) -> Pat
     return candidate
 
 
-def _block_targets(path: Path, block: str, project_root: Path, issues: list[str]) -> list[Path]:
+def _block_targets(
+    path: Path, block: str, project_root: Path, issues: list[str]
+) -> list[Path]:
     targets: list[Path] = []
     for raw_target in MARKDOWN_LINK.findall(block):
         try:
@@ -131,7 +185,9 @@ def _block_targets(path: Path, block: str, project_root: Path, issues: list[str]
         try:
             target.relative_to(project_root.resolve())
         except ValueError:
-            issues.append(f"{path}: generated link escapes the project root: {raw_target}")
+            issues.append(
+                f"{path}: generated link escapes the project root: {raw_target}"
+            )
             continue
         targets.append(target)
         if not target.is_file():
@@ -149,21 +205,27 @@ def _directory_overview(directory: Path, docs_root: Path) -> Path:
 
 def _expected_index_targets(overview: Path, docs_root: Path) -> set[Path]:
     directory = overview.parent
-    expected = {path.resolve() for path in directory.glob("*.md") if path.name != "README.md" and path != overview}
+    expected = {
+        path.resolve()
+        for path in directory.glob("*.md")
+        if path.name != "README.md" and path != overview
+    }
     child_directories = sorted(path for path in directory.iterdir() if path.is_dir())
     for child in child_directories:
         child_overview = _directory_overview(child, docs_root)
         if child_overview.is_file():
             expected.add(child_overview.resolve())
         expected.update(
-            path.resolve() for path in child.glob("*.md") if path.name != "README.md" and path != child_overview
+            path.resolve()
+            for path in child.glob("*.md")
+            if path.name != "README.md" and path != child_overview
         )
     return expected
 
 
-def _expected_backlink(path: Path, docs_root: Path, project_root: Path) -> Path:
+def _expected_backlink(path: Path, docs_root: Path) -> Path | None:
     if path == docs_root / "index.md":
-        return project_root / "README.md"
+        return None
     own_overview = _directory_overview(path.parent, docs_root)
     if path != own_overview:
         return own_overview
@@ -172,33 +234,36 @@ def _expected_backlink(path: Path, docs_root: Path, project_root: Path) -> Path:
 
 
 def _describe_targets(paths: set[Path], project_root: Path) -> str:
-    return ", ".join(sorted(path.relative_to(project_root).as_posix() for path in paths))
+    return ", ".join(
+        sorted(path.relative_to(project_root).as_posix() for path in paths)
+    )
 
 
 def _check_backlinks(
     docs_files: list[Path],
-    root_pages: list[Path],
     docs_root: Path,
     project_root: Path,
-    readme: Path,
 ) -> list[str]:
     issues: list[str] = []
     for path in docs_files:
-        block = _generated_block(path, BACKLINK_START, BACKLINK_END, issues)
+        expected = _expected_backlink(path, docs_root)
+        if expected is None:
+            continue
+        block = _generated_block(
+            path,
+            BACKLINK_START,
+            BACKLINK_END,
+            issues,
+            docs_root=docs_root,
+        )
         if block is None:
             continue
         actual = set(_block_targets(path, block, project_root, issues))
-        expected = _expected_backlink(path, docs_root, project_root).resolve()
+        expected = expected.resolve()
         if actual != {expected}:
-            issues.append(f"{path}: backlink must target {expected.relative_to(project_root).as_posix()}")
-
-    for path in root_pages:
-        block = _generated_block(path, BACKLINK_START, BACKLINK_END, issues)
-        if block is None:
-            continue
-        actual = set(_block_targets(path, block, project_root, issues))
-        if actual != {readme.resolve()}:
-            issues.append(f"{path}: backlink must target README.md")
+            issues.append(
+                f"{path}: backlink must target {expected.relative_to(project_root).as_posix()}"
+            )
     return issues
 
 
@@ -212,9 +277,13 @@ def _compare_index_targets(
     missing = expected - actual
     stale = actual - expected
     if missing:
-        issues.append(f"{path}: index is missing {_describe_targets(missing, project_root)}")
+        issues.append(
+            f"{path}: index is missing {_describe_targets(missing, project_root)}"
+        )
     if stale:
-        issues.append(f"{path}: index has stale entries {_describe_targets(stale, project_root)}")
+        issues.append(
+            f"{path}: index has stale entries {_describe_targets(stale, project_root)}"
+        )
     return issues
 
 
@@ -224,113 +293,174 @@ def _check_overview_indices(
     project_root: Path,
 ) -> list[str]:
     issues: list[str] = []
-    overview_files = [path for path in docs_files if path == _directory_overview(path.parent, docs_root)]
+    overview_files = [
+        path
+        for path in docs_files
+        if path == _directory_overview(path.parent, docs_root)
+    ]
     for overview in overview_files:
-        block = _generated_block(overview, INDEX_START, INDEX_END, issues)
+        block = _generated_block(
+            overview,
+            INDEX_START,
+            INDEX_END,
+            issues,
+            docs_root=docs_root,
+        )
         if block is None:
             continue
         actual = set(_block_targets(overview, block, project_root, issues))
         expected = _expected_index_targets(overview, docs_root)
         if actual != expected:
-            issues.extend(_compare_index_targets(overview, actual, expected, project_root))
+            issues.extend(
+                _compare_index_targets(overview, actual, expected, project_root)
+            )
     return issues
 
 
-def _check_root_index(
-    readme: Path,
-    root_pages: list[Path],
-    docs_root: Path,
-    project_root: Path,
-) -> list[str]:
-    issues: list[str] = []
-    root_block = _generated_block(readme, INDEX_START, INDEX_END, issues)
-    docs_index = docs_root / "index.md"
-    if root_block is None or not docs_index.is_file():
-        return issues
-    actual = set(_block_targets(readme, root_block, project_root, issues))
-    expected = _expected_index_targets(docs_index, docs_root) | {
-        docs_index.resolve(),
-        *(path.resolve() for path in root_pages),
-    }
-    if actual != expected:
-        issues.extend(_compare_index_targets(readme, actual, expected, project_root))
-    return issues
-
-
-def _documentation_root(project_root: Path, docs_dir: str) -> Path | None:
-    configured = project_root.resolve() == CONTEXT.project_root and docs_dir == CONTEXT.config.paths.docs
-    docs_root = (CONTEXT.docs_root if configured else project_root / docs_dir).resolve()
+def _documentation_root(
+    context: ProjectContext,
+    docs_dir: str | None,
+) -> Path | None:
+    project_root = context.project_root
     try:
-        docs_root.relative_to(project_root)
-    except ValueError:
-        logger.fail(f"Documentation directory escapes the project root: {docs_dir}")
+        if docs_dir is None:
+            relative = context.docs_root.relative_to(project_root).as_posix()
+        else:
+            relative = safe_relative_path(docs_dir)
+        docs_root = safe_join(project_root, relative, require_exists=True)
+    except (FilesystemSafetyError, ValueError) as exc:
+        label = docs_dir or context.config.paths.docs + "/toolingdocs"
+        logger.fail(f"Refusing unsafe documentation directory {label!r}: {exc}")
         return None
     if not docs_root.is_dir():
-        logger.fail(f"Documentation directory does not exist: {docs_dir}")
+        logger.fail(f"Documentation directory is not a directory: {relative}")
         return None
     return docs_root
 
 
-def check(args: argparse.Namespace) -> int:
-    project_root = ROOT.resolve()
-    docs_root = _documentation_root(project_root, args.docs_dir)
+def _documentation_files(docs_root: Path) -> list[Path]:
+    files: list[Path] = []
+    for path in docs_root.rglob("*"):
+        if path.is_symlink():
+            raise FilesystemSafetyError(
+                f"Tooling documentation contains a symbolic link: "
+                f"{path.relative_to(docs_root).as_posix()}."
+            )
+        if path.is_file() and path.suffix.casefold() == ".md":
+            files.append(path)
+    return sorted(files)
+
+
+def check(
+    args: argparse.Namespace,
+    *,
+    context: ProjectContext | None = None,
+) -> int:
+    try:
+        selected_context = _context(context, project_root=ROOT)
+    except ProjectConfigError as exc:
+        logger.fail(f"Refusing unsafe project documentation configuration: {exc}")
+        return 1
+    project_root = selected_context.project_root
+    docs_root = _documentation_root(
+        selected_context,
+        getattr(args, "docs_dir", None),
+    )
     if docs_root is None:
         return 1
-    readme = project_root / "README.md"
-    root_pages = sorted(path for path in project_root.glob("*.md") if path != readme)
-    docs_files = sorted(docs_root.rglob("*.md"))
-    issues = _check_backlinks(docs_files, root_pages, docs_root, project_root, readme)
-    issues.extend(_check_overview_indices(docs_files, docs_root, project_root))
-    issues.extend(_check_root_index(readme, root_pages, docs_root, project_root))
+    try:
+        docs_files = _documentation_files(docs_root)
+        issues = _check_backlinks(docs_files, docs_root, project_root)
+        issues.extend(_check_overview_indices(docs_files, docs_root, project_root))
+    except FilesystemSafetyError as exc:
+        logger.fail(f"Refusing unsafe tooling documentation path: {exc}")
+        return 1
 
     if issues:
         for issue in issues:
             logger.fail(issue)
-        logger.fail(f"Documentation navigation check failed with {len(issues)} issue(s)")
+        logger.fail(
+            f"Documentation navigation check failed with {len(issues)} issue(s)"
+        )
         return 1
-    logger.ok(f"Documentation navigation is consistent across {len(docs_files)} page(s)")
+    logger.ok(
+        f"Documentation navigation is consistent across {len(docs_files)} page(s)"
+    )
     return 0
 
 
-def _command_for(script: Path, args: argparse.Namespace) -> list[str]:
-    docs_dir = args.docs_dir
-    if ROOT.resolve() == CONTEXT.project_root and docs_dir == CONTEXT.config.paths.docs:
-        docs_dir = CONTEXT.docs_root.relative_to(ROOT).as_posix()
+def _command_for(
+    script: Path,
+    args: argparse.Namespace,
+    *,
+    docs_dir: str,
+) -> list[str]:
     command = [sys.executable, str(script), "--docs-dir", docs_dir]
-    if args.dry_run:
+    if getattr(args, "dry_run", False):
         command.append("--dry-run")
-    if args.force:
+    if getattr(args, "force", False):
         command.append("--force")
-    if args.compact:
-        command.append("--readme-compact-docs")
-    if args.no_backlinks:
-        command.extend(["--no-docs-backlinks", "--no-root-backlinks"])
-    if args.no_readme:
-        command.append("--no-readme")
+    if getattr(args, "no_backlinks", False):
+        command.append("--no-docs-backlinks")
+    command.extend(["--no-readme", "--no-root-backlinks"])
     return command
 
 
-def main(args: argparse.Namespace) -> int:
+def main(
+    args: argparse.Namespace,
+    *,
+    context: ProjectContext | None = None,
+) -> int:
+    try:
+        selected_context = _context(context, project_root=ROOT)
+    except ProjectConfigError as exc:
+        logger.fail(f"Refusing unsafe project documentation configuration: {exc}")
+        return 1
+    docs_root = _documentation_root(
+        selected_context,
+        getattr(args, "docs_dir", None),
+    )
+    if docs_root is None:
+        return 1
+    try:
+        _documentation_files(docs_root)
+    except FilesystemSafetyError as exc:
+        logger.fail(f"Refusing unsafe tooling documentation path: {exc}")
+        return 1
+
     script = find_script(args.script)
     if script is None:
         logger.fail("PyGitIndex was not found.")
-        logger.info("Set PYGITINDEX_PATH or pass '--script /path/to/PyGitIndex.py', then run this command again.")
+        logger.info(
+            "Set PYGITINDEX_PATH or pass '--script /path/to/PyGitIndex.py', then run this command again."
+        )
         return 1
 
-    command = _command_for(script, args)
+    docs_relative = docs_root.relative_to(selected_context.project_root).as_posix()
+    command = _command_for(script, args, docs_dir=docs_relative)
     logger.info(f"Using PyGitIndex: {script}")
-    logger.info(f"Project root: {ROOT}")
+    logger.info(f"Project root: {selected_context.project_root}")
     sys.stdout.flush()
-    completed = subprocess.run(command, cwd=ROOT, check=False)
+    completed = subprocess.run(
+        command,
+        cwd=selected_context.project_root,
+        check=False,
+    )
     if completed.returncode != 0:
         logger.fail(f"PyGitIndex failed with exit code {completed.returncode}")
         return completed.returncode
 
-    if args.dry_run:
-        logger.ok("Documentation index preview completed; no project files were changed")
+    if getattr(args, "dry_run", False):
+        logger.ok(
+            "Documentation index preview completed; no project files were changed"
+        )
         return 0
 
-    translated = normalize_generated_english(ROOT)
+    try:
+        translated = normalize_generated_english(context=selected_context)
+    except FilesystemSafetyError as exc:
+        logger.fail(f"Refusing unsafe tooling documentation path: {exc}")
+        return 1
     if translated:
         logger.info(f"Normalized generated English labels in {translated} file(s)")
     logger.ok("Documentation indices and backlinks are up to date")

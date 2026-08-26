@@ -29,6 +29,7 @@ def test_tauri_parser_recognizes_subcommands() -> None:
         ["tauri", "install", "--dry-run"],
         ["tauri", "install-appimage", "--dry-run"],
         ["tauri", "run", "--foreground", "--no-follow", "--frontend-port", "5174"],
+        ["tauri", "stop"],
         [
             "tauri",
             "build",
@@ -529,7 +530,6 @@ def test_tauri_follow_ctrl_c_stops_process_group(monkeypatch, tmp_path) -> None:
                 return 0
             return None
 
-    monkeypatch.setattr(run, "_clear_state", lambda: None)
     fake_process = FakeProcess()
 
     def fake_killpg(pid: int, sig: int) -> None:

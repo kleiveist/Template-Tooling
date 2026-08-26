@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 
 import pytest
 
 from tools import control
+from tools.core.filesystem import FilesystemSafetyError
+from tools.core.project_config import (
+    ProjectConfig,
+    ProjectPathConfig,
+    create_project_config,
+)
 from tools.inst import report
 from tools.profiles.model import ProjectProfile
 
@@ -41,6 +48,24 @@ def _payload() -> dict[str, object]:
     }
 
 
+def _write_project_config(
+    root: Path,
+    *,
+    frontend: str = "frontend",
+    backend: str = "",
+    docs: str = "docs",
+) -> None:
+    create_project_config(
+        root / "project-tooling.toml",
+        ProjectConfig(
+            tooling_version="1.0.0",
+            project_name="Test Project",
+            profile="test-profile",
+            paths=ProjectPathConfig(frontend=frontend, backend=backend, docs=docs),
+        ),
+    )
+
+
 def test_bare_test_alias_opens_suite_help() -> None:
     assert control._normalize_argv(["--test"]) == ["test", "--suite-help"]
 
@@ -71,7 +96,9 @@ def test_all_suite_includes_frontend_npm_test() -> None:
 def test_disabled_optional_suites_report_skip(monkeypatch) -> None:
     from tools.inst import run_test
 
-    monkeypatch.setattr(run_test.profile_runtime, "feature_enabled", lambda _feature, _root: False)
+    monkeypatch.setattr(
+        run_test.profile_runtime, "feature_enabled", lambda _feature, _root: False
+    )
 
     assert run_test._run_api_suite().status == "SKIP"
     assert run_test._run_database_suite().status == "SKIP"
@@ -85,7 +112,9 @@ def test_subprocess_start_failure_becomes_a_ci_compatible_result(monkeypatch) ->
     monkeypatch.setattr(
         run_test.subprocess,
         "run",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(FileNotFoundError("missing runtime")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            FileNotFoundError("missing runtime")
+        ),
     )
 
     completed = run_test._run(["missing-runtime"])
@@ -94,10 +123,12 @@ def test_subprocess_start_failure_becomes_a_ci_compatible_result(monkeypatch) ->
     assert "missing runtime" in completed.stderr
 
 
-def test_tooling_runtime_never_falls_back_to_backend_virtualenv(monkeypatch, tmp_path) -> None:
+def test_tooling_runtime_never_falls_back_to_backend_virtualenv(
+    monkeypatch, tmp_path
+) -> None:
     from tools.inst import run_test
 
-    tooling_python = tmp_path / "tools" / ".venv" / "bin" / "python"
+    tooling_python = tmp_path / ".tooling-state" / "venv" / "bin" / "python"
     backend_python = tmp_path / "backend" / ".venv" / "bin" / "python"
     backend_python.parent.mkdir(parents=True)
     backend_python.touch()
@@ -107,13 +138,16 @@ def test_tooling_runtime_never_falls_back_to_backend_virtualenv(monkeypatch, tmp
     assert run_test._tooling_python() == tooling_python
 
 
-def test_tools_suite_includes_optional_master_case_study_tests(monkeypatch, tmp_path) -> None:
+def test_tools_suite_includes_optional_tooling_docs_case_study_tests(
+    monkeypatch, tmp_path
+) -> None:
     from tools.inst import run_test
 
     tools_tests = tmp_path / "tools" / "tests"
-    case_study_tests = tmp_path / "case-study" / "tests"
+    case_study_tests = tmp_path / "docs" / "toolingdocs" / "case-study" / "tests"
     tools_tests.mkdir(parents=True)
     case_study_tests.mkdir(parents=True)
+    (tmp_path / "tools" / "VERSION").write_text("1.0.0\n", encoding="utf-8")
     python = tmp_path / "python"
     captured: list[str] = []
 
@@ -122,6 +156,7 @@ def test_tools_suite_includes_optional_master_case_study_tests(monkeypatch, tmp_
         return subprocess.CompletedProcess(command, 0, stdout="passed", stderr="")
 
     monkeypatch.setattr(run_test, "ROOT", tmp_path)
+    monkeypatch.setattr(run_test, "TOOLS_ROOT", tmp_path / "tools")
     monkeypatch.setattr(run_test, "_tooling_python", lambda: python)
     monkeypatch.setattr(run_test, "_run", fake_run)
 
@@ -135,12 +170,24 @@ DESKTOP_PROFILE_CASES = [
     (
         "desktop-local",
         {"frontend", "tauri"},
-        {"api": "SKIP", "database": "SKIP", "postgres": "SKIP", "frontend": "OK", "tauri": "OK"},
+        {
+            "api": "SKIP",
+            "database": "SKIP",
+            "postgres": "SKIP",
+            "frontend": "OK",
+            "tauri": "OK",
+        },
     ),
     (
         "desktop-cloud",
         {"frontend", "backend", "tauri", "cloud"},
-        {"api": "OK", "database": "SKIP", "postgres": "SKIP", "frontend": "OK", "tauri": "OK"},
+        {
+            "api": "OK",
+            "database": "SKIP",
+            "postgres": "SKIP",
+            "frontend": "OK",
+            "tauri": "OK",
+        },
     ),
 ]
 
@@ -158,6 +205,7 @@ def test_desktop_profiles_select_only_enabled_feature_suites(
     (tmp_path / "frontend").mkdir()
     (tmp_path / "frontend" / "package.json").write_text("{}", encoding="utf-8")
     (tmp_path / "backend" / "tests" / "api").mkdir(parents=True)
+    _write_project_config(tmp_path, backend="backend")
     profile = ProjectProfile(
         schema_version=1,
         profile_id=profile_id,
@@ -167,7 +215,9 @@ def test_desktop_profiles_select_only_enabled_feature_suites(
     )
 
     monkeypatch.setattr(run_test, "ROOT", tmp_path)
-    monkeypatch.setattr(run_test.profile_runtime, "active_profile", lambda _root: profile)
+    monkeypatch.setattr(
+        run_test.profile_runtime, "active_profile", lambda _root: profile
+    )
     monkeypatch.setattr(
         run_test.profile_runtime,
         "feature_enabled",
@@ -177,7 +227,9 @@ def test_desktop_profiles_select_only_enabled_feature_suites(
     monkeypatch.setattr(
         run_test,
         "_run",
-        lambda command, cwd=None: subprocess.CompletedProcess(command, 0, stdout="passed", stderr=""),
+        lambda command, cwd=None: subprocess.CompletedProcess(
+            command, 0, stdout="passed", stderr=""
+        ),
     )
 
     actual = {
@@ -191,23 +243,30 @@ def test_desktop_profiles_select_only_enabled_feature_suites(
     assert actual == expected
 
 
-def test_configured_postgres_suite_invokes_integration_tests(monkeypatch, tmp_path) -> None:
+def test_configured_postgres_suite_invokes_integration_tests(
+    monkeypatch, tmp_path
+) -> None:
     from tools.inst import run_test
 
     tests_dir = tmp_path / "backend" / "tests" / "integration"
     tests_dir.mkdir(parents=True)
+    _write_project_config(tmp_path, backend="backend")
     monkeypatch.setattr(run_test, "ROOT", tmp_path)
     monkeypatch.setattr(
         run_test.profile_runtime,
         "feature_enabled",
         lambda feature, _root: feature == "postgres",
     )
-    monkeypatch.setenv("DATABASE_URL_TEST", "postgresql+psycopg://test:test@127.0.0.1:5432/test")
+    monkeypatch.setenv(
+        "DATABASE_URL_TEST", "postgresql+psycopg://test:test@127.0.0.1:5432/test"
+    )
     monkeypatch.setattr(run_test, "_backend_python", lambda: tmp_path / "python")
     monkeypatch.setattr(
         run_test,
         "_run",
-        lambda command, cwd=None: subprocess.CompletedProcess(command, 0, stdout="1 passed", stderr=""),
+        lambda command, cwd=None: subprocess.CompletedProcess(
+            command, 0, stdout="1 passed", stderr=""
+        ),
     )
 
     result = run_test._run_postgres_suite()
@@ -225,7 +284,9 @@ def test_e2e_bootstrap_runs_cleanup_before_service_start(monkeypatch) -> None:
     calls: list[tuple[str, object]] = []
 
     def fake_cleanup(args) -> int:
-        calls.append(("cleanup", (args.frontend_port, args.backend_port, args.tracked_only)))
+        calls.append(
+            ("cleanup", (args.frontend_port, args.backend_port, args.tracked_only))
+        )
         return 0
 
     def fake_run(cmd: list[str], cwd=None) -> subprocess.CompletedProcess[str]:
@@ -235,12 +296,18 @@ def test_e2e_bootstrap_runs_cleanup_before_service_start(monkeypatch) -> None:
     monkeypatch.setattr(run_test.service_cleanup, "main", fake_cleanup)
     monkeypatch.setattr(run_test, "_run", fake_run)
 
-    started_by_runner, bootstrap = run_test._start_services_if_needed(["e2e"], no_start=False)
+    started_by_runner, bootstrap = run_test._start_services_if_needed(
+        ["e2e"], no_start=False
+    )
 
     assert started_by_runner is True
     assert bootstrap.status == "OK"
     assert bootstrap.message == "services started by test runner"
-    backend_port = 8000 if run_test.profile_runtime.feature_enabled("backend", run_test.ROOT) else 0
+    backend_port = (
+        8000
+        if run_test.profile_runtime.feature_enabled("backend", run_test.ROOT)
+        else 0
+    )
     assert calls == [
         ("cleanup", (5173, backend_port, True)),
         (
@@ -261,12 +328,16 @@ def test_e2e_bootstrap_cleanup_failure_skips_service_start(monkeypatch) -> None:
     monkeypatch.setattr(run_test, "_e2e_configured", lambda: True)
 
     def fake_run(cmd: list[str], cwd=None) -> subprocess.CompletedProcess[str]:
-        raise AssertionError(f"service start should not run after cleanup failure: {cmd}")
+        raise AssertionError(
+            f"service start should not run after cleanup failure: {cmd}"
+        )
 
     monkeypatch.setattr(run_test.service_cleanup, "main", lambda args: 1)
     monkeypatch.setattr(run_test, "_run", fake_run)
 
-    started_by_runner, bootstrap = run_test._start_services_if_needed(["e2e"], no_start=False)
+    started_by_runner, bootstrap = run_test._start_services_if_needed(
+        ["e2e"], no_start=False
+    )
 
     assert started_by_runner is False
     assert bootstrap.status == "FAIL"
@@ -274,7 +345,9 @@ def test_e2e_bootstrap_cleanup_failure_skips_service_start(monkeypatch) -> None:
     assert bootstrap.exit_code == 1
 
 
-def test_e2e_bootstrap_preserves_untracked_listener_and_reports_conflict(monkeypatch) -> None:
+def test_e2e_bootstrap_preserves_untracked_listener_and_reports_conflict(
+    monkeypatch,
+) -> None:
     from tools.inst import run_test
 
     monkeypatch.setattr(run_test, "_e2e_configured", lambda: True)
@@ -284,13 +357,19 @@ def test_e2e_bootstrap_preserves_untracked_listener_and_reports_conflict(monkeyp
         cleanup_modes.append(args.tracked_only)
         return 0
 
-    def occupied_port_failure(cmd: list[str], cwd=None) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="Port 127.0.0.1:5173 is already occupied.")
+    def occupied_port_failure(
+        cmd: list[str], cwd=None
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            cmd, 1, stdout="", stderr="Port 127.0.0.1:5173 is already occupied."
+        )
 
     monkeypatch.setattr(run_test.service_cleanup, "main", fake_cleanup)
     monkeypatch.setattr(run_test, "_run", occupied_port_failure)
 
-    started_by_runner, bootstrap = run_test._start_services_if_needed(["e2e"], no_start=False)
+    started_by_runner, bootstrap = run_test._start_services_if_needed(
+        ["e2e"], no_start=False
+    )
 
     assert cleanup_modes == [True]
     assert started_by_runner is False
@@ -325,18 +404,28 @@ def test_e2e_teardown_stops_only_tracked_services(monkeypatch) -> None:
 def test_e2e_teardown_failure_marks_overall_and_report_failed(monkeypatch) -> None:
     from tools.inst import run_test
 
-    args = control._build_parser().parse_args(["test", "--suite", "e2e", "--report", "json"])
+    args = control._build_parser().parse_args(
+        ["test", "--suite", "e2e", "--report", "json"]
+    )
     bootstrap = run_test.SuiteResult("service-bootstrap", "OK", "started", 0.1)
     suite = run_test.SuiteResult("e2e", "OK", "passed", 0.2)
     captured_report: dict[str, object] = {}
 
     monkeypatch.setattr(run_test, "_ensure_backend_runtime", lambda _suites: None)
-    monkeypatch.setattr(run_test, "_start_services_if_needed", lambda _suites, _no_start: (True, bootstrap))
-    monkeypatch.setattr(run_test, "_run_selected_suite", lambda _suite, bootstrap_failed: suite)
+    monkeypatch.setattr(
+        run_test,
+        "_start_services_if_needed",
+        lambda _suites, _no_start: (True, bootstrap),
+    )
+    monkeypatch.setattr(
+        run_test, "_run_selected_suite", lambda _suite, bootstrap_failed: suite
+    )
     monkeypatch.setattr(
         run_test,
         "_run",
-        lambda command, cwd=None: subprocess.CompletedProcess(command, 1, stdout="", stderr="still running"),
+        lambda command, cwd=None: subprocess.CompletedProcess(
+            command, 1, stdout="", stderr="still running"
+        ),
     )
 
     def capture_report(**kwargs) -> bool:
@@ -361,15 +450,21 @@ def test_e2e_bootstrap_no_start_skips_cleanup(monkeypatch) -> None:
     monkeypatch.setattr(
         run_test.service_cleanup,
         "main",
-        lambda args: (_ for _ in ()).throw(AssertionError("cleanup should not run with --no-start")),
+        lambda args: (_ for _ in ()).throw(
+            AssertionError("cleanup should not run with --no-start")
+        ),
     )
     monkeypatch.setattr(
         run_test,
         "_run",
-        lambda cmd, cwd=None: (_ for _ in ()).throw(AssertionError("service start should not run")),
+        lambda cmd, cwd=None: (_ for _ in ()).throw(
+            AssertionError("service start should not run")
+        ),
     )
 
-    started_by_runner, bootstrap = run_test._start_services_if_needed(["e2e"], no_start=True)
+    started_by_runner, bootstrap = run_test._start_services_if_needed(
+        ["e2e"], no_start=True
+    )
 
     assert started_by_runner is False
     assert bootstrap.status == "SKIP"
@@ -413,8 +508,12 @@ def test_e2e_suite_uses_the_frontend_package_script(monkeypatch, tmp_path) -> No
     environment = {"PLAYWRIGHT_BASE_URL": "http://localhost:6123"}
 
     monkeypatch.setattr(run_test, "ROOT", tmp_path)
-    monkeypatch.setattr(run_test.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None)
-    monkeypatch.setattr(run_test.e2e_runtime, "playwright_environment", lambda _root: environment)
+    monkeypatch.setattr(
+        run_test.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None
+    )
+    monkeypatch.setattr(
+        run_test.e2e_runtime, "playwright_environment", lambda _root: environment
+    )
     monkeypatch.setattr(
         run_test,
         "_run",
@@ -427,7 +526,9 @@ def test_e2e_suite_uses_the_frontend_package_script(monkeypatch, tmp_path) -> No
     result = run_test._run_e2e_suite()
 
     assert result.status == "OK"
-    assert commands == [(["/usr/bin/npm", "run", "test:e2e"], tmp_path / "frontend", environment)]
+    assert commands == [
+        (["/usr/bin/npm", "run", "test:e2e"], tmp_path / "frontend", environment)
+    ]
 
 
 def test_playwright_base_url_uses_runtime_frontend_override() -> None:
@@ -454,10 +555,14 @@ def test_report_writer_creates_markdown_and_json(tmp_path) -> None:
     assert len(paths) == 2
     assert {path.suffix for path in paths} == {".md", ".json"}
     assert all(path.parent == tmp_path / ".report" for path in paths)
-    markdown = next(path for path in paths if path.suffix == ".md").read_text(encoding="utf-8")
-    json_report = next(path for path in paths if path.suffix == ".json").read_text(encoding="utf-8")
+    markdown = next(path for path in paths if path.suffix == ".md").read_text(
+        encoding="utf-8"
+    )
+    json_report = next(path for path in paths if path.suffix == ".json").read_text(
+        encoding="utf-8"
+    )
 
-    assert "# 🧪 Template Project Test Report" in markdown
+    assert "# 🧪 Project Tooling Test Report" in markdown
     assert "## 📋 Summary" in markdown
     assert "full stdout content" in markdown
     assert "full stderr content" in markdown
@@ -471,3 +576,16 @@ def test_report_cleanup_removes_report_directory(tmp_path) -> None:
     assert report.clean_reports(tmp_path) is True
     assert not (tmp_path / ".report").exists()
     assert report.clean_reports(tmp_path) is False
+
+
+def test_report_writer_rejects_symlinked_report_directory(tmp_path) -> None:
+    external = tmp_path / "external"
+    state_root = tmp_path / ".tooling-state"
+    external.mkdir()
+    state_root.mkdir()
+    (state_root / ".report").symlink_to(external, target_is_directory=True)
+
+    with pytest.raises(FilesystemSafetyError):
+        report.write_test_report(state_root, _payload(), "md")
+
+    assert list(external.iterdir()) == []

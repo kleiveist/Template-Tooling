@@ -221,7 +221,7 @@ def _add_build_parser(subparsers: argparse._SubParsersAction) -> None:
     web_parser = build_subparsers.add_parser(
         "web",
         help="compile and package the Vite web app",
-        description="Build frontend/dist and create .dist/web/template-project-web.zip.",
+        description="Build frontend/dist and create .dist/web/web-build.zip.",
         formatter_class=HelpFormatter,
     )
     _add_examples(web_parser, "examples:\n  python tools/control.py build web")
@@ -388,12 +388,18 @@ def _add_docs_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     docs_check_parser = docs_subparsers.add_parser(
         "check",
-        help="validate generated indices, backlinks, targets, and page coverage",
-        description="Check documentation navigation without requiring the external PyGitIndex script.",
+        help="validate portable tooling documentation navigation",
+        description=(
+            "Read only the configured docs/toolingdocs tree and validate its "
+            "generated indices, internal backlinks and targets."
+        ),
         formatter_class=HelpFormatter,
     )
     docs_check_parser.add_argument(
-        "--docs-dir", default="docs", help="documentation directory (default: docs)"
+        "--docs-dir",
+        default=None,
+        metavar="PATH",
+        help="safe project-relative override (default: configured docs/toolingdocs)",
     )
     docs_index_parser = docs_subparsers.add_parser(
         "index",
@@ -423,7 +429,9 @@ def _configure_docs_index_parser(docs_index_parser: argparse.ArgumentParser) -> 
         help="replace index files instead of updating markers",
     )
     docs_index_parser.add_argument(
-        "--compact", action="store_true", help="list only directory overviews in README"
+        "--compact",
+        action="store_true",
+        help="accepted for compatibility; the project README is never modified",
     )
     docs_index_parser.add_argument(
         "--no-backlinks",
@@ -433,7 +441,7 @@ def _configure_docs_index_parser(docs_index_parser: argparse.ArgumentParser) -> 
     docs_index_parser.add_argument(
         "--no-readme",
         action="store_true",
-        help="do not update the README navigation block",
+        help="compatibility flag; project README updates are always disabled",
     )
     docs_index_parser.add_argument(
         "--script",
@@ -441,14 +449,16 @@ def _configure_docs_index_parser(docs_index_parser: argparse.ArgumentParser) -> 
         help="explicit PyGitIndex.py path (otherwise use PYGITINDEX_PATH, PATH or known user locations)",
     )
     docs_index_parser.add_argument(
-        "--docs-dir", default="docs", help="documentation directory (default: docs)"
+        "--docs-dir",
+        default=None,
+        metavar="PATH",
+        help="safe project-relative override (default: configured docs/toolingdocs)",
     )
     _add_examples(
         docs_index_parser,
         """examples:
   python tools/control.py docs index --dry-run
   python tools/control.py docs index
-  python tools/control.py docs index --compact
   python tools/control.py docs index --script /path/to/PyGitIndex.py""",
     )
 
@@ -457,7 +467,7 @@ def _add_service_parsers(subparsers: argparse._SubParsersAction) -> None:
     run_parser = subparsers.add_parser(
         "run",
         help="start enabled development services",
-        description="Start the services enabled by project-profile.toml. Foreground is the default; Ctrl+C stops them.",
+        description="Start the services enabled by project-tooling.toml. Foreground is the default; Ctrl+C stops them.",
         formatter_class=HelpFormatter,
     )
     run_parser.add_argument("--frontend-host", help="override FRONTEND_HOST")

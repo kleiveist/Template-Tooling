@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -5,13 +6,15 @@ import json
 import os
 import queue
 import shutil
-import signal
 import socket
+import stat
 import subprocess
 import threading
 import time
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TextIO
 
 from tools import logger
 from tools.config import (
@@ -21,17 +24,60 @@ from tools.config import (
     is_server_only_name,
     load_runtime_config,
 )
-from tools.core.context import load_context
+from tools.core.context import ProjectContext, load_context
+from tools.core.filesystem import (
+    FilesystemSafetyError,
+    atomic_write_text,
+    ensure_directory,
+    read_regular_text,
+    safe_join,
+)
+from tools.inst import stop as safe_stop
 from tools.process import prepare_command, process_start_token
 from tools.profiles import runtime as profile_runtime
 
-CONTEXT = load_context()
-ROOT = CONTEXT.project_root
-FRONTEND_DIR = CONTEXT.paths.frontend
-BACKEND_DIR = CONTEXT.paths.backend
-RUNTIME_DIR = CONTEXT.runtime_root
-LOG_DIR = RUNTIME_DIR / "logs"
-STATE_FILE = RUNTIME_DIR / "run_state.json"
+TOOLS_ROOT = Path(__file__).resolve().parents[1]
+ROOT = TOOLS_ROOT.parent
+
+
+def _context(context: ProjectContext | None = None) -> ProjectContext:
+    """Resolve target and runtime paths from the current project root."""
+
+    if context is not None:
+        return context
+    return load_context(project_root=ROOT, tools_root=TOOLS_ROOT)
+
+
+def _runtime_dir() -> Path:
+    return _context().runtime_root
+
+
+def _log_dir() -> Path:
+    return _runtime_dir() / "logs"
+
+
+def _state_file() -> Path:
+    return _runtime_dir() / "run_state.json"
+
+
+def _ensure_runtime_dir() -> Path:
+    return ensure_directory(_context().project_root, ".tooling-state/runtime")
+
+
+def _ensure_log_dir() -> Path:
+    return ensure_directory(_context().project_root, ".tooling-state/runtime/logs")
+
+
+def _open_log(path: Path) -> TextIO:
+    context = _context()
+    relative = path.relative_to(context.project_root).as_posix()
+    guarded = safe_join(context.project_root, relative)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(guarded, flags, 0o644)
+    if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+        os.close(descriptor)
+        raise FilesystemSafetyError(f"Runtime log must be a regular file: {relative}.")
+    return os.fdopen(descriptor, "a", encoding="utf-8")
 
 
 def _venv_python(backend_dir: Path) -> Path:
@@ -71,37 +117,54 @@ def _port_is_free(host: str, port: int) -> bool:
     return False
 
 
-def _is_process_alive(pid: int) -> bool:
+def _read_state() -> dict[str, object] | None:
+    state_file = _state_file()
     try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
-
-
-def _read_state() -> dict | None:
-    if not STATE_FILE.exists():
+        state_file.lstat()
+    except FileNotFoundError:
         return None
     try:
-        return json.loads(STATE_FILE.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return None
+        payload = json.loads(
+            read_regular_text(
+                state_file,
+                root=_context().project_root,
+                label="Runtime state",
+            )
+        )
+        validation_error = safe_stop._state_validation_error(payload)
+        return (
+            {"_invalid_runtime_state": validation_error}
+            if validation_error is not None
+            else payload
+        )
+    except (FilesystemSafetyError, json.JSONDecodeError, OSError) as exc:
+        return {"_invalid_runtime_state": str(exc)}
 
 
-def _write_state(payload: dict) -> None:
-    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+def _write_state(payload: dict[str, object]) -> None:
+    _ensure_runtime_dir()
+    atomic_write_text(
+        _state_file(),
+        json.dumps(payload, indent=2) + "\n",
+        root=_context().project_root,
+    )
 
 
 def _clear_state() -> None:
     try:
-        STATE_FILE.unlink(missing_ok=True)
-    except OSError:
+        state_file = _state_file()
+        if not state_file.exists() and not state_file.is_symlink():
+            return
+        relative = state_file.relative_to(_context().project_root).as_posix()
+        safe_join(_context().project_root, relative, require_exists=True).unlink()
+    except (FilesystemSafetyError, OSError):
         pass
 
 
 def _frontend_process_environment(config: RuntimeConfig) -> dict[str, str]:
-    environment = {key: value for key, value in os.environ.items() if not is_server_only_name(key)}
+    environment = {
+        key: value for key, value in os.environ.items() if not is_server_only_name(key)
+    }
     environment.update(config.frontend_environment())
     return environment
 
@@ -114,7 +177,7 @@ def _backend_process_environment(config: RuntimeConfig) -> dict[str, str]:
 
 def _frontend_service(config: RuntimeConfig) -> tuple[ServiceDef | None, list[str]]:
     errors: list[str] = []
-    frontend_dir = FRONTEND_DIR
+    frontend_dir = _context().paths.frontend
     assert config.frontend_host is not None
     assert config.frontend_port is not None
     if not (frontend_dir / "package.json").exists():
@@ -171,7 +234,7 @@ def _backend_runtime_error(backend_python: Path) -> str | None:
 
 def _backend_service(config: RuntimeConfig) -> tuple[ServiceDef | None, list[str]]:
     errors: list[str] = []
-    backend_dir = BACKEND_DIR
+    backend_dir = _context().paths.backend
     assert config.backend_host is not None
     assert config.backend_port is not None
     if backend_dir is None:
@@ -239,31 +302,14 @@ def _build_service_defs(config: RuntimeConfig) -> tuple[list[ServiceDef], list[s
     return services, errors
 
 
-def _terminate_pid(pid: int, timeout_seconds: int = 8) -> bool:
-    if not _is_process_alive(pid):
-        return True
-
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except OSError:
-        return True
-
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
-        if not _is_process_alive(pid):
-            return True
-        time.sleep(0.2)
-
-    try:
-        os.kill(pid, signal.SIGKILL)
-    except OSError:
-        return True
-
-    return not _is_process_alive(pid)
-
-
 def _stop_from_state(print_output: bool = True) -> int:
     state = _read_state()
+    if state and "_invalid_runtime_state" in state:
+        if print_output:
+            logger.fail(
+                f"Runtime state is unsafe or invalid: {state['_invalid_runtime_state']}"
+            )
+        return 1
     if not state or "services" not in state:
         if print_output:
             logger.ok("No tracked services are running")
@@ -271,19 +317,52 @@ def _stop_from_state(print_output: bool = True) -> int:
         return 0
 
     failures = 0
-    for service in state.get("services", []):
+    remaining_services: list[dict[str, object]] = []
+    services = state["services"]
+    assert isinstance(services, list)
+    for service in services:
+        assert isinstance(service, dict)
         pid = int(service.get("pid", -1))
         name = str(service.get("name", "unknown"))
         if pid <= 0:
             continue
-        ok = _terminate_pid(pid)
+        if not safe_stop._is_process_alive(pid):
+            ok = True
+        else:
+            identity_matches, identity_detail = safe_stop._tracked_identity_matches(
+                service, pid
+            )
+            if not identity_matches:
+                if print_output:
+                    logger.status(
+                        "FAIL",
+                        f"stop:stale:{name:<8} pid={pid} ({identity_detail}); process was not signaled",
+                    )
+                failures += 1
+                remaining_services.append(service)
+                continue
+            ok = safe_stop._terminate_tracked_service(service, pid)
+            raw_port = service.get("port")
+            if ok and isinstance(raw_port, int) and not isinstance(raw_port, bool):
+                ok = safe_stop._port_is_free(raw_port)
         if print_output:
             status = "OK" if ok else "FAIL"
             logger.status(status, f"stop:{name:<10} pid={pid}")
         if not ok:
             failures += 1
+            remaining_services.append(service)
 
-    _clear_state()
+    if remaining_services:
+        retained_state = dict(state)
+        retained_state["services"] = remaining_services
+        try:
+            _write_state(retained_state)
+        except (FilesystemSafetyError, OSError) as exc:
+            if print_output:
+                logger.fail(f"Unable to retain failed runtime state entries: {exc}")
+            failures += 1
+    else:
+        _clear_state()
     return 1 if failures else 0
 
 
@@ -291,14 +370,29 @@ def _state_has_live_processes() -> bool:
     state = _read_state()
     if not state:
         return False
+    if "_invalid_runtime_state" in state:
+        return True
 
-    for service in state.get("services", []):
+    services = state["services"]
+    assert isinstance(services, list)
+    live_services: list[dict[str, object]] = []
+    for service in services:
+        assert isinstance(service, dict)
         pid = int(service.get("pid", -1))
-        if pid > 0 and _is_process_alive(pid):
-            return True
+        if pid > 0 and safe_stop._is_process_alive(pid):
+            live_services.append(service)
 
-    _clear_state()
-    return False
+    if not live_services:
+        _clear_state()
+        return False
+    if len(live_services) != len(services):
+        retained_state = dict(state)
+        retained_state["services"] = live_services
+        try:
+            _write_state(retained_state)
+        except (FilesystemSafetyError, OSError):
+            pass
+    return True
 
 
 def _preflight(config: RuntimeConfig) -> list[str]:
@@ -306,7 +400,9 @@ def _preflight(config: RuntimeConfig) -> list[str]:
     profile = profile_runtime.active_profile(ROOT)
 
     if _state_has_live_processes():
-        errors.append("Tracked services are already running. Use 'python tools/control.py stop' first.")
+        errors.append(
+            "Tracked services are already running. Use 'python tools/control.py stop' first."
+        )
 
     endpoints: list[tuple[str, int]] = []
     if profile.has_feature("frontend"):
@@ -325,69 +421,137 @@ def _preflight(config: RuntimeConfig) -> list[str]:
     return errors
 
 
-def _service_state(service: ServiceDef, process: subprocess.Popen, log_file: str | None) -> dict:
+def _service_state(
+    service: ServiceDef, process: subprocess.Popen, log_file: str | None
+) -> dict[str, object]:
+    start_token = process_start_token(process.pid)
+    if not start_token:
+        raise RuntimeError(
+            f"Could not capture process start identity for {service.name} pid={process.pid}."
+        )
     return {
         "name": service.name,
         "pid": process.pid,
         "port": service.port,
         "command": service.command,
-        "process_start_token": process_start_token(process.pid),
+        "process_start_token": start_token,
         "process_group_id": process.pid,
         "log_file": log_file,
     }
 
 
-def _start_detached(services: list[ServiceDef]) -> tuple[list[subprocess.Popen], dict]:
-    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
+def _rollback_started_processes(processes: list[subprocess.Popen]) -> None:
+    for process in reversed(processes):
+        running = True
+        with suppress(BaseException):
+            running = process.poll() is None
 
-    payload = {"created_at": int(time.time()), "services": []}
+        stopped = not running
+        if running:
+            with suppress(BaseException):
+                stopped = safe_stop._terminate_tracked_service(
+                    {"process_group_id": process.pid}, process.pid
+                )
+        if not stopped:
+            with suppress(BaseException):
+                process.terminate()
+                process.wait(timeout=2)
+            stopped = False
+            with suppress(BaseException):
+                stopped = process.poll() is not None
+            if not stopped:
+                with suppress(BaseException):
+                    process.kill()
+                    process.wait(timeout=2)
+
+        stdout = getattr(process, "stdout", None)
+        if stdout is not None:
+            with suppress(BaseException):
+                stdout.close()
+
+
+def _start_detached(
+    services: list[ServiceDef],
+) -> tuple[list[subprocess.Popen], dict[str, object]]:
+    _ensure_runtime_dir()
+    log_dir = _ensure_log_dir()
+
+    service_states: list[dict[str, object]] = []
+    payload: dict[str, object] = {
+        "created_at": int(time.time()),
+        "services": service_states,
+    }
     processes: list[subprocess.Popen] = []
 
-    for service in services:
-        log_path = LOG_DIR / f"{service.name}.log"
-        log_file = log_path.open("a", encoding="utf-8")
-        process = subprocess.Popen(
-            prepare_command(service.command),
-            cwd=service.cwd,
-            env=service.env,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            text=True,
-            start_new_session=True,
-        )
-        log_file.close()
-        processes.append(process)
-        payload["services"].append(_service_state(service, process, str(log_path.relative_to(ROOT))))
+    try:
+        for service in services:
+            log_path = log_dir / f"{service.name}.log"
+            log_file = _open_log(log_path)
+            process: subprocess.Popen | None = None
+            try:
+                process = subprocess.Popen(
+                    prepare_command(service.command),
+                    cwd=service.cwd,
+                    env=service.env,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    start_new_session=True,
+                )
+                processes.append(process)
+            finally:
+                log_file.close()
+            assert process is not None
+            service_states.append(
+                _service_state(service, process, str(log_path.relative_to(ROOT)))
+            )
 
-    _write_state(payload)
+        _write_state(payload)
+    except BaseException:
+        _rollback_started_processes(processes)
+        raise
     return processes, payload
 
 
-def _start_foreground(services: list[ServiceDef]) -> tuple[list[subprocess.Popen], dict]:
-    payload = {"created_at": int(time.time()), "services": []}
+def _start_foreground(
+    services: list[ServiceDef],
+) -> tuple[list[subprocess.Popen], dict[str, object]]:
+    service_states: list[dict[str, object]] = []
+    payload: dict[str, object] = {
+        "created_at": int(time.time()),
+        "services": service_states,
+    }
     processes: list[subprocess.Popen] = []
 
-    for service in services:
-        process = subprocess.Popen(
-            prepare_command(service.command),
-            cwd=service.cwd,
-            env=service.env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            start_new_session=True,
-        )
-        processes.append(process)
-        payload["services"].append(_service_state(service, process, None))
+    try:
+        for service in services:
+            process = subprocess.Popen(
+                prepare_command(service.command),
+                cwd=service.cwd,
+                env=service.env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                start_new_session=True,
+            )
+            processes.append(process)
+            service_states.append(_service_state(service, process, None))
 
-    _write_state(payload)
+        _write_state(payload)
+    except BaseException:
+        _rollback_started_processes(processes)
+        raise
     return processes, payload
 
 
-def _stream_foreground(payload: dict, processes: list[subprocess.Popen]) -> int:
+def _stream_foreground(
+    payload: dict[str, object], processes: list[subprocess.Popen]
+) -> int:
     q: queue.Queue[tuple[str, str]] = queue.Queue()
+
+    services = payload["services"]
+    assert isinstance(services, list)
 
     def reader(name: str, process: subprocess.Popen) -> None:
         assert process.stdout is not None
@@ -395,7 +559,8 @@ def _stream_foreground(payload: dict, processes: list[subprocess.Popen]) -> int:
             q.put((name, line.rstrip()))
 
     threads = []
-    for item, process in zip(payload["services"], processes, strict=True):
+    for item, process in zip(services, processes, strict=True):
+        assert isinstance(item, dict)
         t = threading.Thread(target=reader, args=(item["name"], process), daemon=True)
         t.start()
         threads.append(t)
@@ -409,7 +574,8 @@ def _stream_foreground(payload: dict, processes: list[subprocess.Popen]) -> int:
         except queue.Empty:
             pass
 
-        for item, process in zip(payload["services"], processes, strict=True):
+        for item, process in zip(services, processes, strict=True):
+            assert isinstance(item, dict)
             code = process.poll()
             if code is not None:
                 if code == 0:
@@ -449,10 +615,23 @@ def run_command(args: argparse.Namespace) -> int:
         return 1
 
     if args.detach:
-        processes, payload = _start_detached(services)
+        try:
+            processes, payload = _start_detached(services)
+        except (
+            FilesystemSafetyError,
+            OSError,
+            RuntimeError,
+            ValueError,
+            subprocess.SubprocessError,
+        ) as exc:
+            logger.fail(f"Could not start services safely: {exc}")
+            return 1
         time.sleep(2)
 
-        for item, process in zip(payload["services"], processes, strict=True):
+        service_states = payload["services"]
+        assert isinstance(service_states, list)
+        for item, process in zip(service_states, processes, strict=True):
+            assert isinstance(item, dict)
             code = process.poll()
             if code is not None:
                 logger.fail(f"Service failed early: {item['name']} (code={code})")
@@ -460,11 +639,24 @@ def run_command(args: argparse.Namespace) -> int:
                 return 1
 
         logger.ok("Services started in detached mode")
-        for item in payload["services"]:
-            logger.ok(f"service:{item['name']:<9} pid={item['pid']} port={item['port']} log={item['log_file']}")
+        for item in service_states:
+            assert isinstance(item, dict)
+            logger.ok(
+                f"service:{item['name']:<9} pid={item['pid']} port={item['port']} log={item['log_file']}"
+            )
         return 0
 
-    processes, payload = _start_foreground(services)
+    try:
+        processes, payload = _start_foreground(services)
+    except (
+        FilesystemSafetyError,
+        OSError,
+        RuntimeError,
+        ValueError,
+        subprocess.SubprocessError,
+    ) as exc:
+        logger.fail(f"Could not start services safely: {exc}")
+        return 1
     try:
         return _stream_foreground(payload, processes)
     except KeyboardInterrupt:

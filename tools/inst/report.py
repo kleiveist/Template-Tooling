@@ -6,20 +6,40 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from tools.core.filesystem import (
+    atomic_write_text,
+    ensure_directory,
+    safe_join,
+    validate_root,
+)
+
 REPORT_DIR_NAME = ".report"
 
 
 def clean_reports(root: Path) -> bool:
-    report_dir = root / REPORT_DIR_NAME
-    if not report_dir.exists():
+    state_root = Path(root).absolute()
+    try:
+        state_root.lstat()
+    except FileNotFoundError:
         return False
+    state_root = validate_root(state_root)
+    report_dir = state_root / REPORT_DIR_NAME
+    try:
+        report_dir.lstat()
+    except FileNotFoundError:
+        return False
+    report_dir = safe_join(state_root, REPORT_DIR_NAME, require_exists=True)
     shutil.rmtree(report_dir)
     return True
 
 
 def write_test_report(root: Path, payload: dict[str, Any], mode: str) -> list[Path]:
-    report_dir = root / REPORT_DIR_NAME
-    report_dir.mkdir(parents=True, exist_ok=True)
+    state_root = Path(root).absolute()
+    if state_root.exists():
+        state_root = validate_root(state_root)
+    else:
+        state_root = ensure_directory(state_root.parent, state_root.name)
+    report_dir = ensure_directory(state_root, REPORT_DIR_NAME)
 
     generated_at = datetime.now().astimezone()
     enriched_payload = dict(payload)
@@ -34,13 +54,14 @@ def write_test_report(root: Path, payload: dict[str, Any], mode: str) -> list[Pa
     for report_format in _expand_mode(mode):
         if report_format == "md":
             path = _unique_path(report_dir / f"{basename}.md")
-            path.write_text(_render_markdown(enriched_payload), encoding="utf-8")
+            atomic_write_text(path, _render_markdown(enriched_payload), root=state_root)
             paths.append(path)
         elif report_format == "json":
             path = _unique_path(report_dir / f"{basename}.json")
-            path.write_text(
+            atomic_write_text(
+                path,
                 json.dumps(enriched_payload, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
+                root=state_root,
             )
             paths.append(path)
     return paths
@@ -69,7 +90,9 @@ def _unique_path(path: Path) -> Path:
 
 def _slug(value: str) -> str:
     normalized = value.strip().lower().replace(" ", "-")
-    chars = [char if char.isalnum() or char in {"-", "_"} else "-" for char in normalized]
+    chars = [
+        char if char.isalnum() or char in {"-", "_"} else "-" for char in normalized
+    ]
     slug = "".join(chars).strip("-")
     return slug or "unknown"
 
@@ -93,7 +116,7 @@ def _render_markdown(payload: dict[str, Any]) -> str:
     bootstrap = payload.get("bootstrap", {})
 
     lines: list[str] = [
-        "# 🧪 Template Project Test Report",
+        "# 🧪 Project Tooling Test Report",
         "",
         "## 📋 Summary",
         "",
@@ -138,14 +161,25 @@ def _render_markdown(payload: dict[str, Any]) -> str:
     lines.append("")
 
     for result in results:
-        _append_detail_section(lines, f"🔎 Suite details: {result.get('name', 'unknown')}", result)
+        _append_detail_section(
+            lines, f"🔎 Suite details: {result.get('name', 'unknown')}", result
+        )
 
     return "\n".join(lines).rstrip() + "\n"
 
 
 def _append_detail_section(lines: list[str], title: str, item: dict[str, Any]) -> None:
     has_details = item.get("exit_code") is not None or any(
-        item.get(key) for key in ("command", "cwd", "detail", "stdout", "stderr", "stdout_tail", "stderr_tail")
+        item.get(key)
+        for key in (
+            "command",
+            "cwd",
+            "detail",
+            "stdout",
+            "stderr",
+            "stdout_tail",
+            "stderr_tail",
+        )
     )
     if not has_details:
         return

@@ -13,14 +13,30 @@ from pathlib import Path
 
 from tools import logger
 from tools.config import ConfigLoadError, resolve_configuration, validate_configuration
-from tools.core.context import load_context
+from tools.core.context import ProjectContext, load_context
+from tools.core.filesystem import (
+    FilesystemSafetyError,
+    atomic_write_text,
+    read_regular_text,
+    safe_join,
+)
 from tools.process import process_start_token
 from tools.profiles import runtime as profile_runtime
 
-CONTEXT = load_context()
-ROOT = CONTEXT.project_root
-RUNTIME_DIR = CONTEXT.runtime_root
-STATE_FILE = RUNTIME_DIR / "run_state.json"
+TOOLS_ROOT = Path(__file__).resolve().parents[1]
+ROOT = TOOLS_ROOT.parent
+
+
+def _context(context: ProjectContext | None = None) -> ProjectContext:
+    """Resolve runtime state from the current target project."""
+
+    if context is not None:
+        return context
+    return load_context(project_root=ROOT, tools_root=TOOLS_ROOT)
+
+
+def _state_file() -> Path:
+    return _context().runtime_root / "run_state.json"
 
 
 def _is_process_alive(pid: int) -> bool:
@@ -46,42 +62,90 @@ def _is_zombie_process(pid: int) -> bool:
     return parts[1].split(maxsplit=1)[0] == "Z"
 
 
-def _terminate_pid(pid: int, timeout_seconds: int = 8) -> bool:
-    if not _is_process_alive(pid):
-        return True
-
+def _read_state() -> dict[str, object] | None:
+    state_file = _state_file()
     try:
-        os.kill(pid, signal.SIGTERM)
-    except OSError:
-        return True
-
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
-        if not _is_process_alive(pid):
-            return True
-        time.sleep(0.2)
-
-    try:
-        os.kill(pid, signal.SIGKILL)
-    except OSError:
-        return True
-
-    return not _is_process_alive(pid)
-
-
-def _read_state() -> dict | None:
-    if not STATE_FILE.exists():
+        state_file.lstat()
+    except FileNotFoundError:
         return None
     try:
-        return json.loads(STATE_FILE.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return None
+        payload = json.loads(
+            read_regular_text(
+                state_file,
+                root=_context().project_root,
+                label="Runtime state",
+            )
+        )
+        validation_error = _state_validation_error(payload)
+        return (
+            {"_invalid_runtime_state": validation_error}
+            if validation_error is not None
+            else payload
+        )
+    except (FilesystemSafetyError, json.JSONDecodeError, OSError) as exc:
+        return {"_invalid_runtime_state": str(exc)}
+
+
+def _state_validation_error(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return "runtime state must be a JSON object"
+    created_at = payload.get("created_at")
+    if (
+        not isinstance(created_at, int)
+        or isinstance(created_at, bool)
+        or created_at < 0
+    ):
+        return "runtime state created_at must be a non-negative integer"
+    services = payload.get("services")
+    if not isinstance(services, list):
+        return "runtime state services must be a list"
+    for index, service in enumerate(services):
+        if not isinstance(service, dict):
+            return f"runtime service {index} must be an object"
+        name = service.get("name")
+        pid = service.get("pid")
+        port = service.get("port")
+        command = service.get("command")
+        start_token = service.get("process_start_token")
+        group_id = service.get("process_group_id")
+        if not isinstance(name, str) or not name:
+            return f"runtime service {index} has an invalid name"
+        if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+            return f"runtime service {index} has an invalid pid"
+        if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
+            return f"runtime service {index} has an invalid port"
+        if (
+            not isinstance(command, list)
+            or len(command) < 2
+            or not all(isinstance(item, str) and item for item in command)
+        ):
+            return f"runtime service {index} has an invalid command"
+        if not isinstance(start_token, str) or not start_token:
+            return f"runtime service {index} has an invalid process start identity"
+        if not isinstance(group_id, int) or isinstance(group_id, bool) or group_id <= 0:
+            return f"runtime service {index} has an invalid process group"
+        log_file = service.get("log_file")
+        if log_file is not None and (not isinstance(log_file, str) or not log_file):
+            return f"runtime service {index} has an invalid log file"
+    return None
+
+
+def _write_state(payload: dict[str, object]) -> None:
+    atomic_write_text(
+        _state_file(),
+        json.dumps(payload, indent=2) + "\n",
+        root=_context().project_root,
+    )
 
 
 def _clear_state() -> None:
     try:
-        STATE_FILE.unlink(missing_ok=True)
-    except OSError:
+        state_file = _state_file()
+        if not state_file.exists() and not state_file.is_symlink():
+            return
+        relative = state_file.relative_to(_context().project_root).as_posix()
+        safe_join(_context().project_root, relative, require_exists=True).unlink()
+    except (FilesystemSafetyError, OSError):
         pass
 
 
@@ -103,10 +167,16 @@ def _read_proc_cmdline_tokens(pid: int) -> tuple[str, ...] | None:
 
 def _cmdline_query(pid: int) -> list[str] | None:
     if os.name == "nt":
-        powershell = shutil.which("powershell.exe") or shutil.which("powershell") or shutil.which("pwsh")
+        powershell = (
+            shutil.which("powershell.exe")
+            or shutil.which("powershell")
+            or shutil.which("pwsh")
+        )
         if powershell is None:
             return None
-        script = f'(Get-CimInstance Win32_Process -Filter "ProcessId = {pid}").CommandLine'
+        script = (
+            f'(Get-CimInstance Win32_Process -Filter "ProcessId = {pid}").CommandLine'
+        )
         return [powershell, "-NoProfile", "-NonInteractive", "-Command", script]
 
     ps = shutil.which("ps")
@@ -221,7 +291,9 @@ def _port_owners_from_ss(ports: set[int]) -> dict[int, tuple[set[int], str]]:
     if ss is None:
         return {}
 
-    completed = subprocess.run([ss, "-lptn"], text=True, capture_output=True, check=False)
+    completed = subprocess.run(
+        [ss, "-lptn"], text=True, capture_output=True, check=False
+    )
     if completed.returncode != 0:
         return {}
 
@@ -235,7 +307,11 @@ def _port_owners_from_ss(ports: set[int]) -> dict[int, tuple[set[int], str]]:
             continue
 
         tail = " ".join(parts[5:])
-        pid_parts = [chunk for chunk in tail.replace(",", " ").split() if chunk.startswith("pid=")]
+        pid_parts = [
+            chunk
+            for chunk in tail.replace(",", " ").split()
+            if chunk.startswith("pid=")
+        ]
         for chunk in pid_parts:
             try:
                 pid = int(chunk.split("=", 1)[1])
@@ -262,9 +338,9 @@ def _cmdline_matches_port(tokens: list[str], port: int) -> bool:
             return True
 
     joined = " ".join(tokens)
-    if ("uvicorn" in joined or "http.server" in joined or "vite" in joined) and target in tokens:
-        return True
-    return False
+    return (
+        "uvicorn" in joined or "http.server" in joined or "vite" in joined
+    ) and target in tokens
 
 
 def _port_owners_from_cmdline(ports: set[int]) -> dict[int, tuple[set[int], str]]:
@@ -291,7 +367,9 @@ def _port_owners_from_cmdline(ports: set[int]) -> dict[int, tuple[set[int], str]
     return owners
 
 
-def _merge_owners(base: dict[int, tuple[set[int], str]], extra: dict[int, tuple[set[int], str]]) -> None:
+def _merge_owners(
+    base: dict[int, tuple[set[int], str]], extra: dict[int, tuple[set[int], str]]
+) -> None:
     for pid, (ports, cmdline) in extra.items():
         existing_ports, existing_cmd = base.get(pid, (set(), ""))
         merged_ports = set(existing_ports)
@@ -333,16 +411,25 @@ def _launcher_matches(expected: str, current: tuple[str, ...]) -> bool:
     current_names = {_normalized_executable_name(token) for token in current}
     if expected_name in current_names:
         return True
-    return expected_name in {"npm", "npx"} and f"{expected_name}-cli.js" in current_names
+    return (
+        expected_name in {"npm", "npx"} and f"{expected_name}-cli.js" in current_names
+    )
 
 
-def _contains_token_sequence(tokens: tuple[str, ...], expected: tuple[str, ...]) -> bool:
+def _contains_token_sequence(
+    tokens: tuple[str, ...], expected: tuple[str, ...]
+) -> bool:
     if not expected or len(expected) > len(tokens):
         return False
-    return any(tokens[index : index + len(expected)] == expected for index in range(len(tokens) - len(expected) + 1))
+    return any(
+        tokens[index : index + len(expected)] == expected
+        for index in range(len(tokens) - len(expected) + 1)
+    )
 
 
-def _command_arguments_match(expected: tuple[str, ...], current: tuple[str, ...]) -> bool:
+def _command_arguments_match(
+    expected: tuple[str, ...], current: tuple[str, ...]
+) -> bool:
     arguments = expected[1:]
     if _normalized_executable_name(expected[0]) in {"npm", "npx"}:
         arguments = tuple(token for token in arguments if token != "--")
@@ -367,7 +454,11 @@ def _tracked_identity_matches(service: dict, pid: int) -> tuple[bool, str]:
         or not all(isinstance(item, str) for item in raw_command)
     ):
         return False, "stored command identity is missing or invalid"
-    if not isinstance(raw_port, int) or isinstance(raw_port, bool) or not 1 <= raw_port <= 65535:
+    if (
+        not isinstance(raw_port, int)
+        or isinstance(raw_port, bool)
+        or not 1 <= raw_port <= 65535
+    ):
         return False, "stored port identity is missing or invalid"
 
     current = _read_cmdline_tokens(pid)
@@ -378,7 +469,9 @@ def _tracked_identity_matches(service: dict, pid: int) -> tuple[bool, str]:
         return False, "process launcher does not match tracked service"
     if not _command_arguments_match(expected, current):
         return False, "process command does not match tracked service"
-    if not _cmdline_matches_port(list(expected), raw_port) or not _cmdline_matches_port(list(current), raw_port):
+    if not _cmdline_matches_port(list(expected), raw_port) or not _cmdline_matches_port(
+        list(current), raw_port
+    ):
         return False, "process port does not match tracked service"
     return True, "tracked command and port match"
 
@@ -439,7 +532,10 @@ def _terminate_tracked_service(service: dict, pid: int) -> bool:
         if taskkill is None:
             return False
         completed = subprocess.run(
-            [taskkill, "/PID", str(pid), "/T", "/F"], text=True, capture_output=True, check=False
+            [taskkill, "/PID", str(pid), "/T", "/F"],
+            text=True,
+            capture_output=True,
+            check=False,
         )
         return completed.returncode == 0 or not _is_process_alive(pid)
     try:
@@ -455,12 +551,21 @@ def _stop_tracked_processes() -> tuple[set[int], int]:
     stopped_pids: set[int] = set()
     failures = 0
 
+    if state and "_invalid_runtime_state" in state:
+        logger.fail(
+            f"Runtime state is unsafe or invalid: {state['_invalid_runtime_state']}"
+        )
+        return stopped_pids, 1
     if not state or "services" not in state:
         logger.ok("No tracked services are running")
         _clear_state()
         return stopped_pids, failures
 
-    for service in state.get("services", []):
+    remaining_services: list[dict[str, object]] = []
+    services = state["services"]
+    assert isinstance(services, list)
+    for service in services:
+        assert isinstance(service, dict)
         pid = int(service.get("pid", -1))
         name = str(service.get("name", "unknown"))
         if pid <= 0:
@@ -476,6 +581,7 @@ def _stop_tracked_processes() -> tuple[set[int], int]:
                 f"stop:stale:{name:<8} pid={pid} ({identity_detail}); process was not signaled",
             )
             failures += 1
+            remaining_services.append(service)
             continue
         ok = _terminate_tracked_service(service, pid)
         raw_port = service.get("port")
@@ -484,8 +590,18 @@ def _stop_tracked_processes() -> tuple[set[int], int]:
         logger.status("OK" if ok else "FAIL", f"stop:tracked:{name:<8} pid={pid}")
         if not ok:
             failures += 1
+            remaining_services.append(service)
 
-    _clear_state()
+    if remaining_services:
+        retained_state = dict(state)
+        retained_state["services"] = remaining_services
+        try:
+            _write_state(retained_state)
+        except (FilesystemSafetyError, OSError) as exc:
+            logger.fail(f"Unable to retain failed runtime state entries: {exc}")
+            failures += 1
+    else:
+        _clear_state()
     return stopped_pids, failures
 
 
@@ -502,27 +618,24 @@ def _stop_port_processes(ports: set[int], ignored_pids: set[int]) -> int:
         logger.ok(f"No listener process found on ports {sorted(ports)}")
         return 0
 
-    failures = 0
     current_pid = os.getpid()
     for pid, (pid_ports, cmdline) in sorted(owners.items(), key=lambda item: item[0]):
         if pid in ignored_pids or pid == current_pid:
             continue
-        ok = _terminate_pid(pid)
         port_text = ",".join(str(port) for port in sorted(pid_ports))
         short_cmd = (cmdline[:120] + "...") if len(cmdline) > 120 else cmdline
-        logger.status("OK" if ok else "FAIL", f"stop:port:{port_text:<9} pid={pid} cmd={short_cmd}")
-        if not ok:
-            failures += 1
+        logger.status(
+            "WARN",
+            f"stop:untracked:{port_text:<9} pid={pid} cmd={short_cmd}; process was not signaled",
+        )
 
     still_occupied = [port for port in sorted(ports) if not _port_is_free(port)]
     if still_occupied:
-        failures += len(still_occupied)
         logger.fail(
-            "Unable to clear ports automatically: "
+            "Untracked listeners still occupy project ports: "
             f"{still_occupied}. Action: run 'sudo ss -lptn \"sport = :<port>\"' and stop the owner process."
         )
-
-    return failures
+    return len(still_occupied)
 
 
 def main(args: argparse.Namespace) -> int:
@@ -542,7 +655,11 @@ def main(args: argparse.Namespace) -> int:
             logger.fail(f"Could not load development ports: {exc}")
             return 1
         relevant_names = {"FRONTEND_PORT", "BACKEND_PORT"}
-        relevant_issues = [issue for issue in validate_configuration(resolved) if issue.name in relevant_names]
+        relevant_issues = [
+            issue
+            for issue in validate_configuration(resolved)
+            if issue.name in relevant_names
+        ]
         if relevant_issues:
             for issue in relevant_issues:
                 logger.fail(f"{issue.name}: {issue.message}")

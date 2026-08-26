@@ -35,7 +35,9 @@ def _release_repository(tmp_path: Path) -> tuple[Path, str]:
     (root / "tracked.txt").write_text("release source\n", encoding="utf-8")
     notes = root / ".github" / "release-notes"
     notes.mkdir(parents=True)
-    (notes / "v1.0.2.md").write_text("# Test v1.0.2\n\nReviewed notes.\n", encoding="utf-8")
+    (notes / "v1.0.2.md").write_text(
+        "# Test v1.0.2\n\nReviewed notes.\n", encoding="utf-8"
+    )
     _git(root, "add", ".")
     _git(root, "commit", "-m", "prepare release")
     sha = _git(root, "rev-parse", "HEAD")
@@ -66,7 +68,9 @@ def _bundle(output: Path) -> release_publish.PreparedBundle:
     return release_publish.PreparedBundle(output, output.parent / "RELEASE_NOTES.md")
 
 
-def _run(name: str, run_id: int, sha: str, *, branch: str = "main") -> dict[str, object]:
+def _run(
+    name: str, run_id: int, sha: str, *, branch: str = "main"
+) -> dict[str, object]:
     paths = {
         **release_publish.REQUIRED_WORKFLOW_PATHS,
         release_publish.RELEASE_WORKFLOW: release_publish.RELEASE_WORKFLOW_PATH,
@@ -95,7 +99,9 @@ def _workflow_evidence(sha: str) -> tuple[release_publish.WorkflowEvidence, ...]
             event="push",
             status="completed",
             conclusion="success",
-            head_branch="v1.0.2" if name == release_publish.RELEASE_WORKFLOW else "main",
+            head_branch="v1.0.2"
+            if name == release_publish.RELEASE_WORKFLOW
+            else "main",
             head_sha=sha,
             url=f"https://github.com/example/template/actions/runs/{100 + index}/attempts/2",
         )
@@ -107,8 +113,8 @@ def _artifact_inputs(root: Path, sha: str) -> Path:
     inputs = root / "inputs"
     web = inputs / "web-release-candidate"
     web.mkdir(parents=True)
-    (web / "template-project-web.zip").write_bytes(b"web candidate")
-    (web / f"template-project-{sha}.spdx.json").write_text(
+    (web / "web-build.zip").write_bytes(b"web candidate")
+    (web / f"template-tooling-{sha}.spdx.json").write_text(
         json.dumps(
             {
                 "spdxVersion": "SPDX-2.3",
@@ -148,7 +154,7 @@ def _github_release_payload(
 ) -> dict[str, Any]:
     return {
         "tag_name": identity.tag,
-        "name": f"Template-Projekte {identity.tag}",
+        "name": f"Template-Tooling {identity.tag}",
         "draft": draft,
         "prerelease": False,
         "immutable": immutable,
@@ -169,7 +175,9 @@ def _mock_action_runs(
     monkeypatch: pytest.MonkeyPatch,
     runs: list[dict[str, object]],
 ) -> None:
-    release_run = next(item for item in runs if item["name"] == release_publish.RELEASE_WORKFLOW)
+    release_run = next(
+        item for item in runs if item["name"] == release_publish.RELEASE_WORKFLOW
+    )
 
     def response(url: str, _token: str) -> object:
         if f"/actions/runs/{release_run['id']}" in url:
@@ -189,7 +197,9 @@ def test_release_identity_requires_annotated_exact_version_tag(tmp_path: Path) -
     identity = _identity(root, sha)
 
     assert identity.version == "1.0.2"
-    with pytest.raises(release_publish.ReleasePublishError, match="does not match VERSION"):
+    with pytest.raises(
+        release_publish.ReleasePublishError, match="does not match VERSION"
+    ):
         release_publish.validate_release_identity(
             root,
             release_publish.ReleaseRequest("example/template", "v1.0.3", sha, 600, 2),
@@ -202,7 +212,10 @@ def test_collect_workflow_evidence_requires_every_success_on_exact_sha(
 ) -> None:
     root, sha = _release_repository(tmp_path)
     identity = _identity(root, sha)
-    runs = [_run(name, index, sha) for index, name in enumerate(release_publish.REQUIRED_WORKFLOWS, 1)]
+    runs = [
+        _run(name, index, sha)
+        for index, name in enumerate(release_publish.REQUIRED_WORKFLOWS, 1)
+    ]
     runs.append(_run(release_publish.RELEASE_WORKFLOW, 600, sha, branch="v1.0.2"))
     _mock_action_runs(monkeypatch, runs)
 
@@ -223,7 +236,10 @@ def test_collect_workflow_evidence_rejects_same_name_from_wrong_workflow_path(
 ) -> None:
     root, sha = _release_repository(tmp_path)
     identity = _identity(root, sha)
-    runs = [_run(name, index, sha) for index, name in enumerate(release_publish.REQUIRED_WORKFLOWS, 1)]
+    runs = [
+        _run(name, index, sha)
+        for index, name in enumerate(release_publish.REQUIRED_WORKFLOWS, 1)
+    ]
     runs.append(_run(release_publish.RELEASE_WORKFLOW, 600, sha, branch="v1.0.2"))
     runs[0]["path"] = ".github/workflows/lookalike.yml"
     _mock_action_runs(monkeypatch, runs)
@@ -238,33 +254,50 @@ def test_collect_workflow_evidence_rejects_cross_repository_run_url(
 ) -> None:
     root, sha = _release_repository(tmp_path)
     identity = _identity(root, sha)
-    runs = [_run(name, index, sha) for index, name in enumerate(release_publish.REQUIRED_WORKFLOWS, 1)]
+    runs = [
+        _run(name, index, sha)
+        for index, name in enumerate(release_publish.REQUIRED_WORKFLOWS, 1)
+    ]
     runs.append(_run(release_publish.RELEASE_WORKFLOW, 600, sha, branch="v1.0.2"))
     runs[0]["html_url"] = "https://github.com/attacker/lookalike/actions/runs/1"
     _mock_action_runs(monkeypatch, runs)
 
-    with pytest.raises(release_publish.ReleasePublishError, match="exact repository run"):
+    with pytest.raises(
+        release_publish.ReleasePublishError, match="exact repository run"
+    ):
         release_publish.collect_workflow_evidence(identity, token="test-token")
 
 
 def test_immutable_release_setting_is_required_and_fail_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(release_publish, "_request_json", lambda _url, _token: {"enabled": True})
-    release_publish.ensure_immutable_releases_enabled("example/template", token="admin-read-token")
+    monkeypatch.setattr(
+        release_publish, "_request_json", lambda _url, _token: {"enabled": True}
+    )
+    release_publish.ensure_immutable_releases_enabled(
+        "example/template", token="admin-read-token"
+    )
 
-    monkeypatch.setattr(release_publish, "_request_json", lambda _url, _token: {"enabled": False})
+    monkeypatch.setattr(
+        release_publish, "_request_json", lambda _url, _token: {"enabled": False}
+    )
     with pytest.raises(release_publish.ReleasePublishError, match="does not report"):
-        release_publish.ensure_immutable_releases_enabled("example/template", token="admin-read-token")
+        release_publish.ensure_immutable_releases_enabled(
+            "example/template", token="admin-read-token"
+        )
 
-    forbidden = urllib.error.HTTPError("https://api.example.invalid", 403, "Forbidden", {}, None)
+    forbidden = urllib.error.HTTPError(
+        "https://api.example.invalid", 403, "Forbidden", {}, None
+    )
     monkeypatch.setattr(
         release_publish,
         "_request_json",
         lambda _url, _token: (_ for _ in ()).throw(forbidden),
     )
     with pytest.raises(release_publish.ReleasePublishError, match="HTTP 403"):
-        release_publish.ensure_immutable_releases_enabled("example/template", token="admin-read-token")
+        release_publish.ensure_immutable_releases_enabled(
+            "example/template", token="admin-read-token"
+        )
 
 
 def test_release_tag_ruleset_must_block_updates_and_deletions_without_bypass(
@@ -290,7 +323,9 @@ def test_release_tag_ruleset_must_block_updates_and_deletions_without_bypass(
     with pytest.raises(release_publish.ReleasePublishError, match="non-bypassable"):
         release_publish.ensure_release_tag_ruleset(identity, token="governance-token")
 
-    forbidden = urllib.error.HTTPError("https://api.example.invalid", 403, "Forbidden", {}, None)
+    forbidden = urllib.error.HTTPError(
+        "https://api.example.invalid", 403, "Forbidden", {}, None
+    )
     monkeypatch.setattr(
         release_publish,
         "_request_json",
@@ -307,19 +342,23 @@ def test_build_release_bundle_packages_all_evidence_and_checksums(
     identity = _identity(root, sha)
     inputs = _artifact_inputs(tmp_path, sha)
     output = tmp_path / "release-assets"
-    (root / "untracked-secret.txt").write_text("must not enter source archive\n", encoding="utf-8")
+    (root / "untracked-secret.txt").write_text(
+        "must not enter source archive\n", encoding="utf-8"
+    )
 
-    paths = release_publish_bundle.build_release_bundle(root, inputs, output, identity, _workflow_evidence(sha))
+    paths = release_publish_bundle.build_release_bundle(
+        root, inputs, output, identity, _workflow_evidence(sha)
+    )
 
     names = {path.name for path in paths}
     assert names == {
-        "Template-Projekte-v1.0.2-source.zip",
-        "Template-Projekte-v1.0.2-web.zip",
-        "Template-Projekte-v1.0.2.spdx.json",
-        "Template-Projekte-v1.0.2-linux-unsigned.tar.gz",
-        "Template-Projekte-v1.0.2-macos-unsigned.tar.gz",
-        "Template-Projekte-v1.0.2-windows-unsigned.zip",
-        "Template-Projekte-v1.0.2-release-evidence.json",
+        "Template-Tooling-v1.0.2-source.zip",
+        "Template-Tooling-v1.0.2-web.zip",
+        "Template-Tooling-v1.0.2.spdx.json",
+        "Template-Tooling-v1.0.2-linux-unsigned.tar.gz",
+        "Template-Tooling-v1.0.2-macos-unsigned.tar.gz",
+        "Template-Tooling-v1.0.2-windows-unsigned.zip",
+        "Template-Tooling-v1.0.2-release-evidence.json",
         "SHA256SUMS.txt",
         "RELEASE_NOTES.md",
     }
@@ -327,7 +366,9 @@ def test_build_release_bundle_packages_all_evidence_and_checksums(
     assert len(checksums) == 7
     assert all(len(line.split(maxsplit=1)[0]) == 64 for line in checksums)
 
-    evidence = json.loads((output / "Template-Projekte-v1.0.2-release-evidence.json").read_text())
+    evidence = json.loads(
+        (output / "Template-Tooling-v1.0.2-release-evidence.json").read_text()
+    )
     assert evidence["release"]["sha"] == sha
     assert [item["workflow"] for item in evidence["workflows"]] == [
         *release_publish.REQUIRED_WORKFLOWS,
@@ -338,14 +379,20 @@ def test_build_release_bundle_packages_all_evidence_and_checksums(
     assert "Exact-SHA workflow evidence" in notes
     assert "actions/runs/100" in notes
 
-    with zipfile.ZipFile(output / "Template-Projekte-v1.0.2-source.zip") as archive:
-        assert "Template-Projekte-v1.0.2/tracked.txt" in archive.namelist()
-        assert "Template-Projekte-v1.0.2/untracked-secret.txt" not in archive.namelist()
-    with tarfile.open(output / "Template-Projekte-v1.0.2-linux-unsigned.tar.gz", "r:gz") as archive:
+    with zipfile.ZipFile(output / "Template-Tooling-v1.0.2-source.zip") as archive:
+        assert "Template-Tooling-v1.0.2/tracked.txt" in archive.namelist()
+        assert "Template-Tooling-v1.0.2/untracked-secret.txt" not in archive.namelist()
+    with tarfile.open(
+        output / "Template-Tooling-v1.0.2-linux-unsigned.tar.gz", "r:gz"
+    ) as archive:
         member = archive.getmember("nested/candidate-linux.bin")
         assert member.mode & 0o111
-    assert release_publish_bundle.sha256(output / "Template-Projekte-v1.0.2-linux-unsigned.tar.gz") == (
-        release_publish_bundle.sha256(inputs / "desktop-linux-unsigned" / "desktop-linux-unsigned.tar.gz")
+    assert release_publish_bundle.sha256(
+        output / "Template-Tooling-v1.0.2-linux-unsigned.tar.gz"
+    ) == (
+        release_publish_bundle.sha256(
+            inputs / "desktop-linux-unsigned" / "desktop-linux-unsigned.tar.gz"
+        )
     )
 
 
@@ -404,7 +451,9 @@ def test_remote_tag_must_match_annotated_object_and_commit(
             }
         ),
     )
-    with pytest.raises(release_publish.ReleasePublishError, match="expected annotated tag object"):
+    with pytest.raises(
+        release_publish.ReleasePublishError, match="expected annotated tag object"
+    ):
         release_publish.verify_remote_tag_identity(identity, token="test-token")
 
 
@@ -414,7 +463,10 @@ def test_workflow_evidence_records_exact_rerun_attempt(
 ) -> None:
     root, sha = _release_repository(tmp_path)
     identity = _identity(root, sha)
-    runs = [_run(name, index, sha) for index, name in enumerate(release_publish.REQUIRED_WORKFLOWS, 1)]
+    runs = [
+        _run(name, index, sha)
+        for index, name in enumerate(release_publish.REQUIRED_WORKFLOWS, 1)
+    ]
     runs.append(_run(release_publish.RELEASE_WORKFLOW, 600, sha, branch="v1.0.2"))
     _mock_action_runs(monkeypatch, runs)
 
@@ -431,7 +483,7 @@ def test_release_bundle_rejects_invalid_spdx_document(tmp_path: Path) -> None:
     root, sha = _release_repository(tmp_path)
     identity = _identity(root, sha)
     inputs = _artifact_inputs(tmp_path, sha)
-    (inputs / "web-release-candidate" / f"template-project-{sha}.spdx.json").write_text(
+    (inputs / "web-release-candidate" / f"template-tooling-{sha}.spdx.json").write_text(
         '{"spdxVersion":"not-spdx"}\n',
         encoding="utf-8",
     )
@@ -492,7 +544,9 @@ def test_release_bundle_accepts_internal_relative_tar_symlinks(tmp_path: Path) -
 
 
 @pytest.mark.parametrize("target", ["/etc/passwd", "../../outside", "missing.bin"])
-def test_release_bundle_rejects_unsafe_tar_symlinks(tmp_path: Path, target: str) -> None:
+def test_release_bundle_rejects_unsafe_tar_symlinks(
+    tmp_path: Path, target: str
+) -> None:
     root, sha = _release_repository(tmp_path)
     identity = _identity(root, sha)
     inputs = _artifact_inputs(tmp_path, sha)
@@ -507,7 +561,9 @@ def test_release_bundle_rejects_unsafe_tar_symlinks(tmp_path: Path, target: str)
         member.linkname = target
         archive.addfile(member)
 
-    with pytest.raises(release_publish.ReleasePublishError, match="unsafe symbolic link"):
+    with pytest.raises(
+        release_publish.ReleasePublishError, match="unsafe symbolic link"
+    ):
         release_publish_bundle.build_release_bundle(
             root,
             inputs,
@@ -528,23 +584,29 @@ def test_prepared_bundle_reverification_rejects_tampering(tmp_path: Path) -> Non
         identity,
         _workflow_evidence(sha),
     )
-    web = output / "Template-Projekte-v1.0.2-web.zip"
+    web = output / "Template-Tooling-v1.0.2-web.zip"
     original_web = web.read_bytes()
     web.write_bytes(original_web + b"tampered")
 
     with pytest.raises(release_publish.ReleasePublishError, match="checksum mismatch"):
-        release_publish_bundle.verify_prepared_bundle(_bundle(output), _request(identity))
+        release_publish_bundle.verify_prepared_bundle(
+            _bundle(output), _request(identity)
+        )
     web.write_bytes(original_web)
     notes = tmp_path / "RELEASE_NOTES.md"
     notes.write_text(notes.read_text(encoding="utf-8") + "tampered\n", encoding="utf-8")
-    with pytest.raises(release_publish.ReleasePublishError, match="evidence-bound digest"):
+    with pytest.raises(
+        release_publish.ReleasePublishError, match="evidence-bound digest"
+    ):
         release_publish_bundle.verify_prepared_bundle(
             release_publish.PreparedBundle(output, notes),
             _request(identity),
         )
 
 
-def test_prepared_bundle_rejects_boolean_integer_evidence_fields(tmp_path: Path) -> None:
+def test_prepared_bundle_rejects_boolean_integer_evidence_fields(
+    tmp_path: Path,
+) -> None:
     root, sha = _release_repository(tmp_path)
     identity = _identity(root, sha)
     output = tmp_path / "release-assets"
@@ -555,13 +617,15 @@ def test_prepared_bundle_rejects_boolean_integer_evidence_fields(tmp_path: Path)
         identity,
         _workflow_evidence(sha),
     )
-    evidence_path = output / "Template-Projekte-v1.0.2-release-evidence.json"
+    evidence_path = output / "Template-Tooling-v1.0.2-release-evidence.json"
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
     evidence["schema_version"] = True
     evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
 
     with pytest.raises(release_publish.ReleasePublishError, match="unsupported schema"):
-        release_publish_bundle.verify_prepared_bundle(_bundle(output), _request(identity))
+        release_publish_bundle.verify_prepared_bundle(
+            _bundle(output), _request(identity)
+        )
 
 
 @pytest.mark.parametrize(
@@ -630,9 +694,13 @@ def test_github_release_rejects_numeric_boolean_fields(
         identity,
         _workflow_evidence(sha),
     )
-    payload = _github_release_payload(output, tmp_path / "RELEASE_NOTES.md", identity, True, False)
+    payload = _github_release_payload(
+        output, tmp_path / "RELEASE_NOTES.md", identity, True, False
+    )
     payload["draft"] = 1
-    monkeypatch.setattr(release_publish, "_request_json", lambda _url, _token: [payload])
+    monkeypatch.setattr(
+        release_publish, "_request_json", lambda _url, _token: [payload]
+    )
 
     with pytest.raises(release_publish.ReleasePublishError, match="invalid fields"):
         release_publish_bundle.verify_github_release(
@@ -650,7 +718,9 @@ def test_publication_state_reports_absent_only_for_not_found(
     root, sha = _release_repository(tmp_path)
     identity = _identity(root, sha)
     bundle = release_publish.PreparedBundle(tmp_path / "assets", tmp_path / "notes")
-    missing = urllib.error.HTTPError("https://api.example.invalid", 404, "Not Found", {}, None)
+    missing = urllib.error.HTTPError(
+        "https://api.example.invalid", 404, "Not Found", {}, None
+    )
 
     def missing_response(url: str, _token: str) -> object:
         if "/releases/tags/" in url:
@@ -661,9 +731,14 @@ def test_publication_state_reports_absent_only_for_not_found(
 
     monkeypatch.setattr(release_publish, "_request_json", missing_response)
 
-    assert release_publish_bundle.publication_state(identity, bundle, token="test-token") == "absent"
+    assert (
+        release_publish_bundle.publication_state(identity, bundle, token="test-token")
+        == "absent"
+    )
 
-    forbidden = urllib.error.HTTPError("https://api.example.invalid", 403, "Forbidden", {}, None)
+    forbidden = urllib.error.HTTPError(
+        "https://api.example.invalid", 403, "Forbidden", {}, None
+    )
     monkeypatch.setattr(
         release_publish,
         "_request_json",
@@ -680,7 +755,9 @@ def test_publication_state_fails_closed_for_leftover_draft(
     root, sha = _release_repository(tmp_path)
     identity = _identity(root, sha)
     bundle = release_publish.PreparedBundle(tmp_path / "assets", tmp_path / "notes")
-    missing = urllib.error.HTTPError("https://api.example.invalid", 404, "Not Found", {}, None)
+    missing = urllib.error.HTTPError(
+        "https://api.example.invalid", 404, "Not Found", {}, None
+    )
 
     def response(url: str, _token: str) -> object:
         if "/releases/tags/" in url:
@@ -691,7 +768,9 @@ def test_publication_state_fails_closed_for_leftover_draft(
 
     monkeypatch.setattr(release_publish, "_request_json", response)
 
-    with pytest.raises(release_publish.ReleasePublishError, match="non-published GitHub Release"):
+    with pytest.raises(
+        release_publish.ReleasePublishError, match="non-published GitHub Release"
+    ):
         release_publish_bundle.publication_state(identity, bundle, token="test-token")
 
 
@@ -713,8 +792,15 @@ def test_publication_state_resumes_only_exact_immutable_release(
     payload = _github_release_payload(output, notes, identity, False, True)
     monkeypatch.setattr(release_publish, "_request_json", lambda _url, _token: payload)
 
-    assert release_publish_bundle.publication_state(identity, _bundle(output), token="test-token") == "published"
+    assert (
+        release_publish_bundle.publication_state(
+            identity, _bundle(output), token="test-token"
+        )
+        == "published"
+    )
 
     payload["body"] = "wrong notes"
     with pytest.raises(release_publish.ReleasePublishError, match="notes differ"):
-        release_publish_bundle.publication_state(identity, _bundle(output), token="test-token")
+        release_publish_bundle.publication_state(
+            identity, _bundle(output), token="test-token"
+        )

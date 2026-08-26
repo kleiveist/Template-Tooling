@@ -77,13 +77,26 @@ class WorkflowEvidence:
 
 def validate_request_shape(request: ReleaseRequest) -> None:
     if not isinstance(request.tag, str) or TAG_PATTERN.fullmatch(request.tag) is None:
-        raise ReleasePublishError(f"release tag is not strict patch SemVer: {request.tag}")
-    if not isinstance(request.repository, str) or REPOSITORY_PATTERN.fullmatch(request.repository) is None:
-        raise ReleasePublishError(f"invalid GitHub repository identity: {request.repository}")
+        raise ReleasePublishError(
+            f"release tag is not strict patch SemVer: {request.tag}"
+        )
+    if (
+        not isinstance(request.repository, str)
+        or REPOSITORY_PATTERN.fullmatch(request.repository) is None
+    ):
+        raise ReleasePublishError(
+            f"invalid GitHub repository identity: {request.repository}"
+        )
     if not isinstance(request.sha, str) or SHA_PATTERN.fullmatch(request.sha) is None:
-        raise ReleasePublishError(f"release SHA must be a full lowercase commit SHA: {request.sha}")
-    if not _positive_int(request.release_run_id) or not _positive_int(request.release_run_attempt):
-        raise ReleasePublishError("Release Validation run ID and attempt must be positive")
+        raise ReleasePublishError(
+            f"release SHA must be a full lowercase commit SHA: {request.sha}"
+        )
+    if not _positive_int(request.release_run_id) or not _positive_int(
+        request.release_run_attempt
+    ):
+        raise ReleasePublishError(
+            "Release Validation run ID and attempt must be positive"
+        )
 
 
 def _positive_int(value: object) -> bool:
@@ -99,7 +112,9 @@ def _git(root: Path, *arguments: str) -> str:
         check=False,
     )
     if completed.returncode != 0:
-        detail = completed.stderr.strip() or completed.stdout.strip() or "unknown git error"
+        detail = (
+            completed.stderr.strip() or completed.stdout.strip() or "unknown git error"
+        )
         raise ReleasePublishError(f"git {' '.join(arguments)} failed: {detail}")
     return completed.stdout.strip()
 
@@ -109,16 +124,24 @@ def validate_release_identity(root: Path, request: ReleaseRequest) -> ReleaseIde
     version = request.tag.removeprefix("v")
     source_version = (root / "VERSION").read_text(encoding="utf-8").strip()
     if source_version != version:
-        raise ReleasePublishError(f"tag {request.tag} does not match VERSION={source_version or '<empty>'}")
+        raise ReleasePublishError(
+            f"tag {request.tag} does not match VERSION={source_version or '<empty>'}"
+        )
     if _git(root, "rev-parse", "HEAD") != request.sha:
-        raise ReleasePublishError("checked-out HEAD does not match the validated release SHA")
+        raise ReleasePublishError(
+            "checked-out HEAD does not match the validated release SHA"
+        )
     if _git(root, "cat-file", "-t", f"refs/tags/{request.tag}") != "tag":
         raise ReleasePublishError(f"{request.tag} must be an annotated tag")
     if _git(root, "rev-parse", f"refs/tags/{request.tag}^{{commit}}") != request.sha:
-        raise ReleasePublishError(f"{request.tag} does not resolve to the validated release SHA")
+        raise ReleasePublishError(
+            f"{request.tag} does not resolve to the validated release SHA"
+        )
     tag_object_sha = _git(root, "rev-parse", f"refs/tags/{request.tag}")
     if SHA_PATTERN.fullmatch(tag_object_sha) is None:
-        raise ReleasePublishError(f"{request.tag} has an invalid annotated tag-object SHA")
+        raise ReleasePublishError(
+            f"{request.tag} has an invalid annotated tag-object SHA"
+        )
     return ReleaseIdentity(
         request.repository,
         request.tag,
@@ -136,7 +159,7 @@ def _request_json(url: str, token: str) -> Any:
         headers={
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
-            "User-Agent": "Template-Projekte-release-publisher",
+            "User-Agent": "Template-Tooling-release-publisher",
             "X-GitHub-Api-Version": "2026-03-10",
         },
     )
@@ -198,7 +221,9 @@ def _successful_push(
         and run.get("head_branch") == "main"
     ]
     if not matches:
-        raise ReleasePublishError(f"no successful main push run for {workflow} on exact SHA {identity.sha}")
+        raise ReleasePublishError(
+            f"no successful main push run for {workflow} on exact SHA {identity.sha}"
+        )
     evidence = tuple(_workflow_evidence(run, identity.repository) for run in matches)
     return max(evidence, key=lambda item: item.run_id)
 
@@ -226,14 +251,24 @@ def _workflow_runs(
         payload = _request_json(f"{endpoint}?{query}", token)
         page_runs = payload.get("workflow_runs") if isinstance(payload, dict) else None
         total_count = payload.get("total_count") if isinstance(payload, dict) else None
-        if not isinstance(page_runs, list) or type(total_count) is not int or total_count < 0:
-            raise ReleasePublishError(f"GitHub Actions response for {workflow} is invalid")
+        if (
+            not isinstance(page_runs, list)
+            or type(total_count) is not int
+            or total_count < 0
+        ):
+            raise ReleasePublishError(
+                f"GitHub Actions response for {workflow} is invalid"
+            )
         if total_count > 1000:
-            raise ReleasePublishError(f"GitHub Actions search for {workflow} exceeds the 1,000-run API limit")
+            raise ReleasePublishError(
+                f"GitHub Actions search for {workflow} exceeds the 1,000-run API limit"
+            )
         runs.extend(item for item in page_runs if isinstance(item, dict))
         if len(runs) >= total_count or len(page_runs) < 100:
             return runs
-    raise ReleasePublishError(f"GitHub Actions pagination for {workflow} did not terminate")
+    raise ReleasePublishError(
+        f"GitHub Actions pagination for {workflow} did not terminate"
+    )
 
 
 def verify_remote_tag_identity(
@@ -248,8 +283,13 @@ def verify_remote_tag_identity(
     reference_object = reference.get("object") if isinstance(reference, dict) else None
     if not isinstance(reference_object, dict):
         raise ReleasePublishError("remote release-tag reference payload is invalid")
-    if reference_object.get("type") != "tag" or reference_object.get("sha") != identity.tag_object_sha:
-        raise ReleasePublishError("remote release tag is not the expected annotated tag object")
+    if (
+        reference_object.get("type") != "tag"
+        or reference_object.get("sha") != identity.tag_object_sha
+    ):
+        raise ReleasePublishError(
+            "remote release tag is not the expected annotated tag object"
+        )
     tag_object = _request_json(f"{base}/tags/{identity.tag_object_sha}", token)
     target = tag_object.get("object") if isinstance(tag_object, dict) else None
     valid_target = (
@@ -259,7 +299,9 @@ def verify_remote_tag_identity(
         and target.get("sha") == identity.sha
     )
     if not valid_target:
-        raise ReleasePublishError("remote annotated tag does not resolve to the validated release SHA")
+        raise ReleasePublishError(
+            "remote annotated tag does not resolve to the validated release SHA"
+        )
 
 
 def collect_workflow_evidence(
@@ -279,7 +321,9 @@ def collect_workflow_evidence(
     release_url = f"{api_url.rstrip('/')}/repos/{identity.repository}/actions/runs/{identity.release_run_id}"
     release_run = _request_json(release_url, token)
     if not isinstance(release_run, dict):
-        raise ReleasePublishError("triggering Release Validation run payload is invalid")
+        raise ReleasePublishError(
+            "triggering Release Validation run payload is invalid"
+        )
     expected_release = {
         "id": identity.release_run_id,
         "run_attempt": identity.release_run_attempt,
@@ -291,9 +335,13 @@ def collect_workflow_evidence(
         "status": "completed",
         "conclusion": "success",
     }
-    mismatches = [key for key, value in expected_release.items() if release_run.get(key) != value]
+    mismatches = [
+        key for key, value in expected_release.items() if release_run.get(key) != value
+    ]
     if mismatches:
-        raise ReleasePublishError(f"triggering Release Validation run has invalid fields: {', '.join(mismatches)}")
+        raise ReleasePublishError(
+            f"triggering Release Validation run has invalid fields: {', '.join(mismatches)}"
+        )
     evidence.append(_workflow_evidence(release_run, identity.repository))
     return tuple(evidence)
 
@@ -304,17 +352,26 @@ def ensure_immutable_releases_enabled(
     token: str,
     api_url: str = "https://api.github.com",
 ) -> None:
-    if not isinstance(repository, str) or REPOSITORY_PATTERN.fullmatch(repository) is None:
+    if (
+        not isinstance(repository, str)
+        or REPOSITORY_PATTERN.fullmatch(repository) is None
+    ):
         raise ReleasePublishError(f"invalid GitHub repository identity: {repository}")
     url = f"{api_url.rstrip('/')}/repos/{repository}/immutable-releases"
     try:
         payload = _request_json(url, token)
     except urllib.error.HTTPError as exc:
-        raise ReleasePublishError(f"could not prove immutable releases are enabled: HTTP {exc.code}") from exc
+        raise ReleasePublishError(
+            f"could not prove immutable releases are enabled: HTTP {exc.code}"
+        ) from exc
     except (OSError, ValueError) as exc:
-        raise ReleasePublishError(f"could not prove immutable releases are enabled: {exc}") from exc
+        raise ReleasePublishError(
+            f"could not prove immutable releases are enabled: {exc}"
+        ) from exc
     if not isinstance(payload, dict) or payload.get("enabled") is not True:
-        raise ReleasePublishError("repository does not report native immutable releases as enabled")
+        raise ReleasePublishError(
+            "repository does not report native immutable releases as enabled"
+        )
 
 
 def _tag_ruleset_summaries(
@@ -352,7 +409,11 @@ def _tag_ruleset_is_sufficient(payload: Any) -> bool:
     exclude = ref_name.get("exclude") if isinstance(ref_name, dict) else None
     rules = payload.get("rules")
     rule_types = (
-        {item["type"] for item in rules if isinstance(item, dict) and isinstance(item.get("type"), str)}
+        {
+            item["type"]
+            for item in rules
+            if isinstance(item, dict) and isinstance(item.get("type"), str)
+        }
         if isinstance(rules, list)
         else set()
     )
@@ -385,8 +446,14 @@ def ensure_release_tag_ruleset(
             if type(item.get("id")) is int and item["id"] > 0
         ]
     except urllib.error.HTTPError as exc:
-        raise ReleasePublishError(f"could not prove release-tag ruleset protection: HTTP {exc.code}") from exc
+        raise ReleasePublishError(
+            f"could not prove release-tag ruleset protection: HTTP {exc.code}"
+        ) from exc
     except (KeyError, OSError, TypeError, ValueError) as exc:
-        raise ReleasePublishError(f"could not prove release-tag ruleset protection: {exc}") from exc
+        raise ReleasePublishError(
+            f"could not prove release-tag ruleset protection: {exc}"
+        ) from exc
     if not any(_tag_ruleset_is_sufficient(payload) for payload in details):
-        raise ReleasePublishError("no active non-bypassable tag ruleset protects refs/tags/v* from update and deletion")
+        raise ReleasePublishError(
+            "no active non-bypassable tag ruleset protects refs/tags/v* from update and deletion"
+        )
