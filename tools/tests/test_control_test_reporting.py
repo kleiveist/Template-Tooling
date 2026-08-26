@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -66,6 +67,21 @@ def _write_project_config(
     )
 
 
+def _configure_tools_suite(run_test, monkeypatch, root: Path) -> tuple[Path, Path]:
+    tools_root = root / "tools"
+    (tools_root / "tests").mkdir(parents=True)
+    (tools_root / "VERSION").write_text("1.0.0\n", encoding="utf-8")
+    state_python = (
+        root
+        / ".tooling-state"
+        / "venv"
+        / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    )
+    monkeypatch.setattr(run_test, "ROOT", root)
+    monkeypatch.setattr(run_test, "TOOLS_ROOT", tools_root)
+    return tools_root, state_python
+
+
 def test_bare_test_alias_opens_suite_help() -> None:
     assert control._normalize_argv(["--test"]) == ["test", "--suite-help"]
 
@@ -91,6 +107,24 @@ def test_all_suite_includes_frontend_npm_test() -> None:
         "e2e",
         "tauri",
     ]
+
+
+def test_complete_run_skips_product_suites_without_test_assets(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from tools.inst import run_test
+
+    _configure_tools_suite(run_test, monkeypatch, tmp_path)
+
+    for suite in ("schema", "api", "database", "postgres", "frontend", "e2e", "tauri"):
+        result = run_test._run_selected_suite(
+            suite,
+            bootstrap_failed=False,
+            skip_unconfigured=True,
+        )
+        assert result.status == "SKIP"
+        assert "not configured" in result.message
 
 
 def test_disabled_optional_suites_report_skip(monkeypatch) -> None:
@@ -123,19 +157,336 @@ def test_subprocess_start_failure_becomes_a_ci_compatible_result(monkeypatch) ->
     assert "missing runtime" in completed.stderr
 
 
-def test_tooling_runtime_never_falls_back_to_backend_virtualenv(
+def test_tooling_runtime_prefers_state_venv_and_never_backend_virtualenv(
     monkeypatch, tmp_path
 ) -> None:
     from tools.inst import run_test
 
     tooling_python = tmp_path / ".tooling-state" / "venv" / "bin" / "python"
     backend_python = tmp_path / "backend" / ".venv" / "bin" / "python"
+    tooling_python.parent.mkdir(parents=True)
+    tooling_python.touch()
     backend_python.parent.mkdir(parents=True)
     backend_python.touch()
 
     monkeypatch.setattr(run_test, "ROOT", tmp_path)
 
     assert run_test._tooling_python() == tooling_python
+
+
+def test_missing_tooling_runtime_selects_state_venv_target_not_backend(
+    monkeypatch, tmp_path
+) -> None:
+    from tools.inst import run_test
+
+    backend_python = tmp_path / "backend" / ".venv" / "bin" / "python"
+    backend_python.parent.mkdir(parents=True)
+    backend_python.touch()
+    monkeypatch.setattr(run_test, "ROOT", tmp_path)
+
+    expected = (
+        tmp_path
+        / ".tooling-state"
+        / "venv"
+        / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    )
+    assert run_test._tooling_python() == expected
+
+
+def test_tools_suite_prefers_valid_state_runtime(monkeypatch, tmp_path) -> None:
+    from tools.inst import run_test
+
+    _tools_root, state_python = _configure_tools_suite(run_test, monkeypatch, tmp_path)
+    state_python.parent.mkdir(parents=True)
+    state_python.touch()
+    current_python = tmp_path / "current-python"
+    current_python.touch()
+    monkeypatch.setattr(run_test.sys, "executable", str(current_python))
+    monkeypatch.setenv("PYTHONPATH", "/host-only/imports")
+    monkeypatch.setenv("PYTHONPYCACHEPREFIX", "/host-only/pycache")
+    calls: list[tuple[list[str], dict[str, str] | None]] = []
+
+    def fake_run(command, cwd=None, env=None):
+        calls.append((command, env))
+        return subprocess.CompletedProcess(command, 0, stdout="passed", stderr="")
+
+    monkeypatch.setattr(run_test, "_run", fake_run)
+
+    result = run_test._run_tools_suite()
+
+    assert result.status == "OK"
+    assert [call[0] for call in calls] == [
+        [str(state_python), "-c", run_test.TOOLING_RUNTIME_PROBE],
+        [
+            str(state_python),
+            "-m",
+            "pytest",
+            "-p",
+            "no:cacheprovider",
+            "-q",
+            str(tmp_path / "tools" / "tests"),
+        ],
+    ]
+    assert all(call[1]["PYTHONDONTWRITEBYTECODE"] == "1" for call in calls)
+    assert all(call[1]["PYTHONNOUSERSITE"] == "1" for call in calls)
+    assert all("PYTHONPATH" not in call[1] for call in calls)
+    assert all("PYTHONPYCACHEPREFIX" not in call[1] for call in calls)
+
+
+def test_tools_suite_reuses_current_interpreter_only_after_probe(
+    monkeypatch, tmp_path
+) -> None:
+    from tools.inst import run_test
+
+    _tools_root, _state_python = _configure_tools_suite(run_test, monkeypatch, tmp_path)
+    current_python = tmp_path / "current-python"
+    current_python.touch()
+    monkeypatch.setattr(run_test.sys, "executable", str(current_python))
+    commands: list[list[str]] = []
+
+    def fake_run(command, cwd=None, env=None):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="passed", stderr="")
+
+    monkeypatch.setattr(run_test, "_run", fake_run)
+
+    result = run_test._run_tools_suite()
+
+    assert result.status == "OK"
+    assert commands == [
+        [str(current_python), "-c", run_test.TOOLING_RUNTIME_PROBE],
+        [
+            str(current_python),
+            "-m",
+            "pytest",
+            "-p",
+            "no:cacheprovider",
+            "-q",
+            str(tmp_path / "tools" / "tests"),
+        ],
+    ]
+
+
+def test_tools_suite_installs_tooling_only_then_reprobes_state_runtime(
+    monkeypatch, tmp_path
+) -> None:
+    from tools.inst import run_test
+
+    tools_root, state_python = _configure_tools_suite(run_test, monkeypatch, tmp_path)
+    current_python = tmp_path / "current-python"
+    current_python.touch()
+    monkeypatch.setattr(run_test.sys, "executable", str(current_python))
+    commands: list[list[str]] = []
+    install_command = [
+        str(current_python),
+        str(tools_root / "control.py"),
+        "install",
+        "--skip-frontend",
+        "--skip-backend",
+        "--skip-playwright",
+    ]
+
+    def fake_run(command, cwd=None, env=None):
+        commands.append(command)
+        if command == [str(current_python), "-c", run_test.TOOLING_RUNTIME_PROBE]:
+            return subprocess.CompletedProcess(
+                command, 1, stdout="", stderr="missing ruff"
+            )
+        if command == install_command:
+            state_python.parent.mkdir(parents=True)
+            state_python.touch()
+            return subprocess.CompletedProcess(
+                command, 0, stdout="installed", stderr=""
+            )
+        return subprocess.CompletedProcess(command, 0, stdout="passed", stderr="")
+
+    monkeypatch.setattr(run_test, "_run", fake_run)
+
+    result = run_test._run_tools_suite()
+
+    assert result.status == "OK"
+    assert commands == [
+        [str(current_python), "-c", run_test.TOOLING_RUNTIME_PROBE],
+        install_command,
+        [str(state_python), "-c", run_test.TOOLING_RUNTIME_PROBE],
+        [
+            str(state_python),
+            "-m",
+            "pytest",
+            "-p",
+            "no:cacheprovider",
+            "-q",
+            str(tools_root / "tests"),
+        ],
+    ]
+
+
+@pytest.mark.parametrize(
+    ("configured_backend", "backend_relative"),
+    (
+        (None, "backend"),
+        (None, "services/api"),
+        ("backend", "backend"),
+        ("services/api", "services/api"),
+    ),
+    ids=(
+        "configless-conventional",
+        "configless-custom",
+        "configured-default",
+        "configured-custom",
+    ),
+)
+def test_tools_suite_never_reuses_current_backend_virtualenv(
+    monkeypatch,
+    tmp_path,
+    configured_backend: str | None,
+    backend_relative: str,
+) -> None:
+    from tools.inst import run_test
+
+    tools_root, state_python = _configure_tools_suite(run_test, monkeypatch, tmp_path)
+    if configured_backend is not None:
+        _write_project_config(tmp_path, backend=configured_backend)
+    backend_python = tmp_path / backend_relative / ".venv" / "bin" / "python"
+    backend_python.parent.mkdir(parents=True)
+    backend_python.touch()
+    bootstrap_python = tmp_path / "system" / "python"
+    bootstrap_python.parent.mkdir()
+    bootstrap_python.touch()
+    monkeypatch.setattr(run_test.sys, "executable", str(backend_python))
+    monkeypatch.setattr(run_test.sys, "_base_executable", str(bootstrap_python))
+    commands: list[list[str]] = []
+    install_command = [
+        str(bootstrap_python),
+        str(tools_root / "control.py"),
+        "install",
+        "--skip-frontend",
+        "--skip-backend",
+        "--skip-playwright",
+    ]
+
+    def fake_run(command, cwd=None, env=None):
+        commands.append(command)
+        if command == install_command:
+            state_python.parent.mkdir(parents=True)
+            state_python.touch()
+        return subprocess.CompletedProcess(command, 0, stdout="passed", stderr="")
+
+    monkeypatch.setattr(run_test, "_run", fake_run)
+
+    result = run_test._run_tools_suite()
+
+    assert result.status == "OK"
+    assert commands == [
+        install_command,
+        [str(state_python), "-c", run_test.TOOLING_RUNTIME_PROBE],
+        [
+            str(state_python),
+            "-m",
+            "pytest",
+            "-p",
+            "no:cacheprovider",
+            "-q",
+            str(tools_root / "tests"),
+        ],
+    ]
+    assert all(command[0] != str(backend_python) for command in commands)
+
+
+def test_tools_suite_reports_actionable_install_failure(monkeypatch, tmp_path) -> None:
+    from tools.inst import run_test
+
+    tools_root, _state_python = _configure_tools_suite(run_test, monkeypatch, tmp_path)
+    current_python = tmp_path / "current-python"
+    current_python.touch()
+    monkeypatch.setattr(run_test.sys, "executable", str(current_python))
+    commands: list[list[str]] = []
+    install_command = [
+        str(current_python),
+        str(tools_root / "control.py"),
+        "install",
+        "--skip-frontend",
+        "--skip-backend",
+        "--skip-playwright",
+    ]
+
+    def fake_run(command, cwd=None, env=None):
+        commands.append(command)
+        if command == install_command:
+            return subprocess.CompletedProcess(
+                command, 23, stdout="", stderr="offline index"
+            )
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="no ruff")
+
+    monkeypatch.setattr(run_test, "_run", fake_run)
+
+    result = run_test._run_tools_suite()
+
+    assert result.status == "FAIL"
+    assert result.exit_code == 23
+    assert result.command == install_command
+    assert result.stderr == "offline index"
+    assert "tooling-only runtime installation failed" in result.message
+    assert "Run '" in result.detail
+    assert commands == [
+        [str(current_python), "-c", run_test.TOOLING_RUNTIME_PROBE],
+        install_command,
+    ]
+
+
+def test_tools_suite_reports_actionable_post_install_probe_failure(
+    monkeypatch, tmp_path
+) -> None:
+    from tools.inst import run_test
+
+    tools_root, state_python = _configure_tools_suite(run_test, monkeypatch, tmp_path)
+    current_python = tmp_path / "current-python"
+    current_python.touch()
+    monkeypatch.setattr(run_test.sys, "executable", str(current_python))
+    commands: list[list[str]] = []
+    install_command = [
+        str(current_python),
+        str(tools_root / "control.py"),
+        "install",
+        "--skip-frontend",
+        "--skip-backend",
+        "--skip-playwright",
+    ]
+
+    def fake_run(command, cwd=None, env=None):
+        commands.append(command)
+        if command == install_command:
+            state_python.parent.mkdir(parents=True)
+            state_python.touch()
+            return subprocess.CompletedProcess(
+                command, 0, stdout="installed", stderr=""
+            )
+        if command[0] == str(state_python):
+            return subprocess.CompletedProcess(
+                command, 7, stdout="", stderr="rust analyzer unavailable"
+            )
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="no ruff")
+
+    monkeypatch.setattr(run_test, "_run", fake_run)
+
+    result = run_test._run_tools_suite()
+
+    assert result.status == "FAIL"
+    assert result.exit_code == 7
+    assert result.command == [
+        str(state_python),
+        "-c",
+        run_test.TOOLING_RUNTIME_PROBE,
+    ]
+    assert result.stderr == "rust analyzer unavailable"
+    assert "still unavailable after installation" in result.message
+    assert "post-install tooling state venv failed" in result.detail
+    assert "Run '" in result.detail
+    assert commands == [
+        [str(current_python), "-c", run_test.TOOLING_RUNTIME_PROBE],
+        install_command,
+        [str(state_python), "-c", run_test.TOOLING_RUNTIME_PROBE],
+    ]
 
 
 def test_tools_suite_includes_optional_tooling_docs_case_study_tests(
@@ -150,20 +501,27 @@ def test_tools_suite_includes_optional_tooling_docs_case_study_tests(
     (tmp_path / "tools" / "VERSION").write_text("1.0.0\n", encoding="utf-8")
     python = tmp_path / "python"
     captured: list[str] = []
+    captured_environment: dict[str, str] = {}
 
-    def fake_run(command: list[str], cwd=None) -> subprocess.CompletedProcess[str]:
+    def fake_run(
+        command: list[str], cwd=None, env=None
+    ) -> subprocess.CompletedProcess[str]:
         captured.extend(command)
+        captured_environment.update(env or {})
         return subprocess.CompletedProcess(command, 0, stdout="passed", stderr="")
 
     monkeypatch.setattr(run_test, "ROOT", tmp_path)
     monkeypatch.setattr(run_test, "TOOLS_ROOT", tmp_path / "tools")
-    monkeypatch.setattr(run_test, "_tooling_python", lambda: python)
+    monkeypatch.setattr(run_test, "_ensure_tools_runtime", lambda: (python, None))
     monkeypatch.setattr(run_test, "_run", fake_run)
 
     result = run_test._run_tools_suite()
 
     assert result.status == "OK"
     assert captured[-2:] == [str(tools_tests), str(case_study_tests)]
+    assert captured_environment["PYTHONDONTWRITEBYTECODE"] == "1"
+    assert captured_environment["PYTHONNOUSERSITE"] == "1"
+    assert captured_environment["TEMPLATE_TOOLING_NESTED_TEST"] == "1"
 
 
 DESKTOP_PROFILE_CASES = [
@@ -418,7 +776,9 @@ def test_e2e_teardown_failure_marks_overall_and_report_failed(monkeypatch) -> No
         lambda _suites, _no_start: (True, bootstrap),
     )
     monkeypatch.setattr(
-        run_test, "_run_selected_suite", lambda _suite, bootstrap_failed: suite
+        run_test,
+        "_run_selected_suite",
+        lambda _suite, bootstrap_failed, skip_unconfigured=False: suite,
     )
     monkeypatch.setattr(
         run_test,

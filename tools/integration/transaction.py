@@ -148,6 +148,7 @@ class TransactionRequest:
     managed_roots: tuple[str, ...] = DEFAULT_MANAGED_ROOTS
     post_apply: PostApply | None = None
     structured_key_allowlist: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    staging_snapshot_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +185,10 @@ def apply_transaction(request: TransactionRequest) -> IntegrationResult:
     structured_key_allowlist = _normalize_structured_key_allowlist(
         request.structured_key_allowlist
     )
+    staging_snapshot_paths = _normalize_staging_snapshot_paths(
+        request.staging_snapshot_paths,
+        managed_roots,
+    )
     prepared = _prepare_operations(
         root,
         request.plan.operations,
@@ -203,7 +208,7 @@ def apply_transaction(request: TransactionRequest) -> IntegrationResult:
         scratch = Path(temporary)
         staging = scratch / "staging"
         backup = scratch / "backup"
-        _copy_staging_tree(root, staging)
+        _copy_staging_tree(root, staging, staging_snapshot_paths)
         _apply_to_staging(staging, prepared)
         staged_result = _run_verifier(request.verifier, staging)
         if not staged_result.ok:
@@ -286,6 +291,7 @@ def apply_plan(
     managed_roots: tuple[str, ...] = DEFAULT_MANAGED_ROOTS,
     post_apply: PostApply | None = None,
     structured_key_allowlist: Mapping[str, frozenset[str]] | None = None,
+    staging_snapshot_paths: tuple[str, ...] = (),
 ) -> IntegrationResult:
     """Convenience entry point for callers that do not need a request object."""
 
@@ -299,6 +305,7 @@ def apply_plan(
             managed_roots=managed_roots,
             post_apply=post_apply,
             structured_key_allowlist=structured_key_allowlist or {},
+            staging_snapshot_paths=staging_snapshot_paths,
         )
     )
 
@@ -316,6 +323,20 @@ def _normalize_managed_roots(values: Iterable[str]) -> tuple[str, ...]:
         raise IntegrationError("At least one tooling-managed root is required.")
     if len(normalized) != len({value.casefold() for value in normalized}):
         raise IntegrationError("Tooling-managed roots must be unique.")
+    return normalized
+
+
+def _normalize_staging_snapshot_paths(
+    values: Iterable[str],
+    managed_roots: tuple[str, ...],
+) -> tuple[str, ...]:
+    normalized = tuple(
+        _safe_relative(value, label="Staging snapshot path") for value in values
+    )
+    if len(normalized) != len({value.casefold() for value in normalized}):
+        raise IntegrationError("Staging snapshot paths must be unique.")
+    if any(not _under_managed_root(value, managed_roots) for value in normalized):
+        raise IntegrationError("Staging snapshot path is outside managed roots.")
     return normalized
 
 
@@ -1216,7 +1237,11 @@ def _toml_inline_key(value: Any) -> str:
     )
 
 
-def _copy_staging_tree(root: Path, staging: Path) -> None:
+def _copy_staging_tree(
+    root: Path,
+    staging: Path,
+    snapshot_paths: tuple[str, ...],
+) -> None:
     def ignored(directory: str, names: list[str]) -> set[str]:
         excluded = {
             name
@@ -1248,6 +1273,36 @@ def _copy_staging_tree(root: Path, staging: Path) -> None:
         raise IntegrationError(
             f"Could not create isolated integration staging: {exc}."
         ) from exc
+    for relative in snapshot_paths:
+        try:
+            source = safe_join(root, relative)
+            try:
+                metadata = source.lstat()
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                raise FilesystemSafetyError(
+                    f"Could not inspect staging snapshot path: {relative}."
+                ) from exc
+            content = read_regular_bytes(
+                source,
+                root=root,
+                label=f"Staging snapshot path {relative}",
+            )
+            parent = PurePosixPath(relative).parent.as_posix()
+            if parent != ".":
+                ensure_directory(staging, parent)
+            target = safe_join(staging, relative)
+            atomic_write(
+                target,
+                content,
+                mode=stat.S_IMODE(metadata.st_mode),
+                root=staging,
+            )
+        except FilesystemSafetyError as exc:
+            raise IntegrationError(
+                f"Could not preserve staging snapshot path: {exc}"
+            ) from exc
 
 
 def _affected_paths(prepared: tuple[_PreparedOperation, ...]) -> tuple[str, ...]:

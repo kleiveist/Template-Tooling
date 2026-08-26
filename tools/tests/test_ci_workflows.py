@@ -23,9 +23,21 @@ ARTIFACT_UPLOAD_COUNTS = {
     "desktop.yml": 1,
     "release.yml": 1,
 }
+SOURCE_REPOSITORY_MARKER = "template-tooling-source-v1"
+
+
+def _is_source_repository() -> bool:
+    """Return false in customer projects that happen to own workflows."""
+
+    try:
+        return (
+            ROOT / ".template-tooling-source"
+        ).read_text(encoding="utf-8").strip() == SOURCE_REPOSITORY_MARKER
+    except OSError:
+        return False
 
 pytestmark = pytest.mark.skipif(
-    not WORKFLOWS.exists(),
+    not _is_source_repository() or not WORKFLOWS.exists(),
     reason="Master-repository CI workflows are not scaffolded into derived projects",
 )
 

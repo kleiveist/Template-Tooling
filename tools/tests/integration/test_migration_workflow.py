@@ -35,16 +35,17 @@ def _add_file_migration(
     identifier: str,
     *,
     source_schema: int = STATE_SCHEMA_VERSION,
-    postcondition_path: str = "tools/migrated.txt",
+    postcondition_path: str = "docs/toolingdocs/migrated.txt",
+    target_version: str = TOOLING_VERSION,
 ) -> Migration:
-    path = "tools/migrated.txt"
+    path = "docs/toolingdocs/migrated.txt"
     return Migration(
         migration_id=identifier,
         description="Add deterministic migration evidence",
         order=10,
         applies=MigrationApplicability(
             source_tooling_versions=(TOOLING_VERSION,),
-            target_tooling_version=TOOLING_VERSION,
+            target_tooling_version=target_version,
             source_state_schemas=(source_schema,),
             target_state_schema=STATE_SCHEMA_VERSION,
         ),
@@ -94,7 +95,7 @@ def test_runtime_registry_check_apply_and_second_run_are_exactly_idempotent(
     assert check_payload["pending_migrations"] == ["add-migration-evidence"]
     assert {item["path"] for item in check_payload["plan"]["operations"]} == {
         ".tooling-state/state.toml",
-        "tools/migrated.txt",
+        "docs/toolingdocs/migrated.txt",
     }
     assert _snapshot(root) == before_check
 
@@ -110,7 +111,9 @@ def test_runtime_registry_check_apply_and_second_run_are_exactly_idempotent(
 
     assert applied_payload["pending_migrations"] == []
     assert applied_payload["applied_migrations"] == ["add-migration-evidence"]
-    assert (tools / "migrated.txt").read_bytes() == b"migrated\n"
+    assert (
+        root / "docs" / "toolingdocs" / "migrated.txt"
+    ).read_bytes() == b"migrated\n"
     assert load_state(root).applied_migrations == ("add-migration-evidence",)
     assert workflow.assess_project(root, tools_root=tools).plan.is_noop
 
@@ -161,6 +164,35 @@ def test_registered_migration_can_convert_an_unsupported_old_state(
     assert workflow.assess_project(root, tools_root=tools).plan.is_noop
 
 
+def test_registered_managed_migration_can_reconcile_a_copied_tooling_upgrade(
+    tmp_path: Path,
+) -> None:
+    root, tools = _portable_project(tmp_path)
+    workflow.run_full_fix(root, tools_root=tools)
+    upgraded_version = "0.2.0"
+    (tools / "VERSION").write_text(f"{upgraded_version}\n", encoding="utf-8")
+    registry = MigrationRegistry(
+        (
+            _add_file_migration(
+                "reconcile-copied-upgrade",
+                target_version=upgraded_version,
+            ),
+        )
+    )
+
+    stale = workflow.assess_project(root, tools_root=tools)
+    applied = workflow.run_migrations(root, tools_root=tools, registry=registry)
+
+    assert any(
+        conflict.code == "unverified-managed-tree" for conflict in stale.plan.conflicts
+    )
+    assert applied.applied_ids == ("reconcile-copied-upgrade",)
+    state = load_state(root)
+    assert state.tooling_version == upgraded_version
+    assert state.applied_migrations == ("reconcile-copied-upgrade",)
+    assert workflow.assess_project(root, tools_root=tools).plan.is_noop
+
+
 def test_unsupported_state_without_registered_conversion_fails_closed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -196,7 +228,7 @@ def test_failed_postcondition_keeps_migration_and_state_unchanged(
     state_before = (root / ".tooling-state" / "state.toml").read_bytes()
     migration = _add_file_migration(
         "failing-postcondition",
-        postcondition_path="tools/never-created.txt",
+        postcondition_path="docs/toolingdocs/never-created.txt",
     )
 
     with pytest.raises(
@@ -208,12 +240,12 @@ def test_failed_postcondition_keeps_migration_and_state_unchanged(
             registry=MigrationRegistry((migration,)),
         )
 
-    assert not (tools / "migrated.txt").exists()
+    assert not (root / "docs" / "toolingdocs" / "migrated.txt").exists()
     assert (root / ".tooling-state" / "state.toml").read_bytes() == state_before
     assert load_state(root).applied_migrations == ()
 
 
-def test_structured_migration_uses_declared_key_union_and_preserves_foreign_data(
+def test_structured_migration_requiring_actions_fails_closed_without_writes(
     tmp_path: Path,
 ) -> None:
     root, tools = _portable_project(tmp_path)
@@ -263,15 +295,18 @@ def test_structured_migration_uses_declared_key_union_and_preserves_foreign_data
         ),
     )
 
-    applied = workflow.run_migrations(
-        root,
-        tools_root=tools,
-        registry=MigrationRegistry((migration,)),
-    )
+    state_before = (root / ".tooling-state" / "state.toml").read_bytes()
 
-    assert applied.applied_ids == ("patch-known-structured-key",)
-    assert json.loads(package.read_text(encoding="utf-8")) == {
-        "scripts": {"quality": "new"},
-        "foreign": "keep",
-    }
-    assert load_state(root).applied_migrations == ("patch-known-structured-key",)
+    with pytest.raises(
+        IntegrationError,
+        match="Transactional dependency/quality/test action execution is unsupported",
+    ):
+        workflow.run_migrations(
+            root,
+            tools_root=tools,
+            registry=MigrationRegistry((migration,)),
+        )
+
+    assert package.read_bytes() == before
+    assert (root / ".tooling-state" / "state.toml").read_bytes() == state_before
+    assert load_state(root).applied_migrations == ()

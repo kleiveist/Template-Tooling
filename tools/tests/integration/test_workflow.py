@@ -7,7 +7,7 @@ import shutil
 import stat
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
@@ -18,7 +18,14 @@ from tools.core.project_config import (
     render_project_config,
 )
 from tools.integration import service, workflow
-from tools.integration.model import Finding, FindingStatus, IntegrationError
+from tools.integration.model import (
+    Finding,
+    FindingStatus,
+    IntegrationError,
+    Operation,
+    OperationKind,
+    Ownership,
+)
 
 TOOLS_SOURCE = Path(__file__).resolve().parents[2]
 TOOLING_VERSION = (TOOLS_SOURCE / "VERSION").read_text(encoding="utf-8").strip()
@@ -197,6 +204,7 @@ def test_configless_check_full_fix_check_and_second_full_fix_are_idempotent(
     integrated = workflow.assess_project(root, tools_root=tools)
 
     assert first.changed is True
+    assert first.actions == ()
     assert first.result.ok
     assert first.result.report_path is not None
     assert integrated.plan.is_noop
@@ -215,6 +223,136 @@ def test_configless_check_full_fix_check_and_second_full_fix_are_idempotent(
     assert second.result.report_path is None
     assert _snapshot(root) == before_noop
     assert _report_directories(root) == reports_before
+
+
+def test_full_fix_fails_closed_before_tooling_code_actions_are_supported(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, tools = _portable_project(tmp_path)
+    assessment = workflow.assess_project(root, tools_root=tools)
+    guarded_plan = replace(
+        assessment.plan,
+        operations=(
+            *assessment.plan.operations,
+            Operation(
+                OperationKind.ADD,
+                "tools/generated_runtime.py",
+                Ownership.TOOLING,
+                b"VALUE = 1\n",
+            ),
+        ),
+    )
+    guarded = replace(assessment, plan=guarded_plan)
+    monkeypatch.setattr(workflow, "assess_project", lambda *_args, **_kwargs: guarded)
+    before = _snapshot(root)
+
+    with pytest.raises(
+        IntegrationError,
+        match="Transactional dependency/quality/test action execution is unsupported",
+    ):
+        workflow.run_full_fix(root, tools_root=tools)
+
+    assert _snapshot(root) == before
+    assert not (tools / "generated_runtime.py").exists()
+
+
+def test_invalid_initial_tooling_source_fails_before_any_mutation(
+    tmp_path: Path,
+) -> None:
+    root, tools = _portable_project(tmp_path)
+    _write(tools / "broken.py", "def broken(:\n")
+    before = _snapshot(root)
+
+    assessment = workflow.assess_project(root, tools_root=tools)
+
+    assert any(
+        finding.check == "tooling-python-syntax"
+        and finding.status is FindingStatus.FAIL
+        and finding.path == "tools/broken.py"
+        for finding in assessment.verification.findings
+    )
+    with pytest.raises(
+        IntegrationError,
+        match="Tooling Python source validation failed before mutation",
+    ):
+        workflow.run_full_fix(root, tools_root=tools)
+
+    assert _snapshot(root) == before
+    assert not (root / "project-tooling.toml").exists()
+    assert not (root / ".tooling-state").exists()
+
+
+@pytest.mark.parametrize(
+    ("relative", "content"),
+    (
+        ("tools/customer_change.py", "VALUE = 'changed'\n"),
+        ("docs/toolingdocs/customer-change.md", "changed\n"),
+    ),
+)
+def test_existing_state_never_rebaselines_unexplained_managed_tree_changes(
+    tmp_path: Path,
+    relative: str,
+    content: str,
+) -> None:
+    root, tools = _portable_project(tmp_path)
+    workflow.run_full_fix(root, tools_root=tools)
+    _write(root / relative, content)
+    before = _snapshot(root)
+    state_before = (root / ".tooling-state" / "state.toml").read_bytes()
+
+    assessment = workflow.assess_project(root, tools_root=tools)
+
+    assert any(
+        conflict.code == "unverified-managed-tree"
+        for conflict in assessment.plan.conflicts
+    )
+    assert all(
+        operation.path != ".tooling-state/state.toml"
+        for operation in assessment.plan.operations
+    )
+    with pytest.raises(IntegrationError, match="Integration plan contains conflicts"):
+        workflow.run_full_fix(root, tools_root=tools)
+
+    assert _snapshot(root) == before
+    assert (root / ".tooling-state" / "state.toml").read_bytes() == state_before
+
+
+@pytest.mark.parametrize("change", ("mutate", "delete"))
+def test_existing_state_tracks_versioned_runtime_below_protected_dist(
+    tmp_path: Path,
+    change: str,
+) -> None:
+    root, tools = _portable_project(tmp_path)
+    runtime = (
+        tools / "quality" / "rust_analyzer" / "dist" / "rust_quality_analyzer.wasm"
+    )
+    _write(runtime, b"\x00asm-version-one")
+    workflow.run_full_fix(root, tools_root=tools)
+    state = root / ".tooling-state" / "state.toml"
+    state_before = state.read_bytes()
+    if change == "mutate":
+        _write(runtime, b"\x00asm-version-two")
+    else:
+        runtime.unlink()
+    before = _snapshot(root)
+
+    assessment = workflow.assess_project(root, tools_root=tools)
+
+    assert any(
+        conflict.code == "unverified-managed-tree"
+        for conflict in assessment.plan.conflicts
+    )
+    assert not assessment.verification.ok
+    assert all(
+        operation.path != ".tooling-state/state.toml"
+        for operation in assessment.plan.operations
+    )
+    with pytest.raises(IntegrationError, match="Integration plan contains conflicts"):
+        workflow.run_full_fix(root, tools_root=tools)
+
+    assert _snapshot(root) == before
+    assert state.read_bytes() == state_before
 
 
 def test_real_copied_cli_check_is_byte_for_byte_read_only_without_env_guard(
@@ -321,7 +459,10 @@ def test_configless_root_level_technologies_produce_a_safe_plan(
     assert not assessment.plan.conflicts
 
 
-def test_dirty_real_git_worktree_is_rejected_without_writes(tmp_path: Path) -> None:
+def test_dirty_real_git_worktree_is_rejected_without_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     if shutil.which("git") is None:
         pytest.skip("git is unavailable")
     root, tools = _portable_project(tmp_path)
@@ -343,6 +484,12 @@ def test_dirty_real_git_worktree_is_rejected_without_writes(tmp_path: Path) -> N
         check=True,
     )
     _write(root / "uncommitted-customer-note.txt", "do not touch\n")
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "redirected.git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(tmp_path / "redirected-worktree"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(tmp_path / "redirected.index"))
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "commit.gpgSign")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "true")
     before = _snapshot(root)
 
     with pytest.raises(IntegrationError, match="worktree is not clean"):
@@ -539,7 +686,7 @@ def test_json_output_shape_and_exit_codes_cover_fix_and_integrated_states(
     applied_payload = json.loads(capsys.readouterr().out)
     assert applied_payload["status"] == "INTEGRATED"
     assert applied_payload["report_path"] is not None
-    assert applied_payload["actions"]
+    assert applied_payload["actions"] == []
 
     assert (
         service.run_check(

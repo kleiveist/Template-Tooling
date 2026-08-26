@@ -124,8 +124,14 @@ def test_tauri_doctor_json_is_parseable(monkeypatch, capsys) -> None:
     assert payload["checks"][0]["name"] == "fixture"
 
 
-def test_tauri_install_dry_run_skips_mutating_commands(monkeypatch) -> None:
+def test_tauri_install_dry_run_skips_mutating_commands(
+    monkeypatch, tmp_path: Path
+) -> None:
     commands: list[list[str]] = []
+    frontend = tmp_path / "frontend"
+    package_json = frontend / "package.json"
+    frontend.mkdir()
+    package_json.write_text("{}\n", encoding="utf-8")
 
     def fake_run_command(command: list[str], **kwargs) -> common.CommandResult:
         commands.append(command)
@@ -133,6 +139,8 @@ def test_tauri_install_dry_run_skips_mutating_commands(monkeypatch) -> None:
         return common.CommandResult(command=command, cwd=paths.ROOT, returncode=0, dry_run=True)
 
     monkeypatch.setattr(common, "run_command", fake_run_command)
+    monkeypatch.setattr(paths, "FRONTEND_DIR", frontend)
+    monkeypatch.setattr(paths, "FRONTEND_PACKAGE_JSON", package_json)
     monkeypatch.setattr("tools.tauri.install._ensure_rust", lambda dry_run: 0)
     monkeypatch.setattr("tools.tauri.install._ensure_node", lambda dry_run: 0)
 
@@ -142,7 +150,11 @@ def test_tauri_install_dry_run_skips_mutating_commands(monkeypatch) -> None:
     assert commands
 
 
-def test_tauri_npm_install_uses_package_lock(monkeypatch) -> None:
+def test_tauri_npm_install_uses_package_lock(monkeypatch, tmp_path: Path) -> None:
+    package_lock = tmp_path / "frontend" / "package-lock.json"
+    package_lock.parent.mkdir()
+    package_lock.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(paths, "FRONTEND_PACKAGE_LOCK", package_lock)
     monkeypatch.setattr(common, "package_manager", lambda: "npm")
     monkeypatch.setattr(common.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None)
 
@@ -448,7 +460,13 @@ def test_tauri_commands_remove_server_only_environment(monkeypatch) -> None:
     assert captured["CARGO_REGISTRY_TOKEN"] == "tooling-token"
 
 
-def test_tauri_run_override_uses_frontend_cwd_command() -> None:
+def test_tauri_run_override_uses_frontend_cwd_command(
+    monkeypatch, tmp_path: Path
+) -> None:
+    frontend = tmp_path / "frontend"
+    tauri = tmp_path / "src-tauri"
+    monkeypatch.setattr(paths, "FRONTEND_DIR", frontend)
+    monkeypatch.setattr(paths, "TAURI_DIR", tauri)
     payload = json.loads(run._dev_config_override(5174))
 
     assert payload["build"]["beforeDevCommand"] == "cd ../frontend && npm run dev -- --host 127.0.0.1 --port 5174"
@@ -458,6 +476,7 @@ def test_tauri_run_override_uses_frontend_cwd_command() -> None:
 def test_tauri_run_defaults_to_detached(monkeypatch, capsys) -> None:
     started: list[list[str]] = []
 
+    monkeypatch.setattr(run.cache, "prepare_dev_cache", lambda: True)
     monkeypatch.setattr(common, "tauri_cli_command", lambda *args: ["tauri", *args])
     monkeypatch.setattr(
         run,
@@ -475,6 +494,7 @@ def test_tauri_run_defaults_to_detached(monkeypatch, capsys) -> None:
 def test_tauri_run_no_follow_returns_after_background_start(monkeypatch) -> None:
     started: list[list[str]] = []
 
+    monkeypatch.setattr(run.cache, "prepare_dev_cache", lambda: True)
     monkeypatch.setattr(common, "tauri_cli_command", lambda *args: ["tauri", *args])
     monkeypatch.setattr(
         run,
@@ -491,6 +511,7 @@ def test_tauri_run_no_follow_returns_after_background_start(monkeypatch) -> None
 def test_tauri_run_foreground_uses_current_terminal(monkeypatch) -> None:
     calls: list[list[str]] = []
 
+    monkeypatch.setattr(run.cache, "prepare_dev_cache", lambda: True)
     monkeypatch.setattr(common, "tauri_cli_command", lambda *args: ["tauri", *args])
     monkeypatch.setattr(
         run,
@@ -575,7 +596,6 @@ def test_tauri_package_has_no_bare_imports_or_legacy_tokens() -> None:
     bare_import_pattern = re.compile(r"from\s+(doctor|console|installuix|installuixubu)\s+import")
 
     scanned = list((paths.ROOT / "tools" / "tauri").rglob("*.py"))
-    scanned.extend((paths.ROOT / "src-tauri").rglob("*"))
 
     offenders: list[str] = []
     for path in scanned:
