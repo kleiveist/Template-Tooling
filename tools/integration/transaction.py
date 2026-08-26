@@ -134,6 +134,7 @@ _STAGING_IGNORED_DIRECTORIES = {
 Verifier = Callable[[Path], VerificationResult]
 ReportFinalizer = Callable[[VerificationResult, str], None]
 PostApply = Callable[[Path], VerificationResult | None]
+StagedAction = Callable[[Path], VerificationResult]
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +148,7 @@ class TransactionRequest:
     report_finalizer: ReportFinalizer | None = None
     managed_roots: tuple[str, ...] = DEFAULT_MANAGED_ROOTS
     post_apply: PostApply | None = None
+    staged_action: StagedAction | None = None
     structured_key_allowlist: Mapping[str, frozenset[str]] = field(default_factory=dict)
     staging_snapshot_paths: tuple[str, ...] = ()
 
@@ -163,6 +165,21 @@ class _BackupEntry:
     path: str
     kind: str
     mode: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _StagedOutput:
+    kind: str | None
+    sha256: str | None
+    mode: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class _FrozenOutput:
+    kind: str | None
+    content: bytes | None
+    sha256: str | None
+    mode: int | None
 
 
 class _ConcurrentCreationError(IntegrationError):
@@ -210,26 +227,43 @@ def apply_transaction(request: TransactionRequest) -> IntegrationResult:
         backup = scratch / "backup"
         _copy_staging_tree(root, staging, staging_snapshot_paths)
         _apply_to_staging(staging, prepared)
+        staged_outputs = _snapshot_staged_outputs(staging, prepared)
+        staged_action_result = _run_staged_action(request.staged_action, staging)
+        _validate_staged_outputs(staging, prepared, staged_outputs)
+        if staged_action_result is not None and not staged_action_result.ok:
+            _finalize_report(
+                request.report_finalizer,
+                staged_action_result,
+                "FAILED",
+            )
+            raise IntegrationError(
+                "Staged action verification failed; target remains unchanged."
+            )
         staged_result = _run_verifier(request.verifier, staging)
         if not staged_result.ok:
-            _finalize_report(request.report_finalizer, staged_result, "FAILED")
+            failed_result = _combine_verification_results(
+                staged_action_result,
+                staged_result,
+            )
+            _finalize_report(request.report_finalizer, failed_result, "FAILED")
             raise IntegrationError(
                 "Staged integration verification failed; target remains unchanged."
             )
+        frozen_outputs = _freeze_staged_outputs(staging, prepared, staged_outputs)
 
         affected = _affected_paths(prepared)
         journal_path = _write_journal(
             report_directory,
             request.plan,
             root,
-            staging,
             prepared,
             affected,
+            frozen_outputs,
         )
         backups = _backup_paths(root, backup, affected)
         _validate_preimages(root, prepared)
         try:
-            _apply_from_staging(root, staging, prepared)
+            _apply_from_staging(root, prepared, frozen_outputs)
             post_apply_result = _run_post_apply(request.post_apply, root)
             if post_apply_result is not None and not post_apply_result.ok:
                 _finalize_report(
@@ -239,10 +273,11 @@ def apply_transaction(request: TransactionRequest) -> IntegrationResult:
                 )
                 raise IntegrationError("Post-apply action verification failed.")
             result = _run_verifier(request.verifier, root)
-            if post_apply_result is not None:
-                result = VerificationResult(
-                    (*post_apply_result.findings, *result.findings)
-                )
+            result = _combine_verification_results(
+                staged_action_result,
+                post_apply_result,
+                result,
+            )
             if not result.ok:
                 _finalize_report(request.report_finalizer, result, "FAILED")
                 raise IntegrationError("Post-integration verification failed.")
@@ -290,6 +325,7 @@ def apply_plan(
     report_finalizer: ReportFinalizer | None = None,
     managed_roots: tuple[str, ...] = DEFAULT_MANAGED_ROOTS,
     post_apply: PostApply | None = None,
+    staged_action: StagedAction | None = None,
     structured_key_allowlist: Mapping[str, frozenset[str]] | None = None,
     staging_snapshot_paths: tuple[str, ...] = (),
 ) -> IntegrationResult:
@@ -304,6 +340,7 @@ def apply_plan(
             report_finalizer=report_finalizer,
             managed_roots=managed_roots,
             post_apply=post_apply,
+            staged_action=staged_action,
             structured_key_allowlist=structured_key_allowlist or {},
             staging_snapshot_paths=staging_snapshot_paths,
         )
@@ -376,6 +413,12 @@ def _normalize_structured_key_allowlist(
             for key in keys
         ):
             raise IntegrationError(f"Structured allowlist keys are invalid at {path}.")
+        overlap = _overlapping_dotted_keys(keys)
+        if overlap is not None:
+            raise IntegrationError(
+                f"Structured allowlist keys overlap at {path}: "
+                f"{overlap[0]!r} and {overlap[1]!r}."
+            )
         normalized[path] = keys
     return normalized
 
@@ -396,6 +439,12 @@ def _validate_declared_structured_changes(
     changes: tuple[StructuredChange, ...],
     allowlist: Mapping[str, frozenset[str]],
 ) -> None:
+    overlap = _overlapping_dotted_keys(change.key for change in changes)
+    if overlap is not None:
+        raise IntegrationError(
+            f"Structured PATCH keys overlap at {path}: "
+            f"{overlap[0]!r} and {overlap[1]!r}."
+        )
     allowed = allowlist.get(path)
     if allowed is None:
         raise IntegrationError(
@@ -591,6 +640,16 @@ def _validate_overlaps(
                 )
 
 
+def _overlapping_dotted_keys(values: Iterable[str]) -> tuple[str, str] | None:
+    keys = tuple(sorted(values))
+    for index, parent in enumerate(keys):
+        prefix = f"{parent}."
+        for child in keys[index + 1 :]:
+            if child.startswith(prefix):
+                return parent, child
+    return None
+
+
 def _validate_preimages(root: Path, prepared: tuple[_PreparedOperation, ...]) -> None:
     for item in prepared:
         operation = item.operation
@@ -658,8 +717,8 @@ def _apply_to_staging(staging: Path, prepared: tuple[_PreparedOperation, ...]) -
 
 def _apply_from_staging(
     root: Path,
-    staging: Path,
     prepared: tuple[_PreparedOperation, ...],
+    frozen_outputs: Mapping[str, _FrozenOutput],
 ) -> None:
     for item in _ordered_operations(prepared):
         operation = item.operation
@@ -677,9 +736,9 @@ def _apply_from_staging(
             and operation.ownership is Ownership.STRUCTURED
             and item.path == _PROJECT_CONFIG_RELATIVE
         ):
-            _create_from_stage(root, staging, item.path)
+            _create_from_frozen(root, item.path, frozen_outputs[item.path])
             continue
-        _replace_from_stage(root, staging, item.path)
+        _replace_from_frozen(root, item.path, frozen_outputs[item.path])
 
 
 def _ordered_operations(
@@ -1406,35 +1465,36 @@ def _restore_paths(
             raise IntegrationError(f"Unknown rollback inventory kind: {entry.kind}.")
 
 
-def _replace_from_stage(root: Path, staging: Path, relative: str) -> None:
-    source = _safe_target(staging, relative)
-    if not source.exists() or source.is_symlink() or not source.is_file():
+def _replace_from_frozen(
+    root: Path,
+    relative: str,
+    frozen: _FrozenOutput,
+) -> None:
+    if frozen.kind != "file" or frozen.content is None or frozen.mode is None:
         raise IntegrationError(
             f"Verified staged file is missing or unsafe: {relative}."
         )
     _atomic_write_bytes(
         _safe_target(root, relative),
-        source.read_bytes(),
+        frozen.content,
         root=root,
-        mode=_file_mode(source),
+        mode=frozen.mode,
     )
 
 
-def _create_from_stage(root: Path, staging: Path, relative: str) -> None:
+def _create_from_frozen(
+    root: Path,
+    relative: str,
+    frozen: _FrozenOutput,
+) -> None:
     """Atomically create one verified staged file without replacing a late arrival."""
 
-    source = _safe_target(staging, relative)
-    try:
-        content = read_regular_bytes(
-            source,
-            root=staging,
-            label="Verified staged project configuration",
-        )
-        mode = _file_mode(source)
-    except FilesystemSafetyError as exc:
+    if frozen.kind != "file" or frozen.content is None or frozen.mode is None:
         raise IntegrationError(
             f"Verified staged file is missing or unsafe: {relative}."
-        ) from exc
+        )
+    content = frozen.content
+    mode = frozen.mode
 
     try:
         target = _safe_target(root, relative)
@@ -1508,9 +1568,9 @@ def _write_journal(
     report_directory: Path,
     plan: IntegrationPlan,
     root: Path,
-    staging: Path,
     prepared: tuple[_PreparedOperation, ...],
     affected: tuple[str, ...],
+    frozen_outputs: Mapping[str, _FrozenOutput],
 ) -> Path:
     operation_by_path: dict[str, _PreparedOperation] = {}
     for item in prepared:
@@ -1521,7 +1581,8 @@ def _write_journal(
     for relative in affected:
         item = operation_by_path[relative]
         before_sha, before_kind = _snapshot(root, relative)
-        after_sha, after_kind = _snapshot(staging, relative)
+        frozen = frozen_outputs[relative]
+        after_sha, after_kind = frozen.sha256, frozen.kind
         files.append(
             {
                 "path": sanitize_text(relative, root),
@@ -1804,6 +1865,133 @@ def _run_post_apply(
     if result is not None and not isinstance(result, VerificationResult):
         raise IntegrationError("Post-apply action returned an invalid result.")
     return result
+
+
+def _run_staged_action(
+    staged_action: StagedAction | None,
+    staging: Path,
+) -> VerificationResult | None:
+    if staged_action is None:
+        return None
+    try:
+        result = staged_action(staging)
+    except BaseException as exc:
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)) or not isinstance(
+            exc, Exception
+        ):
+            raise
+        if isinstance(exc, IntegrationError):
+            raise
+        raise IntegrationError(
+            "Staged action execution failed; target remains unchanged."
+        ) from exc
+    if not isinstance(result, VerificationResult):
+        raise IntegrationError("Staged action returned an invalid result.")
+    return result
+
+
+def _snapshot_staged_outputs(
+    staging: Path,
+    prepared: tuple[_PreparedOperation, ...],
+) -> dict[str, _StagedOutput]:
+    return {
+        relative: _staged_output(staging, relative)
+        for relative in _affected_paths(prepared)
+    }
+
+
+def _staged_output(staging: Path, relative: str) -> _StagedOutput:
+    target = _safe_target(staging, relative)
+    if not _path_exists(target):
+        return _StagedOutput(None, None, None)
+    try:
+        metadata = target.lstat()
+    except OSError as exc:
+        raise IntegrationError(
+            f"Could not inspect planned staged output: {relative}."
+        ) from exc
+    if stat.S_ISLNK(metadata.st_mode):
+        raise IntegrationError(f"Planned staged output became a symlink: {relative}.")
+    mode = stat.S_IMODE(metadata.st_mode)
+    if stat.S_ISDIR(metadata.st_mode):
+        return _StagedOutput("directory", None, mode)
+    if stat.S_ISREG(metadata.st_mode):
+        return _StagedOutput("file", _file_digest(target), mode)
+    raise IntegrationError(
+        f"Planned staged output has an unsupported type: {relative}."
+    )
+
+
+def _validate_staged_outputs(
+    staging: Path,
+    prepared: tuple[_PreparedOperation, ...],
+    expected: Mapping[str, _StagedOutput],
+) -> None:
+    actual = _snapshot_staged_outputs(staging, prepared)
+    if actual.keys() != expected.keys():  # pragma: no cover - internal invariant
+        raise IntegrationError("Planned staged output inventory changed unexpectedly.")
+    changed = tuple(path for path in expected if actual[path] != expected[path])
+    if changed:
+        raise IntegrationError(
+            "Staged action or verifier modified a planned integration output; target remains "
+            f"unchanged: {changed[0]}."
+        )
+
+
+def _freeze_staged_outputs(
+    staging: Path,
+    prepared: tuple[_PreparedOperation, ...],
+    expected: Mapping[str, _StagedOutput],
+) -> dict[str, _FrozenOutput]:
+    """Freeze verified bytes so later staging races cannot alter live output."""
+
+    _validate_staged_outputs(staging, prepared, expected)
+    frozen: dict[str, _FrozenOutput] = {}
+    for relative, snapshot in expected.items():
+        if snapshot.kind != "file":
+            frozen[relative] = _FrozenOutput(
+                snapshot.kind,
+                None,
+                snapshot.sha256,
+                snapshot.mode,
+            )
+            continue
+        try:
+            content = read_regular_bytes(
+                _safe_target(staging, relative),
+                root=staging,
+                label=f"Verified staged output {relative}",
+            )
+        except FilesystemSafetyError as exc:
+            raise IntegrationError(
+                f"Verified staged file is missing or unsafe: {relative}."
+            ) from exc
+        digest = hashlib.sha256(content).hexdigest()
+        if digest != snapshot.sha256:
+            raise IntegrationError(
+                "Verified staged output changed while being frozen; target remains "
+                f"unchanged: {relative}."
+            )
+        frozen[relative] = _FrozenOutput(
+            "file",
+            content,
+            digest,
+            snapshot.mode,
+        )
+    return frozen
+
+
+def _combine_verification_results(
+    *results: VerificationResult | None,
+) -> VerificationResult:
+    return VerificationResult(
+        tuple(
+            finding
+            for result in results
+            if result is not None
+            for finding in result.findings
+        )
+    )
 
 
 def _finalize_report(

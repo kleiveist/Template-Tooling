@@ -7,6 +7,7 @@ import json
 import os
 import stat
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 
@@ -23,6 +24,12 @@ from tools.core.filesystem import (
     safe_relative_path,
 )
 from tools.core.manifest import ManifestEntry, ManifestError, create_manifest
+from tools.core.portable_payload import (
+    PAYLOAD_MANIFEST_NAME,
+    PortablePayloadError,
+    validate_portable_payload,
+    validate_portable_payload_identity,
+)
 from tools.core.project_config import (
     ProjectConfig,
     ProjectPathConfig,
@@ -36,6 +43,7 @@ from tools.core.state import (
     load_state,
     render_state,
 )
+from tools.integration.actions import ActionKind, ActionRunner, ActionSpec
 from tools.integration.discovery import ProjectDiscovery, discover_project
 from tools.integration.model import (
     Conflict,
@@ -100,6 +108,7 @@ class IntegrationAssessment:
     catalog: ProfileCatalog
     profile: ProjectProfile
     adapters: tuple[Adapter, ...]
+    structured_key_allowlist: Mapping[str, frozenset[str]]
     plan: IntegrationPlan
     desired_state: ToolingState
     verification: VerificationResult
@@ -187,6 +196,7 @@ def assess_project(
     registry = build_default_registry()
     adapters = registry.select_for_profile(profile, catalog)
     adapter_plan = registry.plan(context, profile, adapters)
+    structured_key_allowlist = registry.structured_key_allowlist(context, adapters)
 
     conflicts = [*adapter_plan.conflicts]
     if not initial.config_exists:
@@ -195,6 +205,21 @@ def assess_project(
 
     config_operation = _config_operation(initial, config, actual_version)
     state_observation = _state_observation_override or _observe_state(context)
+    state = state_observation.state
+    payload_finding = _portable_payload_finding(
+        context,
+        actual_version,
+        require_release_match=state is None or state.tooling_version != actual_version,
+    )
+    if payload_finding.status is FindingStatus.FAIL:
+        conflicts.append(
+            Conflict(
+                payload_finding.path or PAYLOAD_MANIFEST_NAME,
+                Ownership.TOOLING,
+                payload_finding.message,
+                "invalid-portable-payload",
+            )
+        )
     if state_observation.conflict is not None:
         conflicts.append(state_observation.conflict)
     else:
@@ -253,6 +278,7 @@ def assess_project(
         plan,
         config_present=initial.config_exists,
         state_observation=state_observation,
+        payload_finding=payload_finding,
     )
     notices = (
         "Existing project-tooling.toml takes precedence over detected suggestions."
@@ -267,6 +293,7 @@ def assess_project(
         catalog=catalog,
         profile=profile,
         adapters=adapters,
+        structured_key_allowlist=structured_key_allowlist,
         plan=plan,
         desired_state=desired_state,
         verification=verification,
@@ -298,7 +325,6 @@ def run_full_fix(
             (*initial.notices, "No changes or actions were required."),
         )
 
-    _ensure_transactional_actions_supported(initial)
     preflight = ensure_clean_git(initial.context.project_root)
     replanned = assess_project(
         initial.context.project_root,
@@ -324,7 +350,6 @@ def run_full_fix(
             ),
         )
 
-    _ensure_transactional_actions_supported(replanned)
     tools_relative = _relative_path(
         replanned.context.project_root,
         replanned.context.tools_root,
@@ -332,7 +357,7 @@ def run_full_fix(
     )
     managed_roots = _managed_roots(replanned.context)
     published_reports: list[Path] = []
-    action_findings = _planned_action_findings(replanned)
+    action_specs = _planned_action_specs(replanned)
 
     def verifier(root: Path) -> VerificationResult:
         fresh = assess_project(root, tools_root=root / tools_relative)
@@ -354,21 +379,19 @@ def run_full_fix(
         if path is not None:
             published_reports.append(path)
 
-    def post_apply(_root: Path) -> VerificationResult:
-        return VerificationResult(action_findings)
-
     result = apply_plan(
         replanned.context.project_root,
         replanned.plan,
         verifier=verifier,
         report_finalizer=finalizer,
         managed_roots=managed_roots,
-        post_apply=post_apply,
+        staged_action=ActionRunner(action_specs) if action_specs else None,
+        structured_key_allowlist=replanned.structured_key_allowlist,
         staging_snapshot_paths=(_tooling_runtime_path(tools_relative),),
     )
     if published_reports:
         result = replace(result, report_path=published_reports[-1])
-    actions = tuple(finding.message for finding in action_findings)
+    actions = _executed_action_messages(result.verification)
     return AppliedIntegration(
         replanned,
         result,
@@ -498,7 +521,6 @@ def run_migrations(
         )
         return AppliedMigration(applied, ())
 
-    _ensure_transactional_actions_supported(assessment)
     preflight = ensure_clean_git(assessment.context.project_root)
     replanned = assess_migrations(
         assessment.context.project_root,
@@ -527,22 +549,13 @@ def run_migrations(
         )
         return AppliedMigration(applied, ())
 
-    _ensure_transactional_actions_supported(assessment)
     tools_relative = _relative_path(
         assessment.context.project_root,
         assessment.context.tools_root,
         label="Tooling root",
     )
     published_reports: list[Path] = []
-    migration_findings = tuple(
-        Finding(
-            "migration",
-            FindingStatus.PASS,
-            f"Applied migration {migration.migration_id}: {migration.description}",
-        )
-        for migration in replanned.run.migrations
-    )
-    action_findings = (*migration_findings, *_planned_action_findings(assessment))
+    action_specs = _planned_action_specs(assessment)
 
     def verifier(root: Path) -> VerificationResult:
         fresh = assess_project(root, tools_root=root / tools_relative)
@@ -569,24 +582,22 @@ def run_migrations(
         if path is not None:
             published_reports.append(path)
 
-    def post_apply(_root: Path) -> VerificationResult:
-        return VerificationResult(action_findings)
-
     result = apply_plan(
         assessment.context.project_root,
         assessment.plan,
         verifier=verifier,
         report_finalizer=finalizer,
         managed_roots=_managed_roots(assessment.context),
-        post_apply=post_apply,
-        structured_key_allowlist=_migration_structured_allowlist(
-            replanned.run.migrations
+        staged_action=ActionRunner(action_specs) if action_specs else None,
+        structured_key_allowlist=_merge_structured_key_allowlists(
+            assessment.structured_key_allowlist,
+            _migration_structured_allowlist(replanned.run.migrations),
         ),
         staging_snapshot_paths=(_tooling_runtime_path(tools_relative),),
     )
     if published_reports:
         result = replace(result, report_path=published_reports[-1])
-    actions = tuple(finding.message for finding in action_findings)
+    actions = _executed_action_messages(result.verification)
     applied = AppliedIntegration(
         assessment,
         result,
@@ -605,6 +616,16 @@ def _migration_structured_allowlist(
         for policy in migration.structured_key_allowlist:
             by_path.setdefault(policy.path, set()).update(policy.keys)
     return {path: frozenset(keys) for path, keys in sorted(by_path.items())}
+
+
+def _merge_structured_key_allowlists(
+    *policies: Mapping[str, frozenset[str]],
+) -> dict[str, frozenset[str]]:
+    by_path: dict[str, set[str]] = {}
+    for policy in policies:
+        for path, keys in policy.items():
+            by_path.setdefault(path, set()).update(keys)
+    return {path: frozenset(by_path[path]) for path in sorted(by_path)}
 
 
 def verify_project(
@@ -912,6 +933,8 @@ def _migration_explains_tooling_upgrade(
         or not run.migrations
     ):
         return False
+    if len(run.migrations) == 1 and run.migrations[0].reconciles_managed_payload:
+        return True
     managed_payload_roots = tuple(
         root for root in _managed_roots(assessment.context) if root != ".tooling-state"
     )
@@ -1384,6 +1407,7 @@ def _verification(
     *,
     config_present: bool,
     state_observation: _StateObservation,
+    payload_finding: Finding,
 ) -> VerificationResult:
     registry = build_default_registry()
     selected = registry.select_names(adapter.name for adapter in adapters)
@@ -1433,7 +1457,58 @@ def _verification(
         )
         for conflict in plan.conflicts
     )
-    return aggregate_results((adapter_result, tooling_python_result, findings))
+    return aggregate_results(
+        (adapter_result, tooling_python_result, (payload_finding,), findings)
+    )
+
+
+def _portable_payload_finding(
+    context: ProjectContext,
+    tooling_version: str,
+    *,
+    require_release_match: bool,
+) -> Finding:
+    tools_relative = _relative_path(
+        context.project_root,
+        context.tools_root,
+        label="Tooling root",
+    )
+    manifest_path = f"{tools_relative}/{PAYLOAD_MANIFEST_NAME}"
+    try:
+        if require_release_match:
+            manifest = validate_portable_payload(
+                project_root=context.project_root,
+                tools_root=context.tools_root,
+                docs_root=context.docs_root,
+                tooling_version=tooling_version,
+            )
+        else:
+            manifest = validate_portable_payload_identity(
+                tools_root=context.tools_root,
+                tooling_version=tooling_version,
+            )
+    except PortablePayloadError as exc:
+        return Finding(
+            "portable-payload",
+            FindingStatus.FAIL,
+            str(exc),
+            path=manifest_path,
+        )
+    if manifest is None:
+        message = "Legacy tooling payload predates the consistency manifest."
+    else:
+        message = (
+            "Portable payload matches its "
+            f"{len(manifest.files)}-file consistency manifest."
+            if require_release_match
+            else "Portable payload identity is valid; managed state governs migrated files."
+        )
+    return Finding(
+        "portable-payload",
+        FindingStatus.PASS,
+        message,
+        path=manifest_path,
+    )
 
 
 def _tooling_python_verification(context: ProjectContext) -> VerificationResult:
@@ -1537,27 +1612,32 @@ def _ensure_tooling_python_sources_valid(
     )
 
 
-def _planned_action_findings(
+def _planned_action_specs(
     assessment: IntegrationAssessment,
-) -> tuple[Finding, ...]:
-    """Return findings only for actions that this workflow actually executed."""
+) -> tuple[ActionSpec, ...]:
+    """Collapse path-level requirements to one fixed, ordered staged action set."""
 
-    del assessment
-    return ()
-
-
-def _ensure_transactional_actions_supported(
-    assessment: IntegrationAssessment,
-) -> None:
     requirements = _plan_action_requirements(assessment)
-    if not requirements:
-        return
-    details = "; ".join(
-        f"{path}: {', '.join(actions)}" for path, actions in requirements
+    return tuple(
+        ActionSpec(
+            ActionKind(action),
+            paths=tuple(path for path, actions in requirements if action in actions),
+        )
+        for action in _TRANSACTIONAL_ACTION_ORDER
+        if any(action in actions for _path, actions in requirements)
     )
-    raise IntegrationError(
-        "Transactional dependency/quality/test action execution is unsupported "
-        f"for this plan ({details}); nothing was changed."
+
+
+def _executed_action_messages(
+    verification: VerificationResult | None,
+) -> tuple[str, ...]:
+    if verification is None:
+        return ()
+    return tuple(
+        finding.message
+        for finding in verification.findings
+        if finding.adapter == "transaction-actions"
+        and finding.check.startswith("transaction-action:")
     )
 
 
@@ -1593,7 +1673,7 @@ def _plan_action_requirements(
                     or path.startswith(".github/workflows/")
                 )
             ):
-                if dependency_manifest:
+                if dependency_manifest and _structured_dependency_change(operation):
                     required.add("dependencies")
                 required.update(("quality", "tests"))
             if required:
@@ -1606,6 +1686,28 @@ def _plan_action_requirements(
             ),
         )
         for path, actions in sorted(by_path.items())
+    )
+
+
+def _structured_dependency_change(operation: Operation) -> bool:
+    """Return whether a key-level patch changes dependency declarations."""
+
+    prefixes = {
+        "build-dependencies",
+        "dependencies",
+        "dev-dependencies",
+        "devDependencies",
+        "optional-dependencies",
+        "peerDependencies",
+        "project.dependencies",
+        "project.optional-dependencies",
+        "tool.poetry.dependencies",
+        "tool.poetry.dev-dependencies",
+    }
+    return any(
+        change.key == prefix or change.key.startswith(f"{prefix}.")
+        for change in operation.structured_changes
+        for prefix in prefixes
     )
 
 

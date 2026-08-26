@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from tools.core.portable_payload import write_portable_payload_manifest
 from tools.core.project_config import (
     ProjectConfig,
     ProjectPathConfig,
@@ -25,6 +26,8 @@ from tools.integration.model import (
     Operation,
     OperationKind,
     Ownership,
+    StructuredChange,
+    VerificationResult,
 )
 
 TOOLS_SOURCE = Path(__file__).resolve().parents[2]
@@ -56,6 +59,7 @@ def _portable_project(
     docs = root / "docs" / "toolingdocs"
     docs.mkdir(parents=True)
     (docs / "index.md").write_text("# Portable tooling\n", encoding="utf-8")
+    _seal_payload(root, tools)
     return root, tools
 
 
@@ -63,7 +67,7 @@ def _copy_cli_runtime(tmp_path: Path) -> tuple[Path, Path]:
     root = tmp_path / "copied-cli-project"
     tools = root / "tools"
     tools.mkdir(parents=True)
-    for name in ("__init__.py", "control.py", "VERSION"):
+    for name in ("__init__.py", "control.py", "process.py", "VERSION"):
         shutil.copy2(TOOLS_SOURCE / name, tools / name)
     for name in ("adapters", "core", "integration", "profiles", "resources"):
         shutil.copytree(
@@ -78,7 +82,17 @@ def _copy_cli_runtime(tmp_path: Path) -> tuple[Path, Path]:
     docs = root / "docs" / "toolingdocs"
     docs.mkdir(parents=True)
     (docs / "index.md").write_text("# Portable tooling\n", encoding="utf-8")
+    _seal_payload(root, tools)
     return root, tools
+
+
+def _seal_payload(root: Path, tools: Path) -> None:
+    write_portable_payload_manifest(
+        project_root=root,
+        tools_root=tools,
+        docs_root=root / "docs" / "toolingdocs",
+        tooling_version=(tools / "VERSION").read_text(encoding="utf-8").strip(),
+    )
 
 
 def _write(path: Path, content: str | bytes) -> None:
@@ -225,7 +239,7 @@ def test_configless_check_full_fix_check_and_second_full_fix_are_idempotent(
     assert _report_directories(root) == reports_before
 
 
-def test_full_fix_fails_closed_before_tooling_code_actions_are_supported(
+def test_full_fix_fails_closed_when_staged_tooling_actions_fail(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -245,16 +259,73 @@ def test_full_fix_fails_closed_before_tooling_code_actions_are_supported(
     )
     guarded = replace(assessment, plan=guarded_plan)
     monkeypatch.setattr(workflow, "assess_project", lambda *_args, **_kwargs: guarded)
-    before = _snapshot(root)
 
     with pytest.raises(
         IntegrationError,
-        match="Transactional dependency/quality/test action execution is unsupported",
+        match="Staged action verification failed; target remains unchanged",
     ):
         workflow.run_full_fix(root, tools_root=tools)
 
-    assert _snapshot(root) == before
+    assert not (root / "project-tooling.toml").exists()
+    assert not (root / ".tooling-state" / "state.toml").exists()
+    assert _report_directories(root)
     assert not (tools / "generated_runtime.py").exists()
+
+
+def test_frontend_script_patch_plans_only_quality_and_tests(
+    tmp_path: Path,
+) -> None:
+    root, tools = _portable_project(tmp_path)
+    _vite(root / "frontend")
+
+    assessment = workflow.assess_project(root, tools_root=tools)
+    requirements = dict(workflow._plan_action_requirements(assessment))
+
+    assert requirements["frontend/package.json"] == ("quality", "tests")
+    assert "dependencies" not in requirements["frontend/package.json"]
+    assert assessment.structured_key_allowlist == {
+        "frontend/package.json": frozenset(
+            {
+                "scripts.build",
+                "scripts.dev",
+                "scripts.format:check",
+                "scripts.lint",
+                "scripts.tauri",
+                "scripts.test",
+                "scripts.test:e2e",
+                "scripts.typecheck",
+            }
+        )
+    }
+
+
+def test_dependency_key_patch_plans_all_transactional_action_kinds(
+    tmp_path: Path,
+) -> None:
+    root, tools = _portable_project(tmp_path)
+    assessment = workflow.assess_project(root, tools_root=tools)
+    dependency_plan = replace(
+        assessment.plan,
+        operations=(
+            Operation(
+                OperationKind.PATCH,
+                "frontend/package.json",
+                Ownership.STRUCTURED,
+                expected_sha256="a" * 64,
+                structured_changes=(
+                    StructuredChange("devDependencies.vitest", "^3.0.0"),
+                ),
+            ),
+        ),
+    )
+
+    requirements = dict(
+        workflow._plan_action_requirements(replace(assessment, plan=dependency_plan))
+    )
+
+    assert requirements == {
+        "frontend/package.json": ("dependencies", "quality", "tests")
+    }
 
 
 def test_invalid_initial_tooling_source_fails_before_any_mutation(
@@ -328,6 +399,7 @@ def test_existing_state_tracks_versioned_runtime_below_protected_dist(
         tools / "quality" / "rust_analyzer" / "dist" / "rust_quality_analyzer.wasm"
     )
     _write(runtime, b"\x00asm-version-one")
+    _seal_payload(root, tools)
     workflow.run_full_fix(root, tools_root=tools)
     state = root / ".tooling-state" / "state.toml"
     state_before = state.read_bytes()
@@ -615,7 +687,7 @@ opaque = "preserve-me"
     assert workflow.assess_project(root, tools_root=tools).plan.is_noop
 
 
-def test_failed_post_apply_verification_rolls_back_config_and_state(
+def test_failed_staged_action_leaves_config_and_state_unchanged(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -623,18 +695,27 @@ def test_failed_post_apply_verification_rolls_back_config_and_state(
     unknown = root / "customer-owned.bin"
     unknown.write_bytes(b"unchanged")
     monkeypatch.setattr(
-        workflow,
-        "_planned_action_findings",
-        lambda _assessment: (
-            Finding(
-                "synthetic-post-apply",
-                FindingStatus.FAIL,
-                "synthetic post-apply failure",
-            ),
-        ),
+        workflow, "_planned_action_specs", lambda _assessment: (object(),)
     )
 
-    with pytest.raises(IntegrationError, match="Post-apply action verification failed"):
+    def failing_runner(_specs: object):
+        def fail(_staging: Path) -> VerificationResult:
+            return VerificationResult(
+                (
+                    Finding(
+                        "transaction-action:quality",
+                        FindingStatus.FAIL,
+                        "synthetic staged action failure",
+                        adapter="transaction-actions",
+                    ),
+                )
+            )
+
+        return fail
+
+    monkeypatch.setattr(workflow, "ActionRunner", failing_runner)
+
+    with pytest.raises(IntegrationError, match="Staged action verification failed"):
         workflow.run_full_fix(root, tools_root=tools)
 
     assert unknown.read_bytes() == b"unchanged"

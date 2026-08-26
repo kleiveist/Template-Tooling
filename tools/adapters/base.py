@@ -9,12 +9,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import stat
-from collections.abc import Iterable
+import subprocess
+import sys
+import tempfile
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from tools.core.context import ProjectContext
@@ -23,6 +28,7 @@ from tools.core.filesystem import (
     read_regular_bytes,
     safe_join,
     safe_relative_path,
+    validate_root,
 )
 from tools.integration.model import (
     Conflict,
@@ -32,6 +38,7 @@ from tools.integration.model import (
     IntegrationResult,
     Operation,
     Ownership,
+    StructuredChange,
     VerificationResult,
 )
 from tools.integration.planner import (
@@ -40,6 +47,8 @@ from tools.integration.planner import (
     ObservedResource,
     create_plan,
 )
+from tools.integration.sanitize import sanitize_text
+from tools.process import run_bounded, safe_platform_environment
 
 if TYPE_CHECKING:
     from tools.profiles.model import ProjectProfile
@@ -61,13 +70,50 @@ class AdapterApplyError(AdapterError):
 
 
 class AdapterCapability(str, Enum):
-    """Optional operational surfaces an adapter may explicitly implement."""
+    """Explicit user actions, never implicit integration or Full-Fix steps."""
 
     INSTALL = "install"
     RUN = "run"
     STOP = "stop"
     TEST = "test"
     BUILD = "build"
+
+
+_CONTROL_ACTION_TIMEOUT_SECONDS = 900
+_CONTROL_ACTION_OUTPUT_LIMIT = 1200
+_CONTROL_ACTION_ARGUMENTS: Mapping[tuple[str, AdapterCapability], tuple[str, ...]] = (
+    MappingProxyType(
+        {
+            ("backend", AdapterCapability.INSTALL): (
+                "install",
+                "--skip-frontend",
+                "--skip-tooling",
+                "--skip-playwright",
+            ),
+            ("backend", AdapterCapability.TEST): ("test", "--suite", "api"),
+            ("container", AdapterCapability.BUILD): ("build", "container"),
+            ("container", AdapterCapability.TEST): ("container", "validate"),
+            ("database", AdapterCapability.TEST): ("test", "--suite", "database"),
+            ("documentation", AdapterCapability.TEST): ("docs", "check"),
+            ("frontend", AdapterCapability.BUILD): ("build", "web"),
+            ("frontend", AdapterCapability.INSTALL): (
+                "install",
+                "--skip-backend",
+                "--skip-tooling",
+                "--skip-playwright",
+            ),
+            ("frontend", AdapterCapability.TEST): ("test", "--suite", "frontend"),
+            ("quality", AdapterCapability.TEST): ("quality",),
+            ("release", AdapterCapability.TEST): ("release", "check"),
+            ("tauri", AdapterCapability.BUILD): ("tauri", "build"),
+            ("tauri", AdapterCapability.INSTALL): ("tauri", "install"),
+            ("tauri", AdapterCapability.RUN): ("tauri", "run", "--no-follow"),
+            ("tauri", AdapterCapability.STOP): ("tauri", "stop"),
+            ("tauri", AdapterCapability.TEST): ("tauri", "test"),
+            ("testing", AdapterCapability.TEST): ("test", "--suite", "tools"),
+        }
+    )
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +124,20 @@ class AdapterActionResult:
     capability: AdapterCapability
     ok: bool
     message: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.adapter, str) or not _IDENTIFIER.fullmatch(self.adapter):
+            raise AdapterContractError(
+                f"Adapter action name must use lowercase kebab-case: {self.adapter!r}."
+            )
+        if not isinstance(self.capability, AdapterCapability):
+            raise AdapterContractError(
+                "Adapter action capability must be an AdapterCapability value."
+            )
+        if not isinstance(self.ok, bool):
+            raise AdapterContractError("Adapter action result ok flag must be boolean.")
+        if not isinstance(self.message, str):
+            raise AdapterContractError("Adapter action result message must be text.")
 
 
 @runtime_checkable
@@ -147,7 +207,8 @@ class PathRequirement:
     ``content`` is permitted only for tooling-owned files.  Omitting content
     makes an existing path a presence requirement, not permission to invent or
     replace its payload.  ``create_if_missing`` must be explicit even when
-    content is present.
+    content is present.  Structured JSON files may declare only exact dotted
+    keys and object-shape guards; they are observed before any PATCH is planned.
     """
 
     path: str
@@ -160,6 +221,9 @@ class PathRequirement:
     marker: bool = False
     marker_json_keys: tuple[str, ...] = ()
     marker_script_commands: tuple[str, ...] = ()
+    structured_changes: tuple[StructuredChange, ...] = ()
+    structured_object_keys: tuple[str, ...] = ()
+    structured_string_map_keys: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         try:
@@ -211,6 +275,27 @@ class PathRequirement:
             )
         marker_json_keys = tuple(self.marker_json_keys)
         marker_script_commands = tuple(self.marker_script_commands)
+        if not isinstance(self.structured_changes, tuple) or any(
+            not isinstance(change, StructuredChange)
+            for change in self.structured_changes
+        ):
+            raise AdapterContractError(
+                f"Structured changes must be a tuple of StructuredChange values: "
+                f"{self.path}."
+            )
+        if not isinstance(self.structured_object_keys, tuple):
+            raise AdapterContractError(
+                f"Structured object selectors must be a tuple: {self.path}."
+            )
+        if not isinstance(self.structured_string_map_keys, tuple):
+            raise AdapterContractError(
+                f"Structured string-map selectors must be a tuple: {self.path}."
+            )
+        structured_changes = tuple(
+            sorted(self.structured_changes, key=lambda change: change.key)
+        )
+        structured_object_keys = tuple(sorted(self.structured_object_keys))
+        structured_string_map_keys = tuple(sorted(self.structured_string_map_keys))
         if any(
             not isinstance(selector, str)
             or not selector
@@ -229,10 +314,72 @@ class PathRequirement:
             raise AdapterContractError(
                 f"JSON marker selectors require a marked file: {self.path}."
             )
+        duplicate_change = _duplicate(change.key for change in structured_changes)
+        if duplicate_change is not None:
+            raise AdapterContractError(
+                f"Structured key is declared more than once at {self.path}: "
+                f"{duplicate_change}."
+            )
+        overlapping_changes = _overlapping_dotted_keys(
+            change.key for change in structured_changes
+        )
+        if overlapping_changes is not None:
+            parent, child = overlapping_changes
+            raise AdapterContractError(
+                f"Structured keys overlap at {self.path}: {parent!r} and {child!r}."
+            )
+        if any(
+            not isinstance(key, str)
+            or not key
+            or any(not part for part in key.split("."))
+            for key in structured_object_keys
+        ):
+            raise AdapterContractError(
+                f"Structured object selectors must be non-empty dotted keys: {self.path}."
+            )
+        if len(structured_object_keys) != len(set(structured_object_keys)):
+            raise AdapterContractError(
+                f"Structured object selectors must be unique: {self.path}."
+            )
+        if any(
+            not isinstance(key, str)
+            or not key
+            or any(not part for part in key.split("."))
+            for key in structured_string_map_keys
+        ) or len(structured_string_map_keys) != len(set(structured_string_map_keys)):
+            raise AdapterContractError(
+                f"Structured string-map selectors must be unique dotted keys: {self.path}."
+            )
+        if not set(structured_string_map_keys).issubset(structured_object_keys):
+            raise AdapterContractError(
+                "Structured string-map selectors must also be declared as object "
+                f"selectors: {self.path}."
+            )
+        if self.ownership is Ownership.STRUCTURED and (
+            self.kind != "file"
+            or not self.path.casefold().endswith(".json")
+            or content is not None
+            or self.create_if_missing
+        ):
+            raise AdapterContractError(
+                "Structured JSON requirements must target an existing, "
+                f"structured-owned JSON file: {self.path}."
+            )
+        if (
+            structured_changes or structured_object_keys or structured_string_map_keys
+        ) and (self.ownership is not Ownership.STRUCTURED):
+            raise AdapterContractError(
+                f"Structured JSON policy requires structured ownership: {self.path}."
+            )
         object.__setattr__(self, "path", path)
         object.__setattr__(self, "content", content)
         object.__setattr__(self, "marker_json_keys", marker_json_keys)
         object.__setattr__(self, "marker_script_commands", marker_script_commands)
+        object.__setattr__(self, "structured_changes", structured_changes)
+        object.__setattr__(self, "structured_object_keys", structured_object_keys)
+        object.__setattr__(
+            self, "structured_string_map_keys", structured_string_map_keys
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -295,6 +442,11 @@ class Adapter(Protocol):
 
     def verify(self, context: ProjectContext) -> VerificationResult: ...
 
+    def structured_key_allowlist(
+        self,
+        context: ProjectContext,
+    ) -> dict[str, frozenset[str]]: ...
+
 
 class BaseAdapter:
     """Safe default implementation for declarative path adapters."""
@@ -325,14 +477,66 @@ class BaseAdapter:
         del context
         return ()
 
+    def desired_structured_changes(
+        self,
+        context: ProjectContext,
+        requirement: PathRequirement,
+        observed: ObservedResource,
+        detection: AdapterDetection,
+    ) -> tuple[StructuredChange, ...]:
+        """Select declared known-key changes for one observed JSON document."""
+
+        del context, observed, detection
+        return requirement.structured_changes
+
+    def structured_key_allowlist(
+        self,
+        context: ProjectContext,
+    ) -> dict[str, frozenset[str]]:
+        """Return this adapter's complete declared structured-write policy."""
+
+        policies: dict[str, frozenset[str]] = {}
+        for requirement in self._requirements(context):
+            keys = frozenset(change.key for change in requirement.structured_changes)
+            if keys:
+                policies[requirement.path] = keys
+        return {path: policies[path] for path in sorted(policies)}
+
+    def _run_control_action(
+        self,
+        context: ProjectContext,
+        capability: AdapterCapability,
+    ) -> AdapterActionResult:
+        """Execute one built-in, explicitly requested control action."""
+
+        if capability not in self.capabilities:
+            raise AdapterContractError(
+                f"Adapter {self.name!r} does not declare {capability.value!r}."
+            )
+        return run_control_action(
+            context,
+            adapter=self.name,
+            capability=capability,
+        )
+
     def detect(self, context: ProjectContext) -> AdapterDetection:
         findings = list(self.configuration_findings(context))
         resources: list[ObservedResource] = []
         requirements = self._requirements(context)
         for requirement in requirements:
             try:
-                observation = _observe(context, requirement)
+                observation, observation_issues = _observe(context, requirement)
                 resources.append(observation)
+                findings.extend(
+                    Finding(
+                        check=check,
+                        status=FindingStatus.FAIL,
+                        message=message,
+                        adapter=self.name,
+                        path=requirement.path,
+                    )
+                    for check, message in observation_issues
+                )
                 if (
                     observation.exists
                     and not observation.is_symlink
@@ -398,10 +602,30 @@ class BaseAdapter:
 
         detection = self.detect(context)
         observed = {item.path: item for item in detection.resources}
+        blocked_paths = {
+            finding.path
+            for finding in detection.findings
+            if finding.status is FindingStatus.FAIL
+            and finding.check
+            in {
+                "path-kind",
+                "path-safety",
+                "structured-json",
+                "structured-shape",
+            }
+        }
         desired_resources: list[DesiredResource] = []
         conflicts: list[Conflict] = []
         for requirement in self._requirements(context):
             actual = observed[requirement.path]
+            if requirement.path in blocked_paths:
+                continue
+            if (
+                not actual.exists
+                and not requirement.required
+                and requirement.ownership is Ownership.STRUCTURED
+            ):
+                continue
             if (
                 not actual.exists
                 and requirement.ownership is Ownership.TOOLING
@@ -420,7 +644,18 @@ class BaseAdapter:
                         )
                     )
                 continue
-            desired_resources.append(_desired_requirement(requirement, actual))
+            desired_resources.append(
+                _desired_requirement(
+                    requirement,
+                    actual,
+                    structured_changes=self.desired_structured_changes(
+                        context,
+                        requirement,
+                        actual,
+                        detection,
+                    ),
+                )
+            )
 
         plan = create_plan(
             detection.resources,
@@ -444,11 +679,20 @@ class BaseAdapter:
                 code={
                     "path-safety": "adapter-path-safety",
                     "path-kind": "adapter-path-kind",
+                    "structured-json": "adapter-structured-json",
+                    "structured-shape": "adapter-structured-shape",
                 }.get(finding.check, "adapter-configuration"),
             )
             for finding in detection.findings
             if finding.status is FindingStatus.FAIL
-            and finding.check in {"configured-path", "path-kind", "path-safety"}
+            and finding.check
+            in {
+                "configured-path",
+                "path-kind",
+                "path-safety",
+                "structured-json",
+                "structured-shape",
+            }
         )
         return IntegrationPlan(
             profile=plan.profile,
@@ -499,9 +743,15 @@ class BaseAdapter:
             for item in findings
             if item.check == "path-kind" and item.status is FindingStatus.FAIL
         }
+        invalid_paths = {
+            item.path
+            for item in findings
+            if item.status is FindingStatus.FAIL
+            and item.check in {"structured-json", "structured-shape"}
+        }
         for actual in detection.resources:
             requirement = requirements[actual.path]
-            if actual.path in unsafe_paths:
+            if actual.path in unsafe_paths or actual.path in invalid_paths:
                 continue
             if not actual.exists:
                 findings.append(
@@ -589,6 +839,16 @@ class BaseAdapter:
             raise AdapterContractError(
                 f"Adapter {self.name!r} capabilities must be AdapterCapability values."
             )
+        control_capabilities = frozenset(
+            capability
+            for adapter, capability in _CONTROL_ACTION_ARGUMENTS
+            if adapter == self.name
+        )
+        if control_capabilities and self.capabilities != control_capabilities:
+            raise AdapterContractError(
+                f"Built-in adapter {self.name!r} capabilities do not match its "
+                "fixed control-action policy."
+            )
         for capability in self.capabilities:
             implementation = getattr(type(self), capability.value, None)
             if not callable(implementation):
@@ -609,10 +869,215 @@ def project_relative_path(context: ProjectContext, path: Path) -> str:
         ) from exc
 
 
+def run_control_action(
+    context: ProjectContext,
+    *,
+    adapter: str,
+    capability: AdapterCapability,
+) -> AdapterActionResult:
+    """Run one fixed built-in action through the copied control entry point.
+
+    These actions are explicit user requests.  They are deliberately separate
+    from integration planning and staged Full-Fix verification.
+    """
+
+    arguments = _CONTROL_ACTION_ARGUMENTS.get((adapter, capability))
+    if arguments is None:
+        return _action_result(
+            adapter,
+            capability,
+            ok=False,
+            message="Control action is not allowlisted for this adapter.",
+        )
+    try:
+        project_root, control = _validated_control_target(context)
+    except (FilesystemSafetyError, OSError) as exc:
+        return _action_result(
+            adapter,
+            capability,
+            ok=False,
+            message=(
+                "Control action refused because its entry point is unsafe: "
+                f"{_safe_action_detail(exc, context.project_root)}"
+            ),
+        )
+
+    command = (sys.executable, str(control), *arguments)
+    try:
+        with tempfile.TemporaryDirectory(prefix="tooling-adapter-action-") as temporary:
+            environment = _control_action_environment(
+                Path(temporary),
+                project_root,
+            )
+            completed = run_bounded(
+                command,
+                cwd=project_root,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=_CONTROL_ACTION_TIMEOUT_SECONDS,
+                shell=False,
+                stdin=subprocess.DEVNULL,
+            )
+    except subprocess.TimeoutExpired as exc:
+        detail = _safe_action_detail(
+            "\n".join(
+                str(value)
+                for value in (exc.stdout, exc.stderr)
+                if value not in {None, "", b""}
+            ),
+            project_root,
+        )
+        return _action_result(
+            adapter,
+            capability,
+            ok=False,
+            message=(
+                f"Control action timed out after {_CONTROL_ACTION_TIMEOUT_SECONDS} "
+                f"seconds: {detail}"
+            ),
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return _action_result(
+            adapter,
+            capability,
+            ok=False,
+            message=(
+                "Control action could not run: "
+                f"{_safe_action_detail(exc, project_root)}"
+            ),
+        )
+
+    detail = _safe_action_detail(
+        "\n".join(
+            part for part in (completed.stdout or "", completed.stderr or "") if part
+        ),
+        project_root,
+    )
+    if completed.returncode == 0:
+        return _action_result(
+            adapter,
+            capability,
+            ok=True,
+            message=f"Control action completed successfully: {detail}",
+        )
+    return _action_result(
+        adapter,
+        capability,
+        ok=False,
+        message=(
+            f"Control action failed with exit code {completed.returncode}: {detail}"
+        ),
+    )
+
+
+def _validated_control_target(context: ProjectContext) -> tuple[Path, Path]:
+    project_root = validate_root(context.project_root)
+    tools_root = validate_root(context.tools_root)
+    if tools_root.parent != project_root:
+        raise FilesystemSafetyError(
+            "Tooling root must be the direct tools directory of the project root."
+        )
+    control = safe_join(tools_root, "control.py", require_exists=True)
+    try:
+        metadata = control.lstat()
+    except OSError as exc:
+        raise FilesystemSafetyError(
+            "Could not inspect the tooling control entry point."
+        ) from exc
+    if not stat.S_ISREG(metadata.st_mode):
+        raise FilesystemSafetyError(
+            "Tooling control entry point must be a regular file."
+        )
+    return project_root, control
+
+
+def _control_action_environment(temporary: Path, root: Path) -> dict[str, str]:
+    home = temporary / "home"
+    cache = temporary / "cache"
+    config = temporary / "config"
+    data = temporary / "data"
+    pycache = temporary / "pycache"
+    for directory in (home, cache, config, data, pycache):
+        directory.mkdir(mode=0o700)
+
+    environment = safe_platform_environment(os.environ)
+    environment.update(
+        {
+            "PATH": _control_action_search_path(os.environ.get("PATH"), root),
+            "HOME": str(home),
+            "USERPROFILE": str(home),
+            "TMP": str(temporary),
+            "TEMP": str(temporary),
+            "TMPDIR": str(temporary),
+            "XDG_CACHE_HOME": str(cache),
+            "XDG_CONFIG_HOME": str(config),
+            "XDG_DATA_HOME": str(data),
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONNOUSERSITE": "1",
+            "PYTHONPYCACHEPREFIX": str(pycache),
+            "PIP_CONFIG_FILE": os.devnull,
+            "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+            "NPM_CONFIG_USERCONFIG": os.devnull,
+            "NPM_CONFIG_CACHE": str(cache / "npm"),
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_OPTIONAL_LOCKS": "0",
+            "GIT_TERMINAL_PROMPT": "0",
+            "NO_COLOR": "1",
+        }
+    )
+    return environment
+
+
+def _control_action_search_path(value: str | None, root: Path) -> str:
+    candidates = (value or os.defpath).split(os.pathsep)
+    accepted: list[str] = []
+    for candidate in candidates:
+        path = Path(candidate)
+        if not candidate or not path.is_absolute():
+            continue
+        try:
+            resolved = path.resolve(strict=False)
+        except OSError:
+            continue
+        if resolved == root or resolved.is_relative_to(root):
+            continue
+        rendered = str(resolved)
+        if rendered not in accepted:
+            accepted.append(rendered)
+    return os.pathsep.join(accepted) if accepted else os.defpath
+
+
+def _action_result(
+    adapter: str,
+    capability: AdapterCapability,
+    *,
+    ok: bool,
+    message: str,
+) -> AdapterActionResult:
+    return AdapterActionResult(
+        adapter=adapter,
+        capability=capability,
+        ok=ok,
+        message=message,
+    )
+
+
+def _safe_action_detail(value: object, project_root: Path) -> str:
+    sanitized = sanitize_text(value, project_root).strip()
+    if not sanitized:
+        return "no diagnostic output"
+    if len(sanitized) > _CONTROL_ACTION_OUTPUT_LIMIT:
+        sanitized = sanitized[-_CONTROL_ACTION_OUTPUT_LIMIT:]
+    return " | ".join(line.strip() for line in sanitized.splitlines() if line.strip())
+
+
 def _observe(
     context: ProjectContext,
     requirement: PathRequirement,
-) -> ObservedResource:
+) -> tuple[ObservedResource, tuple[tuple[str, str], ...]]:
     target = safe_join(
         context.project_root,
         requirement.path,
@@ -621,11 +1086,14 @@ def _observe(
     try:
         metadata = target.lstat()
     except FileNotFoundError:
-        return ObservedResource(
-            path=requirement.path,
-            ownership=requirement.ownership,
-            exists=False,
-            kind=requirement.kind,
+        return (
+            ObservedResource(
+                path=requirement.path,
+                ownership=requirement.ownership,
+                exists=False,
+                kind=requirement.kind,
+            ),
+            (),
         )
     except OSError as exc:
         raise FilesystemSafetyError(
@@ -633,6 +1101,17 @@ def _observe(
         ) from exc
 
     is_symlink = stat.S_ISLNK(metadata.st_mode)
+    if is_symlink:
+        return (
+            ObservedResource(
+                path=requirement.path,
+                ownership=requirement.ownership,
+                exists=True,
+                kind=requirement.kind,
+                is_symlink=True,
+            ),
+            (("path-safety", "adapter path must not be a symbolic link"),),
+        )
     if stat.S_ISDIR(metadata.st_mode):
         kind = "directory"
     elif stat.S_ISREG(metadata.st_mode):
@@ -642,32 +1121,95 @@ def _observe(
             f"Adapter path is not a regular file or directory: {requirement.path}."
         )
     digest: str | None = None
-    if kind == "file" and not is_symlink and stat.S_ISREG(metadata.st_mode):
-        digest = hashlib.sha256(
-            read_regular_bytes(
-                target,
-                root=context.project_root,
-                label=f"Adapter path {requirement.path}",
-            )
-        ).hexdigest()
-    return ObservedResource(
-        path=requirement.path,
-        ownership=requirement.ownership,
-        exists=True,
-        sha256=digest,
-        kind=kind,
-        is_symlink=is_symlink,
+    structured_values: dict[str, object] = {}
+    issues: list[tuple[str, str]] = []
+    if kind == "file" and stat.S_ISREG(metadata.st_mode):
+        payload = read_regular_bytes(
+            target,
+            root=context.project_root,
+            label=f"Adapter path {requirement.path}",
+        )
+        digest = hashlib.sha256(payload).hexdigest()
+        if requirement.ownership is Ownership.STRUCTURED:
+            try:
+                document = json.loads(
+                    payload.decode("utf-8"),
+                    object_pairs_hook=_unique_json_object,
+                    parse_constant=_reject_json_constant,
+                )
+            except (UnicodeError, json.JSONDecodeError, ValueError):
+                issues.append(
+                    (
+                        "structured-json",
+                        "structured JSON must be strict, duplicate-free UTF-8 JSON",
+                    )
+                )
+            else:
+                if not isinstance(document, dict):
+                    issues.append(
+                        (
+                            "structured-shape",
+                            "structured JSON must contain an object",
+                        )
+                    )
+                else:
+                    structured_values = document
+                    for key in requirement.structured_object_keys:
+                        found, value = _json_value(document, key)
+                        if found and not isinstance(value, dict):
+                            issues.append(
+                                (
+                                    "structured-shape",
+                                    f"structured JSON key {key} must contain an object",
+                                )
+                            )
+                    for key in requirement.structured_string_map_keys:
+                        found, value = _json_value(document, key)
+                        if (
+                            found
+                            and isinstance(value, dict)
+                            and any(
+                                not isinstance(item_key, str)
+                                or not item_key
+                                or not isinstance(item_value, str)
+                                or not item_value.strip()
+                                for item_key, item_value in value.items()
+                            )
+                        ):
+                            issues.append(
+                                (
+                                    "structured-shape",
+                                    (
+                                        f"structured JSON key {key} must map non-empty "
+                                        "strings to non-empty strings"
+                                    ),
+                                )
+                            )
+    return (
+        ObservedResource(
+            path=requirement.path,
+            ownership=requirement.ownership,
+            exists=True,
+            sha256=digest,
+            kind=kind,
+            is_symlink=False,
+            structured_values=structured_values,
+        ),
+        tuple(issues),
     )
 
 
 def _desired_requirement(
     requirement: PathRequirement,
     observed: ObservedResource,
+    *,
+    structured_changes: tuple[StructuredChange, ...],
 ) -> DesiredResource:
     digest = None
     if (
         requirement.kind == "file"
         and requirement.content is None
+        and requirement.ownership is not Ownership.STRUCTURED
         and observed.exists
         and not observed.is_symlink
     ):
@@ -677,6 +1219,7 @@ def _desired_requirement(
         ownership=requirement.ownership,
         content=requirement.content,
         sha256=digest,
+        structured_changes=structured_changes,
         required=requirement.required,
         reason=requirement.reason,
         kind=requirement.kind,
@@ -692,22 +1235,25 @@ def _matches_detection_marker(
         return False
     if not requirement.marker_json_keys and not requirement.marker_script_commands:
         return True
-    try:
-        target = safe_join(
-            context.project_root,
-            requirement.path,
-            require_exists=True,
-        )
-        raw = read_regular_bytes(
-            target,
-            root=context.project_root,
-            label=f"Adapter marker {requirement.path}",
-        ).decode("utf-8")
-        payload = json.loads(raw)
-    except (FilesystemSafetyError, UnicodeError, json.JSONDecodeError):
-        return False
-    if not isinstance(payload, dict):
-        return False
+    if requirement.ownership is Ownership.STRUCTURED:
+        payload = observed.structured_values
+    else:
+        try:
+            target = safe_join(
+                context.project_root,
+                requirement.path,
+                require_exists=True,
+            )
+            raw = read_regular_bytes(
+                target,
+                root=context.project_root,
+                label=f"Adapter marker {requirement.path}",
+            ).decode("utf-8")
+            payload = json.loads(raw)
+        except (FilesystemSafetyError, UnicodeError, json.JSONDecodeError):
+            return False
+        if not isinstance(payload, dict):
+            return False
     if any(_json_has_path(payload, key) for key in requirement.marker_json_keys):
         return True
     scripts = payload.get("scripts")
@@ -721,12 +1267,30 @@ def _matches_detection_marker(
 
 
 def _json_has_path(payload: dict[str, object], dotted: str) -> bool:
+    found, _value = _json_value(payload, dotted)
+    return found
+
+
+def _json_value(payload: dict[str, object], dotted: str) -> tuple[bool, object]:
     current: object = payload
     for part in dotted.split("."):
         if not isinstance(current, dict) or part not in current:
-            return False
+            return False, None
         current = current[part]
-    return True
+    return True, current
+
+
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    document: dict[str, object] = {}
+    for key, value in pairs:
+        if key in document:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        document[key] = value
+    return document
+
+
+def _reject_json_constant(value: str) -> object:
+    raise ValueError(f"non-standard JSON constant: {value}")
 
 
 def _script_runs_any(script: str, commands: tuple[str, ...]) -> bool:
@@ -778,6 +1342,16 @@ def _duplicate(values: Iterable[str]) -> str | None:
     return None
 
 
+def _overlapping_dotted_keys(values: Iterable[str]) -> tuple[str, str] | None:
+    keys = tuple(sorted(values))
+    for index, parent in enumerate(keys):
+        prefix = f"{parent}."
+        for child in keys[index + 1 :]:
+            if child.startswith(prefix):
+                return parent, child
+    return None
+
+
 def _finding_key(finding: Finding) -> tuple[str, str, str, str, str]:
     return (
         finding.adapter or "",
@@ -806,4 +1380,5 @@ __all__ = [
     "TestCapability",
     "TransactionBoundary",
     "project_relative_path",
+    "run_control_action",
 ]

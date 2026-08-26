@@ -27,8 +27,11 @@ from tools.integration.model import (
 from tools.tests.integration.test_workflow import (
     TOOLING_VERSION,
     _portable_project,
+    _seal_payload,
     _snapshot,
 )
+
+PAYLOAD_RECONCILIATION_ID = "reconcile-managed-payload-0-1-0-to-0-2-0"
 
 
 def _add_file_migration(
@@ -169,8 +172,9 @@ def test_registered_managed_migration_can_reconcile_a_copied_tooling_upgrade(
 ) -> None:
     root, tools = _portable_project(tmp_path)
     workflow.run_full_fix(root, tools_root=tools)
-    upgraded_version = "0.2.0"
+    upgraded_version = "0.3.0"
     (tools / "VERSION").write_text(f"{upgraded_version}\n", encoding="utf-8")
+    _seal_payload(root, tools)
     registry = MigrationRegistry(
         (
             _add_file_migration(
@@ -191,6 +195,49 @@ def test_registered_managed_migration_can_reconcile_a_copied_tooling_upgrade(
     assert state.tooling_version == upgraded_version
     assert state.applied_migrations == ("reconcile-copied-upgrade",)
     assert workflow.assess_project(root, tools_root=tools).plan.is_noop
+
+
+def test_productive_payload_reconciliation_updates_only_config_and_state(
+    tmp_path: Path,
+) -> None:
+    root, tools = _portable_project(tmp_path)
+    (tools / "VERSION").write_text("0.1.0\n", encoding="utf-8")
+    (tools / "PORTABLE-PAYLOAD.json").unlink()
+    workflow.run_full_fix(root, tools_root=tools)
+    config = root / "project-tooling.toml"
+    config_before = config.read_text(encoding="utf-8")
+    (tools / "VERSION").write_text("0.2.0\n", encoding="utf-8")
+    _seal_payload(root, tools)
+
+    pending = workflow.assess_migrations(root, tools_root=tools)
+
+    assert pending.pending_ids == (PAYLOAD_RECONCILIATION_ID,)
+    assert pending.run.operations == ()
+    assert not pending.run.is_noop
+    assert {operation.path for operation in pending.assessment.plan.operations} == {
+        ".tooling-state/state.toml",
+        "project-tooling.toml",
+    }
+
+    applied = workflow.run_migrations(root, tools_root=tools)
+    state = load_state(root)
+
+    assert applied.applied_ids == (PAYLOAD_RECONCILIATION_ID,)
+    assert state.tooling_version == "0.2.0"
+    assert state.applied_migrations == (PAYLOAD_RECONCILIATION_ID,)
+    assert '[project]\nname = "target-project"\nprofile = "web-only"' in (
+        config.read_text(encoding="utf-8")
+    )
+    assert config_before.replace('version = "0.1.0"', 'version = "0.2.0"') == (
+        config.read_text(encoding="utf-8")
+    )
+
+    before_noop = _snapshot(root)
+    second = workflow.run_migrations(root, tools_root=tools)
+
+    assert second.applied_ids == ()
+    assert not second.applied.changed
+    assert _snapshot(root) == before_noop
 
 
 def test_unsupported_state_without_registered_conversion_fails_closed(
@@ -245,7 +292,7 @@ def test_failed_postcondition_keeps_migration_and_state_unchanged(
     assert load_state(root).applied_migrations == ()
 
 
-def test_structured_migration_requiring_actions_fails_closed_without_writes(
+def test_structured_migration_action_failure_leaves_project_unchanged(
     tmp_path: Path,
 ) -> None:
     root, tools = _portable_project(tmp_path)
@@ -299,7 +346,7 @@ def test_structured_migration_requiring_actions_fails_closed_without_writes(
 
     with pytest.raises(
         IntegrationError,
-        match="Transactional dependency/quality/test action execution is unsupported",
+        match="Staged action verification failed; target remains unchanged",
     ):
         workflow.run_migrations(
             root,

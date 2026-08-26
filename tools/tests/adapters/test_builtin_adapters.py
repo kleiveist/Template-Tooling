@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+import pytest
+
 from tools.adapters import (
     BackendAdapter,
     CiAdapter,
@@ -15,7 +20,7 @@ from tools.adapters import (
     TestingAdapter as ToolingTestingAdapter,
 )
 from tools.core.context import ProjectContext
-from tools.integration.model import FindingStatus, Ownership
+from tools.integration.model import FindingStatus, OperationKind, Ownership
 
 
 def test_builtin_adapters_use_configured_context_paths(
@@ -127,7 +132,7 @@ def test_wrong_marker_kind_is_not_detected(adapter_context: ProjectContext) -> N
     assert not detection.detected
     assert plan.operations == ()
     assert {item.code for item in plan.conflicts} == {"adapter-path-kind"}
-    assert {item.ownership for item in plan.conflicts} == {Ownership.PROJECT}
+    assert {item.ownership for item in plan.conflicts} == {Ownership.STRUCTURED}
     assert not FrontendAdapter().verify(adapter_context).ok
 
 
@@ -153,6 +158,184 @@ def test_arbitrary_script_mention_does_not_detect_vite(
     )
 
     assert not FrontendAdapter().detect(adapter_context).detected
+
+
+def test_frontend_adds_only_missing_scripts_for_declared_tools(
+    adapter_context: ProjectContext,
+) -> None:
+    adapter_context.paths.frontend.mkdir(parents=True)
+    package = {
+        "name": "customer-ui",
+        "scripts": {
+            "dev": "customer-dev-server",
+            "foreign": "keep-me",
+            "lint": "customer-lint",
+        },
+        "dependencies": {
+            "@playwright/test": "^1.0.0",
+            "typescript": "^5.0.0",
+            "vite": "^7.0.0",
+        },
+        "devDependencies": {
+            "@tauri-apps/cli": "^2.0.0",
+            "eslint": "^9.0.0",
+            "prettier": "^3.0.0",
+            "vitest": "^3.0.0",
+        },
+        "x-customer": {"preserve": True},
+    }
+    package_path = adapter_context.paths.frontend / "package.json"
+    package_path.write_text(json.dumps(package), encoding="utf-8")
+
+    plan = FrontendAdapter().plan(
+        adapter_context,
+        type(
+            "Desired",
+            (),
+            {"profile": "fixture", "features": ("frontend",)},
+        )(),
+    )
+
+    assert not plan.conflicts
+    assert len(plan.operations) == 1
+    operation = plan.operations[0]
+    assert operation.kind is OperationKind.PATCH
+    assert operation.path == "ui/package.json"
+    assert operation.ownership is Ownership.STRUCTURED
+    assert {change.key: change.value for change in operation.structured_changes} == {
+        "scripts.build": "vite build",
+        "scripts.format:check": "prettier --check .",
+        "scripts.tauri": "tauri",
+        "scripts.test": "vitest run",
+        "scripts.test:e2e": "playwright test",
+        "scripts.typecheck": "tsc --noEmit",
+    }
+    assert all(
+        change.key not in {"scripts.dev", "scripts.lint"}
+        for change in operation.structured_changes
+    )
+
+
+def test_vite_config_without_declared_vite_never_adds_broken_scripts(
+    adapter_context: ProjectContext,
+) -> None:
+    adapter_context.paths.frontend.mkdir(parents=True)
+    (adapter_context.paths.frontend / "package.json").write_text(
+        '{"name":"customer-ui"}\n', encoding="utf-8"
+    )
+    (adapter_context.paths.frontend / "vite.config.ts").write_text(
+        "export default {}\n", encoding="utf-8"
+    )
+
+    plan = FrontendAdapter().plan(
+        adapter_context,
+        type(
+            "Desired",
+            (),
+            {"profile": "fixture", "features": ("frontend",)},
+        )(),
+    )
+
+    assert plan.operations == ()
+
+
+def test_existing_frontend_script_values_are_never_overwritten(
+    adapter_context: ProjectContext,
+) -> None:
+    adapter_context.paths.frontend.mkdir(parents=True)
+    (adapter_context.paths.frontend / "package.json").write_text(
+        json.dumps(
+            {
+                "scripts": {"build": "custom-build", "dev": "custom-dev"},
+                "devDependencies": {"vite": "^7.0.0"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    plan = FrontendAdapter().plan(
+        adapter_context,
+        type(
+            "Desired",
+            (),
+            {"profile": "fixture", "features": ("frontend",)},
+        )(),
+    )
+
+    assert plan.is_noop
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_code"),
+    (
+        ("{not-json", "adapter-structured-json"),
+        ('{"name":"first","name":"second"}', "adapter-structured-json"),
+        ('{"custom":NaN}', "adapter-structured-json"),
+        ("[]", "adapter-structured-shape"),
+        ('{"scripts":"npm test"}', "adapter-structured-shape"),
+        ('{"dependencies":[]}', "adapter-structured-shape"),
+        ('{"dependencies":{"vite":false}}', "adapter-structured-shape"),
+        ('{"dependencies":{"vite":null}}', "adapter-structured-shape"),
+        ('{"dependencies":{"vite":{}}}', "adapter-structured-shape"),
+        ('{"dependencies":{"vite":""}}', "adapter-structured-shape"),
+    ),
+)
+def test_invalid_frontend_package_shapes_fail_closed(
+    adapter_context: ProjectContext,
+    payload: str,
+    expected_code: str,
+) -> None:
+    adapter_context.paths.frontend.mkdir(parents=True)
+    (adapter_context.paths.frontend / "package.json").write_text(
+        payload, encoding="utf-8"
+    )
+
+    adapter = FrontendAdapter()
+    plan = adapter.plan(
+        adapter_context,
+        type(
+            "Desired",
+            (),
+            {"profile": "fixture", "features": ("frontend",)},
+        )(),
+    )
+
+    assert plan.operations == ()
+    assert {conflict.code for conflict in plan.conflicts} == {expected_code}
+    assert not adapter.verify(adapter_context).ok
+
+
+def test_frontend_package_symlink_fails_closed_without_following_it(
+    adapter_context: ProjectContext,
+    tmp_path: Path,
+) -> None:
+    adapter_context.paths.frontend.mkdir(parents=True)
+    external = tmp_path.parent / f"{tmp_path.name}-external-package.json"
+    external.write_text(
+        '{"devDependencies":{"vite":"secret-version"}}', encoding="utf-8"
+    )
+    (adapter_context.paths.frontend / "package.json").symlink_to(external)
+
+    adapter = FrontendAdapter()
+    detection = adapter.detect(adapter_context)
+    plan = adapter.plan(
+        adapter_context,
+        type(
+            "Desired",
+            (),
+            {"profile": "fixture", "features": ("frontend",)},
+        )(),
+    )
+
+    package = next(
+        resource
+        for resource in detection.resources
+        if resource.path == "ui/package.json"
+    )
+    assert package.is_symlink
+    assert package.sha256 is None
+    assert plan.operations == ()
+    assert {conflict.code for conflict in plan.conflicts} == {"adapter-path-safety"}
 
 
 def test_fastapi_requires_source_and_dependency_evidence(

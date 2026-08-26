@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -189,7 +190,13 @@ def test_copied_tooling_matrix_is_read_only_integrated_and_idempotent(
     _copy_portable_runtime(root, case)
     _assert_portable_copy_is_clean(root)
     clean_git_repository = _initialize_clean_git(root, case)
-    protected_before = _product_digests(root, product_paths)
+    package_before = _package_payloads(root, case)
+    structured_paths = frozenset(package_before)
+    protected_before = _product_digests(
+        root,
+        product_paths,
+        excluded=structured_paths,
+    )
     product_tree_before = _project_owned_digests(root, case)
     before_check = _snapshot_tree(root)
 
@@ -220,10 +227,24 @@ def test_copied_tooling_matrix_is_read_only_integrated_and_idempotent(
 
     assert first_fix["status"] == "INTEGRATED"
     assert first_fix["report_path"] is not None
+    assert first_fix["actions"] == (
+        ["Staged quality action passed.", "Staged tests action passed."]
+        if package_before
+        else []
+    )
     if clean_git_repository:
         assert "Git preflight: worktree is clean." in first_fix["notices"]
     _assert_persisted_config(root, case)
-    assert _product_digests(root, product_paths) == protected_before
+    _assert_package_integration(root, package_before)
+    package_integrated = _package_payloads(root, case)
+    assert (
+        _product_digests(
+            root,
+            product_paths,
+            excluded=structured_paths,
+        )
+        == protected_before
+    )
     assert _project_owned_digests(root, case) == product_tree_before
 
     before_integrated_check = _snapshot_tree(root)
@@ -236,8 +257,16 @@ def test_copied_tooling_matrix_is_read_only_integrated_and_idempotent(
     )
     _assert_integrated(integrated, expected_profile=case.expected_profile)
     assert _snapshot_tree(root) == before_integrated_check
-    assert _product_digests(root, product_paths) == protected_before
+    assert (
+        _product_digests(
+            root,
+            product_paths,
+            excluded=structured_paths,
+        )
+        == protected_before
+    )
     assert _project_owned_digests(root, case) == product_tree_before
+    assert _package_payloads(root, case) == package_integrated
 
     before_verify = _snapshot_tree(root)
     verified = _run_json(
@@ -249,8 +278,16 @@ def test_copied_tooling_matrix_is_read_only_integrated_and_idempotent(
     )
     _assert_integrated(verified, expected_profile=case.expected_profile)
     assert _snapshot_tree(root) == before_verify
-    assert _product_digests(root, product_paths) == protected_before
+    assert (
+        _product_digests(
+            root,
+            product_paths,
+            excluded=structured_paths,
+        )
+        == protected_before
+    )
     assert _project_owned_digests(root, case) == product_tree_before
+    assert _package_payloads(root, case) == package_integrated
 
     before_complete_test = _snapshot_tree(root)
     complete_test = _run_command(
@@ -264,8 +301,16 @@ def test_copied_tooling_matrix_is_read_only_integrated_and_idempotent(
     assert "suite:tools" in complete_test.stdout
     assert "Overall test status: OK" in complete_test.stdout
     assert _snapshot_tree(root) == before_complete_test
-    assert _product_digests(root, product_paths) == protected_before
+    assert (
+        _product_digests(
+            root,
+            product_paths,
+            excluded=structured_paths,
+        )
+        == protected_before
+    )
     assert _project_owned_digests(root, case) == product_tree_before
+    assert _package_payloads(root, case) == package_integrated
 
     before_second_fix = _snapshot_tree(root)
     reports_before = _report_directories(root)
@@ -282,8 +327,16 @@ def test_copied_tooling_matrix_is_read_only_integrated_and_idempotent(
     assert second_fix["report_path"] is None
     assert _report_directories(root) == reports_before
     assert _snapshot_tree(root) == before_second_fix
-    assert _product_digests(root, product_paths) == protected_before
+    assert (
+        _product_digests(
+            root,
+            product_paths,
+            excluded=structured_paths,
+        )
+        == protected_before
+    )
     assert _project_owned_digests(root, case) == product_tree_before
+    assert _package_payloads(root, case) == package_integrated
 
 
 def _seed_product(root: Path, name: str) -> tuple[str, ...]:
@@ -597,15 +650,26 @@ def _assert_integrated(payload: dict[str, Any], *, expected_profile: str) -> Non
 
 def _assert_persisted_config(root: Path, case: CopyCase) -> None:
     payload = tomllib.loads((root / "project-tooling.toml").read_text(encoding="utf-8"))
+    state = tomllib.loads(
+        (root / ".tooling-state" / "state.toml").read_text(encoding="utf-8")
+    )
     assert payload["tooling"]["version"] == TOOLING_VERSION
     assert payload["project"]["profile"] == case.expected_profile
     assert payload["paths"] == dict(case.expected_config_paths)
+    assert state["tooling_version"] == TOOLING_VERSION
+    assert state["applied_migrations"] == []
 
 
-def _product_digests(root: Path, paths: tuple[str, ...]) -> dict[str, str]:
+def _product_digests(
+    root: Path,
+    paths: tuple[str, ...],
+    *,
+    excluded: frozenset[str] = frozenset(),
+) -> dict[str, str]:
     return {
         relative: hashlib.sha256((root / relative).read_bytes()).hexdigest()
         for relative in sorted(paths)
+        if relative not in excluded
     }
 
 
@@ -614,14 +678,72 @@ def _project_owned_digests(root: Path, case: CopyCase) -> dict[str, str]:
         "handbook" if case.name == "custom-paths-desktop-cloud" else "docs"
     )
     excluded_roots = {".git", ".tooling-state", "tools", documentation_root}
+    structured_paths = frozenset(_package_payloads(root, case))
     return {
         relative: hashlib.sha256(path.read_bytes()).hexdigest()
         for path in sorted(root.rglob("*"))
         if path.is_file()
         and not path.is_symlink()
         and (relative := path.relative_to(root).as_posix()) != "project-tooling.toml"
+        and relative not in structured_paths
         and relative.split("/", maxsplit=1)[0] not in excluded_roots
     }
+
+
+def _package_payloads(root: Path, case: CopyCase) -> dict[str, dict[str, Any]]:
+    frontend = dict(case.expected_config_paths)["frontend"]
+    relative = (
+        "package.json"
+        if frontend == "."
+        else (PurePosixPath(frontend) / "package.json").as_posix()
+    )
+    target = root / relative
+    if not target.is_file() or target.is_symlink():
+        return {}
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    assert isinstance(payload, dict)
+    return {relative: payload}
+
+
+def _assert_package_integration(
+    root: Path,
+    before: dict[str, dict[str, Any]],
+) -> None:
+    after = {
+        relative: json.loads((root / relative).read_text(encoding="utf-8"))
+        for relative in before
+    }
+    for relative, original in before.items():
+        expected = copy.deepcopy(original)
+        dependencies = {
+            **(
+                expected.get("dependencies", {})
+                if isinstance(expected.get("dependencies"), dict)
+                else {}
+            ),
+            **(
+                expected.get("devDependencies", {})
+                if isinstance(expected.get("devDependencies"), dict)
+                else {}
+            ),
+        }
+        scripts = expected.setdefault("scripts", {})
+        assert isinstance(scripts, dict)
+        if "vite" in dependencies:
+            scripts.setdefault("dev", "vite")
+            scripts.setdefault("build", "vite build")
+        conditional = {
+            "eslint": ("lint", "eslint ."),
+            "prettier": ("format:check", "prettier --check ."),
+            "typescript": ("typecheck", "tsc --noEmit"),
+            "vitest": ("test", "vitest run"),
+            "@playwright/test": ("test:e2e", "playwright test"),
+            "@tauri-apps/cli": ("tauri", "tauri"),
+        }
+        for dependency, (name, command) in conditional.items():
+            if dependency in dependencies:
+                scripts.setdefault(name, command)
+        assert after[relative] == expected, relative
 
 
 def _snapshot_tree(root: Path) -> dict[str, TreeEntry]:

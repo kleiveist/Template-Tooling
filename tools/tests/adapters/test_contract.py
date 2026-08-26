@@ -22,6 +22,7 @@ from tools.integration.model import (
     Operation,
     OperationKind,
     Ownership,
+    StructuredChange,
     VerificationResult,
 )
 
@@ -92,11 +93,30 @@ class _RecordingBoundary:
             Ownership.PROJECT,
             create_if_missing=True,
         ),
+        lambda: PathRequirement(
+            "frontend/package.json",
+            Ownership.PROJECT,
+            kind="file",
+            structured_changes=(StructuredChange("scripts.test", "vitest"),),
+        ),
     ],
 )
 def test_path_requirement_rejects_unsafe_write_contracts(requirement: object) -> None:
     with pytest.raises(AdapterContractError):
         requirement()  # type: ignore[operator]
+
+
+def test_path_requirement_rejects_parent_child_structured_keys() -> None:
+    with pytest.raises(AdapterContractError, match="Structured keys overlap"):
+        PathRequirement(
+            "frontend/package.json",
+            Ownership.STRUCTURED,
+            kind="file",
+            structured_changes=(
+                StructuredChange("scripts", {"dev": "vite"}),
+                StructuredChange("scripts.test", "vitest run"),
+            ),
+        )
 
 
 def test_adapter_plan_uses_integration_planner_contract(

@@ -168,6 +168,27 @@ def test_structured_full_replacement_and_missing_target_are_conflicts() -> None:
     assert not replacement.operations and not missing.operations
 
 
+def test_missing_optional_structured_target_is_a_noop() -> None:
+    plan = create_plan(
+        (),
+        DesiredProfile(
+            "web-only",
+            (
+                DesiredResource(
+                    "package.json",
+                    Ownership.STRUCTURED,
+                    structured_changes=(
+                        StructuredChange("scripts.quality", "quality"),
+                    ),
+                    required=False,
+                ),
+            ),
+        ),
+    )
+
+    assert plan.is_noop
+
+
 def test_structured_precondition_mismatch_blocks_patch() -> None:
     plan = create_plan(
         (
