@@ -1,4 +1,4 @@
-"""Exercise one exported payload as an independent customer installation in CI."""
+"""Exercise one exported payload as an independent copied customer installation."""
 
 from __future__ import annotations
 
@@ -226,9 +226,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         run(args.export_root, args.work_root)
     except (OSError, SmokeFailure, subprocess.TimeoutExpired) as exc:
-        print(f"portable CI smoke failed: {exc}", file=sys.stderr)
+        print(f"portable customer smoke failed: {exc}", file=sys.stderr)
         return 1
-    print("portable CI smoke passed")
+    print("portable customer smoke passed")
     return 0
 
 

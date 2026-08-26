@@ -4,22 +4,22 @@
   "files": [
     {
       "path": "docs/toolingdocs/acceptance/acceptance.md",
-      "sha256": "sha256:9ccd3845253fbd59eb4f83bb048e8d391a2a3fd47806f6de890e61730001ec31",
-      "size": 1131,
+      "sha256": "sha256:62ee5dfde6f94297d8c4e219110dbe8f0d471466ac8fc782db88961f23a1f81c",
+      "size": 1135,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/acceptance/copy-matrix.md",
-      "sha256": "sha256:9c5fd8784dbbb972a43fb4273608b4d3578c8cc7da6388009cc6ae2bbe8c8abc",
-      "size": 4470,
+      "sha256": "sha256:2eae39fc3dcf40c50ded6fdd2f25370b4dc62865fe329aadcf49a7a34ff5b705",
+      "size": 4454,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/acceptance/definition-of-done.md",
-      "sha256": "sha256:0aae90e61f89eb9ba00318dc2b28801ab383c3e8816fc10f5509aed7230d77c7",
-      "size": 6497,
+      "sha256": "sha256:c7fa68cdd8c9424d72f20157879a7162892d82754c91fc0889a6b2ce9816f398",
+      "size": 6498,
       "kind": "file",
       "executable": false
     },
@@ -109,15 +109,15 @@
     },
     {
       "path": "docs/toolingdocs/development/development.md",
-      "sha256": "sha256:63f84e48364132cfc77e03fd6bb353c0ead30d9dd06cf19d059c44b85b0559ac",
-      "size": 1203,
+      "sha256": "sha256:1b45aa596ea8cf6a92bbb05a2bb29171f7255df19adeacb0024568f2eabea5cf",
+      "size": 1206,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/development/refactor-inventory.md",
-      "sha256": "sha256:f16c3495f82d99649b0404c168c317f53297d7ce758937ede416cbc4c99900e0",
-      "size": 14640,
+      "sha256": "sha256:872f1751f446c09758a9d2a8b4878e513b98a30591981293a3ebe7a1fe7681c6",
+      "size": 14737,
       "kind": "file",
       "executable": false
     },
@@ -137,8 +137,8 @@
     },
     {
       "path": "docs/toolingdocs/guides/folder-replacement.md",
-      "sha256": "sha256:9db0988dbc83c97a86a3464d00f14e8fc5b4d27e3665bc0829df9eb7cd978aaf",
-      "size": 5303,
+      "sha256": "sha256:e8c62a53f9558b4490a86c1be1985871ff564b870e0d877fafa7200cce71576b",
+      "size": 5318,
       "kind": "file",
       "executable": false
     },
@@ -1676,5 +1676,5 @@
       "executable": false
     }
   ],
-  "digest": "sha256:6bd0f398d058633c1cd62367e3109964c6961be60e9c8686ccc542df23f634ea"
+  "digest": "sha256:b818817d30d9df17d43f98d1f6d078e570d56ff07708724f0571471658398b49"
 }

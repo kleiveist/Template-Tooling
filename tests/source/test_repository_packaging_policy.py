@@ -74,3 +74,41 @@ def test_only_checked_in_rust_analyzer_wasm_is_not_gitignored(
     artifact_result = _git_check_ignore(isolated_root, ARTIFACT)
     assert artifact_result.returncode == 1, artifact_result.stderr
     assert not artifact_result.stderr
+
+
+def test_repository_has_no_hosted_github_actions_workflows() -> None:
+    workflow_root = REPOSITORY_ROOT / ".github" / "workflows"
+    workflows = (
+        sorted(
+            path.relative_to(REPOSITORY_ROOT).as_posix()
+            for pattern in ("*.yml", "*.yaml")
+            for path in workflow_root.glob(pattern)
+        )
+        if workflow_root.is_dir()
+        else []
+    )
+
+    assert workflows == []
+
+
+def test_repository_only_tests_stay_outside_portable_tools_tests() -> None:
+    portable_root = REPOSITORY_ROOT / "tools" / "tests"
+    portable_sources = tuple(portable_root.rglob("*.py"))
+    marker_references = [
+        path.relative_to(REPOSITORY_ROOT).as_posix()
+        for path in portable_sources
+        if ".template-tooling-source" in path.read_text(encoding="utf-8")
+    ]
+
+    assert marker_references == ["tools/tests/integration/test_export.py"]
+    assert "skipif" not in (REPOSITORY_ROOT / marker_references[0]).read_text(
+        encoding="utf-8"
+    )
+    assert not (portable_root / "quality" / "test_typescript_ast.py").exists()
+    assert (
+        REPOSITORY_ROOT / "tests" / "source" / "test_historical_tooling_migration.py"
+    ).is_file()
+    assert (REPOSITORY_ROOT / "tests" / "source" / "test_typescript_ast.py").is_file()
+    assert (
+        REPOSITORY_ROOT / "tests" / "source" / "test_repository_documentation.py"
+    ).is_file()

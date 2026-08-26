@@ -11,7 +11,7 @@ item needs reproducible evidence from the exact candidate revision.
 
 | Area | Pass condition |
 | --- | --- |
-| Payload scope | The candidate contains only the intended `tools/` and `docs/toolingdocs/` content. The repository root README, source marker, CI, handoff files, local state, dependency environments, caches, reports, and builds are excluded. |
+| Payload scope | The candidate contains only the intended `tools/` and `docs/toolingdocs/` content. The repository root README, source marker, hosted workflows, handoff files, local state, dependency environments, caches, reports, and builds are excluded. |
 | Runtime closure | `tools/` contains every packaged profile, configuration resource, runtime module, fixed adapter capability, and verified runtime asset required by a copied execution; it does not depend on the source checkout. |
 | Legacy isolation | Runtime code contains no old Template-Projekte repository identity/URL, external template Git source, full-product baseline, adoption/scaffold reconstruction, `tools/template_lifecycle/`, or `.template/` state model. |
 | Payload consistency | The reviewed manifest covers the complete portable file set and every copied file matches it. Documentation calls this self-consistency, not publisher authentication. |
@@ -27,7 +27,7 @@ item needs reproducible evidence from the exact candidate revision.
 | Historical upgrade | The pinned real `0.1.0`, `0.2.0`, and `0.3.0` payloads each upgrade through their direct registered reconciliation to `0.4.0`; tampering is rejected; config/state migrate; current payload and product hashes remain unchanged. |
 | Deterministic export | `tooling export` creates only `tools/` and `docs/toolingdocs/`, refuses an existing destination, rejects unsafe source objects, normalizes metadata and produces the same manifest and bytes from the same source. |
 | Test separation | Repository-only tests live under `tests/source/`; the exported `tools/tests/` tree contains portable runtime and acceptance tests without source-marker skips. |
-| Continuous integration | Linux CI exports and exercises an independent customer workflow plus migration and reproducible bilingual PDFs; Windows CI runs the portable suite and validates an exported CLI. Both use an external tooling environment and leave the checkout clean. |
+| Local acceptance | The source checkout can run the copy matrix, folder replacement, historical migration, deterministic export, and independent customer smoke explicitly with an external tooling environment. No hosted push or pull-request workflow is required. |
 | Documentation | All portable pages use relative links and the exact generated index/backlink markers; `python tools/control.py docs check` passes; command examples match the parser. |
 | Case study | New German and English portable-tooling sources and diagrams build reproducibly; no inherited PDF, renamed legacy chapter, old architecture claim, or generated LaTeX artifact is stored as source. |
 | Repository quality | Focused tests, the complete `tools/tests` suite, static CLI/documentation contracts, `git diff --check`, and the portable-artifact scan pass on the candidate. |

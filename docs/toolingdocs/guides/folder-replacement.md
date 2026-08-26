@@ -49,8 +49,8 @@ Preserve these target-owned paths:
 - all application, configuration, data, and unknown files outside `tools/` and the resolved
   target tooling-documentation directory
 
-The repository-only root `README.md`, workflow handoff files, `.github/`, and `.dist/` are not
-part of this copy operation.
+The repository-only root `README.md`, workflow handoff files, other repository metadata, and
+`.dist/` are not part of this copy operation.
 
 ## 3. Inspect migration compatibility
 

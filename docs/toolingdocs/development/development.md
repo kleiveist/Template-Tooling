@@ -21,5 +21,5 @@ test, build, migration, or export path. The [refactor inventory](refactor-invent
 the Phase 1 classification and is historical design evidence, not a current permission to own
 product files.
 
-The root `README.md`, source-only CI, and repository handoff documents are repository assets.
+The root `README.md`, source-only tests, and repository handoff documents are repository assets.
 Only `tools/` and `docs/toolingdocs/` may become portable payload content.

@@ -94,7 +94,7 @@ def _copy_historical_release(
         env=environment,
     )
     assert resolved.returncode == 0, (
-        "the complete source history is required (CI must use fetch-depth: 0)\n"
+        "the local source checkout must contain the complete Git history\n"
         f"stderr:\n{resolved.stderr}"
     )
     assert tuple(resolved.stdout.splitlines()) == expected_objects

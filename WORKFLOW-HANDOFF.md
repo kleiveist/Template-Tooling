@@ -2,11 +2,12 @@
 
 - Stand: 26. August 2026
 - Branch: `refactor/portable-tooling`
-- Implementierungsstand: `4d86b99`
-  (`📦 Add deterministic portable export and CI`)
+- Letzter gepushter Stand vor dieser Vereinfachung: `97392e1`
+  (`📝 Complete portable tooling workflow handoff`)
+- Aktueller Abschluss: schlanke lokale Copy-Paste-Abnahme ohne Hosted Checks (dieser Commit)
 - Tooling-Version: `0.4.0`
 - Portables Payload-Manifest:
-  `sha256:6bd0f398d058633c1cd62367e3109964c6961be60e9c8686ccc542df23f634ea`
+  `sha256:b818817d30d9df17d43f98d1f6d078e570d56ff07708724f0571471658398b49`
 - Ausgangspunkt: `main` bei `9fefcdd`
 
 ## Kurzfassung
@@ -28,12 +29,13 @@ Der Abschlussstand umfasst insbesondere:
 - vollständig neue portable Dokumentation sowie deutsche und englische Fallstudienquellen;
 - deterministischen, fail-closed Export mit selbstvalidierendem Payload-Manifest;
 - physische Trennung portabler Kundentests von Source-Repository-Tests;
-- reale Linux- und Windows-CI für Export, Kopie, Migration, Wiederholung und Fallstudienbuild.
+- explizite lokale Abnahme für Export, Kopie, Migration, Wiederholung und Kundensmoke;
+- keine GitHub-Actions-Workflows, Push-Checks oder Pull-Request-Checks.
 
 Innerhalb des beschriebenen Entwicklungsworkflows ist keine Implementierungsphase mehr offen.
-Offen sind nur noch externe Betriebsaktionen: den lokalen Branch ausdrücklich zu pushen, die
-dadurch gestartete gehostete CI zu beobachten und gegebenenfalls einen signierten Releasekanal
-außerhalb des Payload-Manifests bereitzustellen.
+Offen sind nur noch externe Betriebsaktionen: den bereits bestehenden Pull Request #6 in GitHub zu
+schließen, den neuen Abschlusscommit nur bei ausdrücklicher Freigabe zu pushen und gegebenenfalls
+einen signierten Releasekanal außerhalb des Payload-Manifests bereitzustellen.
 
 ## Phasen- und Commitübersicht
 
@@ -47,9 +49,15 @@ außerhalb des Payload-Manifests bereitzustellen.
 | 6 – Acceptance-Härtung | `30b318c` | Unabhängige Copy-Matrix, Austauschbarkeit und Fail-Closed-Prüfungen aufgebaut. |
 | 6 – Funktionsabschluss | `74400bb` | Reale profilgesteuerte Aktionen, Prozessgrenzen, Managed-Payload-Schutz und produktive Migration ergänzt. |
 | 7 – Dokumentation | `ee4d4fe` | Root-README, 30 portable Seiten und vollständig neue bilinguale LaTeX-Fallstudie erstellt. |
-| 8 – Export und CI | `4d86b99` | Deterministischen Export, Testsplit, 0.4.0-Migrationen und portable Linux-/Windows-CI abgeschlossen. |
+| 8 – Export und Abnahme | `4d86b99` | Deterministischen Export, Testsplit und 0.4.0-Migrationen abgeschlossen; die damals ergänzte Hosted CI wurde durch die spätere Betreiberentscheidung wieder entfernt. |
+| Übergabe | `97392e1` | Den vollständigen Phasenstand dokumentiert und mit dem Remote synchronisiert. |
+| Betriebsvereinfachung | dieser Commit | Push-/PR-Workflows entfernt und den lokalen Copy-Paste-Nachweis beibehalten. |
 
 Der frühere Übergabecommit `6b48439` ist durch dieses Dokument fachlich ersetzt.
+
+Die Tooling-Version bleibt `0.4.0`: Der Stand ist weiterhin derselbe noch nicht veröffentlichte
+Releasekandidat, und diese Betreiberentscheidung ändert weder Runtime noch Migrationsgraph. Das
+Payload-Manifest wurde trotzdem neu erzeugt, weil portable Dokumentationsdateien geändert wurden.
 
 ## Tatsächlich abgeschlossener Funktionsstand
 
@@ -141,7 +149,7 @@ Das Exportmanifest enthält 239 Nutzdateieinträge. Mit dem Manifest selbst umfa
 Export 240 Dateien. Sein Digest ist:
 
 ```text
-sha256:6bd0f398d058633c1cd62367e3109964c6961be60e9c8686ccc542df23f634ea
+sha256:b818817d30d9df17d43f98d1f6d078e570d56ff07708724f0571471658398b49
 ```
 
 Das Manifest ist eine Selbstkonsistenzprüfung, keine Signatur oder Herausgeberauthentisierung.
@@ -152,31 +160,36 @@ Das Manifest ist eine Selbstkonsistenzprüfung, keine Signatur oder Herausgebera
 - Repository-only-Tests liegen physisch unter `tests/source/` und werden nicht exportiert.
 - Der Source-Marker erscheint unter `tools/tests/` nur als Exporter-Negativfixture, nicht als
   Skipmechanismus für Kundentests.
-- Die frühere Master-Repository-CI-Suite wurde entfernt und durch vier Phase-8-Vertragstests für
-  den realen portablen Workflow ersetzt.
-- Der unabhängige Kundensmoke verwendet ausschließlich exportierte Dateien und führt
+- Die frühere Master-Repository-Suite wurde durch lokale Source-, Export-, Copy- und
+  Migrationsprüfungen für den realen portablen Workflow ersetzt.
+- `tests/source/portable_customer_smoke.py` verwendet ausschließlich exportierte Dateien und führt
   Check → Full-Fix → Check → `test --suite all` → zweiten Full-Fix aus.
 - Vorher/nachher-Hashes belegen, dass Produktdateien unverändert bleiben.
 
-### Continuous Integration
+### Schlanke lokale Abnahme
 
-`.github/workflows/portable-tooling.yml` besitzt zwei nicht publizierende Jobs:
+Das Repository enthält bewusst keine GitHub-Actions-Workflowdatei unter
+`.github/workflows/`. Damit startet ein Push oder Pull Request aus diesem Projekt heraus keine
+portablen Linux-/Windows-Checks mehr. Die Qualitätsbelege werden bei Bedarf explizit lokal
+ausgeführt:
 
-- Linux auf `ubuntu-24.04` mit vollständiger Git-Historie, Source-Tests, echter Historienmigration,
-  Copy-Matrix, Austauschtest, Export, unabhängigem Kundensmoke und zweimaligem Build beider
-  Fallstudien-PDFs mit Bytevergleich;
-- Windows auf `windows-2025` mit portabler Suite, Export, exportierter CLI, Dokumentationscheck
-  sowie exportierten Core-/Integrationstests.
+- die Copy-Matrix prüft alle Profile und erhält kundenbesessene Dateien;
+- der Austauschtest ersetzt `tools/` und `docs/toolingdocs/` wie im echten Einsatz;
+- die Historientests migrieren die gepinnten Versionen `0.1.0`, `0.2.0` und `0.3.0`;
+- Exporttests und Kundensmoke prüfen die unabhängige kopierte Installation;
+- der Dokumentationscheck prüft die 30 portablen Seiten.
 
-Beide Jobs installieren die Tooling-Umgebung außerhalb von `tools/`, stellen deren Executables
-über `GITHUB_PATH` bereit, verhindern Bytecode/User-Site-Einflüsse und verlangen am Ende einen
-sauberen Checkout. Die verwendeten Actions sind auf vollständige Commit-SHAs gepinnt:
+Der read-only Befehl `integrate --check` bleibt absichtlich erhalten: Er ist keine
+Pull-Request-Anforderung, sondern zeigt im bestehenden Zielprojekt vor jeder Änderung Konflikte
+und geplante Operationen an. Auch der portable `ci`-Adapter, Fixtures zum Erhalt fremder
+Kundenworkflows und der separate Release-Publisher bleiben bestehen; keiner davon startet einen
+Hosted Check dieses Repositories.
 
-- `actions/checkout` `v6.0.2` → `de0fac2e4500dabe0009e67214ff5f5447ce83dd`;
-- `actions/setup-python` `v6.3.0` → `ece7cb06caefa5fff74198d8649806c4678c61a1`.
-
-Der Workflow besitzt nur `contents: read`, enthält keine Secrets, keinen Deploy- oder
-Publish-Schritt und überschreibt keine bestehenden Exporte.
+Ein read-only Abruf der öffentlichen GitHub-Metadaten am 26. August 2026 meldete für `main` und
+`refactor/portable-tooling` jeweils `protected: false`, Status-Check-Enforcement `off` und
+keine Repository-Rulesets. Es gibt damit aktuell kein separates serverseitiges Required-Check-Gate.
+Die bereits gelaufenen roten Jobs bleiben lediglich historische Einträge; nach dem Push dieses
+Commits existiert keine Workflowdatei mehr, die neue Läufe startet.
 
 ## Prüfbelege des Abschlussstands
 
@@ -185,34 +198,28 @@ Alle Python-Aufrufe verwendeten die externe Umgebung
 
 ```text
 Vollständige Repository-/Payload-Suite mit Nested-Schutz
-=> 1075 passed, 90 skipped in 62.98s
+=> 1073 passed, 90 skipped in 81.98s
 
-Unabhängige Copy-Matrix plus Tooling-Austausch, ohne Nested-Schutz
-=> 12 passed in 405.52s
+Unabhängige Copy-Matrix, Tooling-Austausch und echte historische Migrationen
+=> 15 passed in 462.81s (10 Copy-Matrix, 2 Austausch, 3 Migration)
 
-Echte historische Payloads 0.1.0, 0.2.0 und 0.3.0 → 0.4.0
-=> 3 passed in 30.49s
-
-Betroffene Migrations-, Workflow-, Doku- und CI-Suite
-=> 35 passed in 10.36s
-
-Fokussierte Export-, Manifest-, Migration- und CI-Vertragssuite
-=> 96 passed in 3.23s
+Manifest- und Exporttests
+=> 39 passed in 0.62s
 
 Dokumentationsnavigation
 => 30 Seiten konsistent
 
-CI-Vertrag nach finaler GITHUB_PATH-Härtung
-=> 4 passed
+Zwei reale Exporte
+=> jeweils 240 Dateien; Manifest, Payload und Verzeichnisinhalt bytegleich
 
-Ruff für alle geänderten/neuen Python-Dateien
-=> All checks passed; 24 files already formatted
+Unabhängiger lokaler Kundensmoke
+=> portable customer smoke passed
 
-GitHub-Workflow-Syntax
-=> actionlint 1.7.12 sauber
+Ruff für die geänderten Python-Dateien
+=> Check und Formatprüfung bestanden
 
-Staged-Diff, JSON/TOML, Artefakt- und Legacy-Scan
-=> sauber
+Payload-Manifest
+=> 239 Nutzdateien; sha256:b818817d…8398b49
 ```
 
 Die 90 Skips der vollständigen lokalen Suite sind begründet:
@@ -223,21 +230,16 @@ Die 90 Skips der vollständigen lokalen Suite sind begründet:
 - zwei Prozessprüfungen sind Windows-spezifisch;
 - optionale Source-Baselines beziehungsweise ESLint-/TypeScript-Integrationsvoraussetzungen sind
   in diesem abgeleiteten Repositoryprofil nicht vorhanden;
-- der echte Ruff-PATH-Test wurde separat bestanden und die CI-PATH-Auflösung anschließend
-  explizit gehärtet;
 - lokal ist `pdflatex` nicht installiert, daher wurde genau der reale PDF-Kompilationstest
-  übersprungen. Die gehostete Linux-CI installiert `texlive-latex-base` und baut/vergleicht beide
-  Fassungen reproduzierbar.
+  übersprungen. Dieser Plattformbeleg ist kein Pflichtteil des schlanken Copy-Paste-Ablaufs.
 
 Zwei reale Exporte aus demselben Source-Stand waren in Dateien, Modi und Zeitstempeln identisch.
-Ein Export bestand anschließend den vollständigen unabhängigen Kundensmoke. Zusätzlich wurde der
-exakte Commit `4d86b99` in einem frischen detached Worktree geprüft:
+Ein Export bestand anschließend den vollständigen unabhängigen Kundensmoke:
 
 ```text
-Export: 240 Dateien, Digest sha256:6bd0…634ea
-Kundensmoke: passed
+Export: 240 Dateien, Digest sha256:b818817d…8398b49
+Kundensmoke: portable customer smoke passed
 Dokumentation: 30 Seiten konsistent
-git status des frischen Worktrees: clean
 ```
 
 ## Definition of Done
@@ -259,36 +261,30 @@ git status des frischen Worktrees: clean
 - [x] Root-README und Übergabe sind vom Export ausgeschlossen.
 - [x] Export ist deterministisch, selbstvalidierend und fail-closed.
 - [x] Source-only-Tests sind physisch vom Kundenpayload getrennt.
-- [x] Linux- und Windows-CI bilden den realen Kopier-/Check-/Fix-/Test-/Wiederholungslauf ab.
-- [x] Phase-8-Diff wurde vollständig geprüft und atomar committed.
+- [x] Das Repository definiert keine Hosted Push-/Pull-Request-Checks.
+- [x] Der lokale Kundensmoke bildet den realen
+  Kopier-/Check-/Fix-/Test-/Wiederholungslauf ab.
+- [x] Der Abschlussdiff wurde vollständig lokal geprüft und atomar committed.
 
 ## Noch offen
 
-### 1. Lokalen Branch nur nach ausdrücklicher Freigabe pushen
+### 1. Bestehenden Pull Request #6 in GitHub schließen
 
-Der Remote-Tracking-Stand ist weiterhin `6b48439`. Nach dem Commit dieses Dokuments ist der lokale
-Branch vier Commits voraus:
+Die öffentliche Repositoryansicht zeigt den bereits vorhandenen Pull Request #6 weiterhin als
+offen. Das Löschen der Workflowdatei schließt ihn nicht und entfernt auch keine historischen
+Action-Läufe. Wenn das Repository vollständig ohne Pull-Request-Ablauf betrieben werden soll, ist
+der PR in GitHub zu schließen. Diese externe Kontohandlung wurde nicht automatisch ausgeführt.
 
-```text
-74400bb 🧩 Add profile actions and portable migration safeguards
-ee4d4fe 📚 Document portable tooling and bilingual case study
-4d86b99 📦 Add deterministic portable export and CI
-📝 Complete portable tooling workflow handoff (dieser Commit)
-```
+### 2. Neuen Abschlusscommit nur nach ausdrücklicher Freigabe pushen
 
-Es wurde in diesem Arbeitsgang bewusst nicht gepusht. Der nächste berechtigte Schritt lautet:
+Der Stand `97392e1` war vor dieser Betreiberentscheidung bereits mit
+`origin/refactor/portable-tooling` synchron. Nach diesem lokalen Abschlusscommit ist der Branch
+genau um die Verschlankung voraus. Es wurde bewusst nicht gepusht. Der nächste berechtigte Schritt
+lautet:
 
 ```sh
 git push origin refactor/portable-tooling
 ```
-
-### 2. Gehostete CI nach dem Push beobachten
-
-Der lokale Rechner besitzt weder Windows noch `pdflatex`. Deshalb muss der erste GitHub-Actions-
-Lauf nach dem Push als externe Plattformbestätigung beobachtet werden. Erwartet werden beide
-grünen Jobs und insbesondere der bytegleiche deutsche/englische PDF-Build. Ein externer Fehler ist
-nicht durch Deaktivieren des Gates zu umgehen, sondern in einem neuen atomaren Fixcommit zu
-beheben.
 
 ### 3. Veröffentlichung bleibt eine separate Entscheidung
 
@@ -319,12 +315,20 @@ PYTHONDONTWRITEBYTECODE=1 "$TOOLING_PYTHON" -m pytest -q -p no:cacheprovider \
   tools/tests/acceptance/test_tooling_replacement.py \
   tests/source/test_historical_tooling_migration.py
 
+EXPORT_PARENT=/absolute/path/to/empty-export-parent
+CUSTOMER_ROOT=/absolute/path/to/new-customer-fixture
+PYTHONDONTWRITEBYTECODE=1 "$TOOLING_PYTHON" tools/control.py tooling export \
+  --output "$EXPORT_PARENT"
+PYTHONDONTWRITEBYTECODE=1 "$TOOLING_PYTHON" tests/source/portable_customer_smoke.py \
+  --export-root "$EXPORT_PARENT/Template-Tooling-0.4.0" \
+  --work-root "$CUSTOMER_ROOT"
+
 PYTHONDONTWRITEBYTECODE=1 "$TOOLING_PYTHON" tools/control.py docs check
 ```
 
 Vor einem Release das Manifest nach jeder Änderung innerhalb von `tools/` oder
 `docs/toolingdocs/` als letzten Payload-Schritt neu erzeugen und danach erneut validieren. Eine
-Änderung nur an Root-Dateien, `.github/` oder `tests/source/` gehört nicht zum Payload.
+Änderung nur an Root-Dateien oder `tests/source/` gehört nicht zum Payload.
 
 ## Nicht regressieren
 
@@ -337,5 +341,7 @@ Vor einem Release das Manifest nach jeder Änderung innerhalb von `tools/` oder
 - Persistierten Managed-Tree-Drift niemals still akzeptieren oder neu baselinen.
 - Read-only Befehle dürfen keine Reports, State-, Bytecode- oder Cachedateien erzeugen.
 - Source-only-Tests niemals wieder unter `tools/tests/` verstecken oder nur per Marker skippen.
+- Keine Hosted Push-/Pull-Request-Workflows wieder einführen, solange das Betriebsmodell bewusst
+  lokal und Copy-Paste-orientiert bleibt.
 - Manifest und Payload niemals aus unterschiedlichen Revisionen kombinieren.
 - Bestehende Exportziele niemals automatisch zusammenführen oder ersetzen.

@@ -59,9 +59,9 @@ proves:
   product hashes unchanged;
 - verification passes afterward and the second migration is a byte-stable no-op.
 
-The source checkout must have complete Git history so every pinned historical object can be
-verified (`fetch-depth: 0` in CI). Replacing any old fixture with a newly manufactured “legacy”
-payload would invalidate the purpose of these tests.
+The local source checkout must contain complete Git history so every pinned historical object can
+be verified. Replacing any old fixture with a newly manufactured “legacy” payload would invalidate
+the purpose of these tests.
 
 ## Run the focused acceptance suite
 

@@ -73,10 +73,14 @@ an existing output parent. The command fails closed instead of merging with or r
 existing package and writes only `tools/` plus `docs/toolingdocs/`, including a manifest of the
 exported bytes. Build artifacts under `.dist/` are product outputs, not portable exports.
 
-The source-only tests under `tests/source/`, this README, `.github/`, the source marker and the
-workflow handoff are deliberately absent from the package. The manifest proves internal
+The source-only tests under `tests/source/`, this README, repository metadata, the source marker
+and the workflow handoff are deliberately absent from the package. The manifest proves internal
 self-consistency; obtain the export from a trusted revision because it is not a publisher
 signature.
+
+This repository intentionally defines no GitHub Actions workflow for pushes or pull requests.
+Copy, migration, export, and customer-smoke acceptance are run locally when needed. Existing
+workflows in a customer project remain customer-owned and are not replaced by the tooling.
 
 For repository work, follow the [contribution guide](docs/toolingdocs/development/contribution.md)
 and keep changes small, tested, and ownership-aware.
