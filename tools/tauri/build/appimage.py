@@ -5,19 +5,14 @@ import os
 import re
 import shutil
 import stat
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import tomllib
 
 from tools import logger
 from tools.tauri import common, paths
 from tools.tauri.linux import install as linux_install
-
-DESKTOP_FILE_NAME = f"{paths.APP_SLUG}.desktop"
-STABLE_APPIMAGE_NAME = f"{paths.APP_NAME}.AppImage"
-STABLE_ICON_BASENAME = paths.APP_SLUG
-NAME_PREFERENCE_TOKEN = paths.APP_SLUG
 
 APPIMAGE_PATTERNS = ("*.AppImage", "*.appimage")
 PNG_PATTERNS = ("*.png", "*.PNG")
@@ -30,6 +25,14 @@ class AppImageInstallError(RuntimeError):
     """Raised for expected local AppImage install failures."""
 
 
+def _app_name() -> str:
+    return paths.app_name()
+
+
+def _app_slug() -> str:
+    return paths.app_slug()
+
+
 def main(args: argparse.Namespace) -> int:
     dry_run = bool(getattr(args, "dry_run", False))
     if common.host_os() != "linux" and not dry_run:
@@ -37,7 +40,10 @@ def main(args: argparse.Namespace) -> int:
         return 1
 
     if not dry_run and not common.frontend_dependencies_ready():
-        missing = ", ".join(str(path.relative_to(paths.ROOT)) for path in common.missing_frontend_dependency_paths())
+        missing = ", ".join(
+            str(path.relative_to(paths.ROOT))
+            for path in common.missing_frontend_dependency_paths()
+        )
         logger.fail(
             "Frontend dependencies are incomplete. "
             f"Missing: {missing}. "
@@ -45,19 +51,31 @@ def main(args: argparse.Namespace) -> int:
         )
         return 1
 
-    if not dry_run and not getattr(args, "skip_appimage_preflight", False) and not _appimage_prerequisites_ready():
+    if (
+        not dry_run
+        and not getattr(args, "skip_appimage_preflight", False)
+        and not _appimage_prerequisites_ready()
+    ):
         return 1
     if not dry_run and getattr(args, "skip_appimage_preflight", False):
-        logger.warn("Skipping AppImage prerequisite checks; linuxdeploy may still fail.")
+        logger.warn(
+            "Skipping AppImage prerequisite checks; linuxdeploy may still fail."
+        )
 
     command = common.tauri_cli_command("build", "--bundles", "appimage")
-    common.print_build_plan("linux-appimage", command, dry_run=dry_run, bundles="appimage")
+    common.print_build_plan(
+        "linux-appimage", command, dry_run=dry_run, bundles="appimage"
+    )
     appimage_snapshot = _appimage_snapshot()
-    result = common.run_command(command, cwd=paths.ROOT, dry_run=dry_run, env=appimage_build_env())
+    result = common.run_command(
+        command, cwd=paths.ROOT, dry_run=dry_run, env=appimage_build_env()
+    )
     code = result.returncode
     if code != 0:
         if not is_linuxdeploy_failure(result):
-            common.print_result(result, "Linux AppImage build completed", "Linux AppImage build failed")
+            common.print_result(
+                result, "Linux AppImage build completed", "Linux AppImage build failed"
+            )
             logger.fail(
                 "AppImage fallback skipped: Tauri failed before linuxdeploy. "
                 "Fix the build error above; no AppDir/AppImage fallback was installed."
@@ -71,11 +89,19 @@ def main(args: argparse.Namespace) -> int:
         else:
             fallback_code = package_existing_appdir(dry_run=dry_run)
             if fallback_code != 0:
-                common.print_result(result, "Linux AppImage build completed", "Linux AppImage build failed")
+                common.print_result(
+                    result,
+                    "Linux AppImage build completed",
+                    "Linux AppImage build failed",
+                )
                 return code
-            logger.warn("Tauri linuxdeploy failed, but AppImage was packaged from the generated AppDir.")
+            logger.warn(
+                "Tauri linuxdeploy failed, but AppImage was packaged from the generated AppDir."
+            )
     else:
-        common.print_result(result, "Linux AppImage build completed", "Linux AppImage build failed")
+        common.print_result(
+            result, "Linux AppImage build completed", "Linux AppImage build failed"
+        )
 
     if dry_run:
         _print_install_plan()
@@ -100,7 +126,9 @@ def is_linuxdeploy_failure(result: common.CommandResult) -> bool:
         r"beforebuildcommand\s+`[^`]+`\s+failed(?:\s+with\s+exit\s+code\s+\d+)?",
         output,
     )
-    frontend_build_failed = "npm run build` failed" in output or "npm run build failed" in output
+    frontend_build_failed = (
+        "npm run build` failed" in output or "npm run build failed" in output
+    )
     typescript_failed = "error ts" in output
     if before_build_failed or frontend_build_failed or typescript_failed:
         return False
@@ -138,7 +166,11 @@ def package_existing_appdir(*, dry_run: bool = False) -> int:
         cwd=_appimage_dir(),
         env=appimage_build_env(),
     )
-    code = common.print_result(result, "Fallback AppImage packaging completed", "Fallback AppImage packaging failed")
+    code = common.print_result(
+        result,
+        "Fallback AppImage packaging completed",
+        "Fallback AppImage packaging failed",
+    )
     if code != 0:
         return code
 
@@ -177,7 +209,8 @@ def _fresh_appimage_from_snapshot(snapshot: dict[Path, tuple[int, int]]) -> Path
     if not changed:
         return None
 
-    preferred = [path for path in changed if NAME_PREFERENCE_TOKEN in _normalize_name(path.name)]
+    preference = _normalize_name(_app_slug())
+    preferred = [path for path in changed if preference in _normalize_name(path.name)]
     pool = preferred if preferred else changed
     return max(pool, key=lambda path: (path.stat().st_mtime_ns, path.name.lower()))
 
@@ -235,7 +268,9 @@ def _command_available(binary: str) -> bool:
         return True
     if _host_file_exists(f"usr/bin/{binary}"):
         return True
-    ok, output = common.command_output(["flatpak-spawn", "--host", "sh", "-lc", f"command -v {binary}"])
+    ok, output = common.command_output(
+        ["flatpak-spawn", "--host", "sh", "-lc", f"command -v {binary}"]
+    )
     return ok and bool(output.strip())
 
 
@@ -277,18 +312,22 @@ def install_latest(*, dry_run: bool = False) -> int:
             return 0
 
         if not appimage_dir.is_dir():
-            raise AppImageInstallError(f"AppImage build folder does not exist: {appimage_dir}")
+            raise AppImageInstallError(
+                f"AppImage build folder does not exist: {appimage_dir}"
+            )
         if not icon_dir.is_dir():
             raise AppImageInstallError(f"Icon folder does not exist: {icon_dir}")
         if not _collect_files(appimage_dir, APPIMAGE_PATTERNS) and _appdir().is_dir():
-            logger.warn("No final AppImage found; packaging the existing AppDir before install.")
+            logger.warn(
+                "No final AppImage found; packaging the existing AppDir before install."
+            )
             code = package_existing_appdir(dry_run=dry_run)
             if code != 0:
                 return code
 
         source_appimage = _select_appimage(appimage_dir)
         source_icon = _select_icon(icon_dir)
-        target_icon = _target_icon_dir() / f"{STABLE_ICON_BASENAME}{source_icon.suffix.lower()}"
+        target_icon = _target_icon_dir() / f"{_app_slug()}{source_icon.suffix.lower()}"
 
         logger.info(f"🧩 Selected AppImage: {source_appimage.name}")
         logger.info(f"🎨 Selected icon: {source_icon.name}")
@@ -309,7 +348,7 @@ def install_latest(*, dry_run: bool = False) -> int:
             dry_run=dry_run,
         )
 
-        logger.ok(f"{paths.APP_NAME} AppImage installed locally")
+        logger.ok(f"{_app_name()} AppImage installed locally")
         logger.info(f"🧩 Installed AppImage: {_target_appimage_path()}")
         logger.info(f"🎨 Installed icon: {target_icon}")
         logger.info(f"🧾 Desktop entry: {_target_desktop_path()}")
@@ -324,9 +363,13 @@ def install_latest(*, dry_run: bool = False) -> int:
 
 def _print_install_plan() -> None:
     logger.info("🧩 AppImage install plan:")
-    logger.info(f"▶️ copy newest AppImage from {_appimage_dir()} to {_target_appimage_path()}")
+    logger.info(
+        f"▶️ copy newest AppImage from {_appimage_dir()} to {_target_appimage_path()}"
+    )
     logger.info(f"▶️ chmod +x {_target_appimage_path()}")
-    logger.info(f"▶️ copy best icon from {paths.TAURI_DIR / 'icons'} to {_target_icon_dir()}")
+    logger.info(
+        f"▶️ copy best icon from {paths.TAURI_DIR / 'icons'} to {_target_icon_dir()}"
+    )
     logger.info(f"▶️ write desktop entry {_target_desktop_path()}")
 
 
@@ -335,7 +378,7 @@ def _appimage_dir() -> Path:
 
 
 def _appdir() -> Path:
-    return _appimage_dir() / f"{paths.APP_NAME}.AppDir"
+    return _appimage_dir() / f"{_app_name()}.AppDir"
 
 
 def _appimage_plugin() -> Path:
@@ -349,7 +392,9 @@ def _repair_appdir_icon(appdir: Path) -> None:
 
     icon_name = _desktop_icon_name(desktop_file)
     if not icon_name:
-        raise AppImageInstallError(f"No Icon entry found in desktop file: {desktop_file}")
+        raise AppImageInstallError(
+            f"No Icon entry found in desktop file: {desktop_file}"
+        )
 
     for extension in ICON_EXTENSIONS:
         expected = appdir / f"{icon_name}{extension}"
@@ -377,8 +422,10 @@ def _desktop_icon_name(desktop_file: Path) -> str | None:
 
 
 def _find_appdir_icon_source(appdir: Path) -> Path | None:
-    preferred_names = [f"{paths.APP_NAME}.png", "icon.png", "128x128.png"]
-    by_lower_name = {path.name.lower(): path for path in _collect_files(appdir, PNG_PATTERNS)}
+    preferred_names = [f"{_app_name()}.png", "icon.png", "128x128.png"]
+    by_lower_name = {
+        path.name.lower(): path for path in _collect_files(appdir, PNG_PATTERNS)
+    }
     for name in preferred_names:
         candidate = by_lower_name.get(name.lower())
         if candidate:
@@ -386,7 +433,10 @@ def _find_appdir_icon_source(appdir: Path) -> Path | None:
 
     candidates = _collect_files(appdir, PNG_PATTERNS)
     if candidates:
-        return sorted(candidates, key=lambda path: (_extract_size_hint(path), path.name.lower()), reverse=True)[0]
+        return max(
+            candidates,
+            key=lambda path: (_extract_size_hint(path), path.name.lower()),
+        )
     return None
 
 
@@ -407,7 +457,7 @@ def _normalize_fallback_appimage_name() -> None:
 
 def _expected_appimage_name() -> str:
     version = _tauri_version()
-    return f"{paths.APP_NAME}_{version}_amd64.AppImage"
+    return f"{_app_name()}_{version}_amd64.AppImage"
 
 
 def _tauri_version() -> str:
@@ -427,7 +477,9 @@ def _tauri_version() -> str:
             continue
         if version:
             return version
-    raise AppImageInstallError("Could not determine the AppImage version from Cargo.toml or VERSION")
+    raise AppImageInstallError(
+        "Could not determine the AppImage version from Cargo.toml or VERSION"
+    )
 
 
 def _data_home() -> Path:
@@ -439,11 +491,11 @@ def _home() -> Path:
 
 
 def _target_appimage_path() -> Path:
-    return _home() / "Applications" / STABLE_APPIMAGE_NAME
+    return _home() / "Applications" / f"{_app_name()}.AppImage"
 
 
 def _target_desktop_path() -> Path:
-    return _data_home() / "applications" / DESKTOP_FILE_NAME
+    return _data_home() / "applications" / f"{_app_slug()}.desktop"
 
 
 def _target_icon_dir() -> Path:
@@ -469,13 +521,18 @@ def _collect_files(directory: Path, patterns: Iterable[str]) -> list[Path]:
 def _select_appimage(appimage_dir: Path) -> Path:
     candidates = _collect_files(appimage_dir, APPIMAGE_PATTERNS)
     if not candidates:
-        raise AppImageInstallError(f"No AppImage found in build directory: {appimage_dir}")
+        raise AppImageInstallError(
+            f"No AppImage found in build directory: {appimage_dir}"
+        )
 
-    preferred = [path for path in candidates if NAME_PREFERENCE_TOKEN in _normalize_name(path.name)]
+    preference = _normalize_name(_app_slug())
+    preferred = [
+        path for path in candidates if preference in _normalize_name(path.name)
+    ]
     pool = preferred if preferred else candidates
     if len(candidates) > 1:
         detail = (
-            f"preferred {paths.APP_NAME} candidates: {len(preferred)}"
+            f"preferred {_app_name()} candidates: {len(preferred)}"
             if preferred
             else "using newest by modification time"
         )
@@ -497,16 +554,21 @@ def _select_icon(icon_dir: Path) -> Path:
             candidate = by_name.get(name)
             if candidate:
                 return candidate
-        return sorted(
+        return max(
             png_files,
-            key=lambda path: (_extract_size_hint(path), path.stat().st_mtime_ns, path.name.lower()),
-            reverse=True,
-        )[0]
+            key=lambda path: (
+                _extract_size_hint(path),
+                path.stat().st_mtime_ns,
+                path.name.lower(),
+            ),
+        )
 
     svg_files = _collect_files(icon_dir, SVG_PATTERNS)
     if svg_files:
-        preferred = next((path for path in svg_files if path.name.lower() == "icon.svg"), None)
-        return preferred or sorted(svg_files, key=lambda path: path.name.lower())[0]
+        preferred = next(
+            (path for path in svg_files if path.name.lower() == "icon.svg"), None
+        )
+        return preferred or min(svg_files, key=lambda path: path.name.lower())
 
     raise AppImageInstallError(f"Icon missing: no PNG or SVG files found in {icon_dir}")
 
@@ -543,7 +605,7 @@ def _set_executable(path: Path, *, dry_run: bool) -> None:
 
 def _cleanup_stale_icons(keep_path: Path, *, dry_run: bool) -> None:
     for extension in ICON_EXTENSIONS:
-        candidate = _target_icon_dir() / f"{STABLE_ICON_BASENAME}{extension}"
+        candidate = _target_icon_dir() / f"{_app_slug()}{extension}"
         if candidate == keep_path or not candidate.exists():
             continue
         logger.info(f"▶️ remove stale icon {candidate}")
@@ -555,8 +617,8 @@ def _desktop_file_content(appimage_path: Path, icon_path: Path) -> str:
     lines = [
         "[Desktop Entry]",
         "Type=Application",
-        f"Name={paths.APP_NAME}",
-        f"Comment={paths.APP_NAME} desktop app",
+        f"Name={_app_name()}",
+        f"Comment={_app_name()} desktop app",
         f"Exec={appimage_path}",
         f"TryExec={appimage_path}",
         f"Icon={icon_path}",

@@ -29,9 +29,15 @@ def main(args: argparse.Namespace) -> int:
             return code
 
     command = _build_command(host, runner=runner)
-    common.print_build_plan("windows-portable", command, dry_run=dry_run, bundles="disabled")
+    common.print_build_plan(
+        "windows-portable", command, dry_run=dry_run, bundles="disabled"
+    )
     result = common.run_command(command, cwd=paths.ROOT, dry_run=dry_run, env=build_env)
-    code = common.print_result(result, "Windows portable Tauri build completed", "Windows portable Tauri build failed")
+    code = common.print_result(
+        result,
+        "Windows portable Tauri build completed",
+        "Windows portable Tauri build failed",
+    )
     if code != 0:
         return code
     code = _zip_portable_binary(dry_run=dry_run)
@@ -50,13 +56,19 @@ def _ensure_cargo_xwin(*, dry_run: bool) -> tuple[int, str, dict[str, str]]:
         code = _ensure_windows_resource_compiler(env, dry_run=dry_run)
         return code, cargo_xwin, env
 
-    cargo = shutil.which("cargo", path=env.get("PATH")) or ("cargo" if dry_run else None)
+    cargo = shutil.which("cargo", path=env.get("PATH")) or (
+        "cargo" if dry_run else None
+    )
     if cargo is None:
-        logger.fail("cargo not found. Action: install Rust before building Windows portable on Linux.")
+        logger.fail(
+            "cargo not found. Action: install Rust before building Windows portable on Linux."
+        )
         return 1, "cargo-xwin", env
 
     logger.info("cargo-xwin not found; installing it for the Windows portable build.")
-    result = common.run_command([cargo, "install", "cargo-xwin"], dry_run=dry_run, env=env)
+    result = common.run_command(
+        [cargo, "install", "cargo-xwin"], dry_run=dry_run, env=env
+    )
     code = common.print_result(result, "cargo-xwin ready", "cargo-xwin install failed")
     if code != 0:
         return code, "cargo-xwin", env
@@ -67,7 +79,9 @@ def _ensure_cargo_xwin(*, dry_run: bool) -> tuple[int, str, dict[str, str]]:
 
     cargo_xwin = _find_cargo_xwin(env)
     if cargo_xwin is None:
-        logger.fail(f"cargo-xwin install completed, but cargo-xwin was not found at {_cargo_xwin_path()}.")
+        logger.fail(
+            f"cargo-xwin install completed, but cargo-xwin was not found at {_cargo_xwin_path()}."
+        )
         return 1, "cargo-xwin", env
     code = _ensure_windows_resource_compiler(env, dry_run=dry_run)
     return code, cargo_xwin, env
@@ -83,7 +97,9 @@ def _ensure_windows_resource_compiler(env: dict[str, str], *, dry_run: bool) -> 
         logger.ok("llvm-rc found")
         return 0
 
-    rustup = shutil.which("rustup", path=env.get("PATH")) or ("rustup" if dry_run else None)
+    rustup = shutil.which("rustup", path=env.get("PATH")) or (
+        "rustup" if dry_run else None
+    )
     if rustup is None:
         logger.fail(
             "llvm-rc not found. Action: install the Rust llvm-tools-preview component "
@@ -91,9 +107,15 @@ def _ensure_windows_resource_compiler(env: dict[str, str], *, dry_run: bool) -> 
         )
         return 1
 
-    logger.info("llvm-rc not found; installing Rust llvm-tools-preview for Windows resource compilation.")
-    result = common.run_command([rustup, "component", "add", "llvm-tools-preview"], dry_run=dry_run, env=env)
-    code = common.print_result(result, "llvm-tools-preview ready", "llvm-tools-preview install failed")
+    logger.info(
+        "llvm-rc not found; installing Rust llvm-tools-preview for Windows resource compilation."
+    )
+    result = common.run_command(
+        [rustup, "component", "add", "llvm-tools-preview"], dry_run=dry_run, env=env
+    )
+    code = common.print_result(
+        result, "llvm-tools-preview ready", "llvm-tools-preview install failed"
+    )
     if code != 0 or dry_run:
         return code
 
@@ -108,7 +130,11 @@ def _ensure_windows_resource_compiler(env: dict[str, str], *, dry_run: bool) -> 
 
 
 def _configured_resource_compiler(env: dict[str, str]) -> str | None:
-    for name in (f"RC_{WINDOWS_TARGET}", f"RC_{WINDOWS_TARGET.replace('-', '_')}", "RC"):
+    for name in (
+        f"RC_{WINDOWS_TARGET}",
+        f"RC_{WINDOWS_TARGET.replace('-', '_')}",
+        "RC",
+    ):
         if env.get(name):
             return name
     return None
@@ -124,7 +150,13 @@ def _prepend_rust_llvm_tools_dir(env: dict[str, str]) -> None:
     if rustc is None:
         return
     try:
-        completed = subprocess.run([rustc, "--print", "sysroot"], capture_output=True, text=True, check=False, env=env)
+        completed = subprocess.run(
+            [rustc, "--print", "sysroot"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
     except OSError:
         return
     if completed.returncode != 0:
@@ -182,7 +214,7 @@ def _build_command(host: str, *, runner: str | None = None) -> list[str]:
 
 def _zip_portable_binary(*, dry_run: bool) -> int:
     release_dir = paths.TAURI_DIR / "target" / WINDOWS_TARGET / "release"
-    zip_path = paths.DIST_DIR / f"{paths.APP_NAME}-windows-portable.zip"
+    zip_path = paths.DIST_DIR / f"{paths.app_name()}-windows-portable.zip"
 
     if dry_run:
         logger.info(f"DRY-RUN create portable ZIP {zip_path}")
@@ -212,7 +244,9 @@ def _zip_portable_binary(*, dry_run: bool) -> int:
 def _ensure_portable_output_path(zip_path: Path) -> bool:
     try:
         zip_path.parent.mkdir(parents=True, exist_ok=True)
-        _ensure_user_permissions(zip_path.parent, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+        _ensure_user_permissions(
+            zip_path.parent, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
+        )
         if zip_path.exists():
             _ensure_user_permissions(zip_path, stat.S_IRUSR | stat.S_IWUSR)
     except OSError as exc:
@@ -233,9 +267,11 @@ def _ensure_user_permissions(path: Path, permission_bits: int) -> None:
 
 def _portable_exe_candidates(release_dir: Path) -> list[Path]:
     candidates: list[Path] = []
-    for candidate in sorted(path for path in release_dir.glob("*.exe") if path.is_file()):
+    for candidate in sorted(
+        path for path in release_dir.glob("*.exe") if path.is_file()
+    ):
         name = candidate.name.lower()
-        if name.endswith("-setup.exe") or name.endswith("setup.exe"):
+        if name.endswith(("-setup.exe", "setup.exe")):
             continue
         if "uninstall" in name:
             continue

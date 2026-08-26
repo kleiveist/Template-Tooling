@@ -1,8 +1,12 @@
-"""Project profile loading, validation, and scaffolding helpers."""
+"""Portable project-profile loading, validation, and runtime helpers."""
 
-from tools.profiles.generator import GenerationError, ScaffoldPlan, build_scaffold_plan, scaffold_project
 from tools.profiles.loader import load_active_profile, load_catalog, resolve_profile
-from tools.profiles.model import FeatureDefinition, ProfileCatalog, ProfileDefinition, ProjectProfile
+from tools.profiles.model import (
+    FeatureDefinition,
+    ProfileCatalog,
+    ProfileDefinition,
+    ProjectProfile,
+)
 from tools.profiles.runtime import active_profile, feature_enabled
 from tools.profiles.validator import (
     CatalogValidationError,
@@ -15,20 +19,16 @@ from tools.profiles.validator import (
 __all__ = [
     "CatalogValidationError",
     "FeatureDefinition",
-    "GenerationError",
     "ProfileCatalog",
     "ProfileDefinition",
     "ProfileError",
     "ProfileLookupError",
     "ProjectProfile",
-    "ScaffoldPlan",
     "active_profile",
-    "build_scaffold_plan",
     "feature_enabled",
     "load_active_profile",
     "load_catalog",
-    "resolve_profile",
     "resolve_optional_features",
-    "scaffold_project",
+    "resolve_profile",
     "validate_catalog",
 ]

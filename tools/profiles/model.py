@@ -8,7 +8,7 @@ class FeatureDefinition:
     id: str
     name: str
     description: str
-    paths: tuple[str, ...]
+    adapter: str
     requires: tuple[str, ...] = ()
     optional: bool = False
     selectable: bool = False
@@ -27,7 +27,7 @@ class ProfileDefinition:
 @dataclass(frozen=True, slots=True)
 class ProfileCatalog:
     schema_version: int
-    core_paths: tuple[str, ...]
+    core_adapters: tuple[str, ...]
     features: dict[str, FeatureDefinition]
     profiles: dict[str, ProfileDefinition]
 

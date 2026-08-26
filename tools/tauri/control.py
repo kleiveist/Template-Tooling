@@ -69,6 +69,7 @@ Use '<command> --help' before an unfamiliar or destructive operation.
     _configure_install_parser(tauri_subparsers)
     _configure_install_appimage_parser(tauri_subparsers)
     _configure_run_parser(tauri_subparsers)
+    _configure_stop_parser(tauri_subparsers)
     _configure_build_command_parser(tauri_subparsers)
     _configure_test_parser(tauri_subparsers)
     _configure_copy_parser(tauri_subparsers)
@@ -147,6 +148,19 @@ def _configure_run_parser(tauri_subparsers: argparse._SubParsersAction) -> None:
     parser.epilog = (
         "examples:\n  python tools/control.py tauri run --foreground\n  python tools/control.py tauri run --no-follow"
     )
+
+
+def _configure_stop_parser(tauri_subparsers: argparse._SubParsersAction) -> None:
+    parser = tauri_subparsers.add_parser(
+        "stop",
+        help="stop a tracked detached Tauri process",
+        description=(
+            "Stop only the detached Tauri process whose PID, creation identity, "
+            "arguments, and process group still match its recorded state."
+        ),
+        formatter_class=TauriHelpFormatter,
+    )
+    parser.epilog = "example:\n  python tools/control.py tauri stop"
 
 
 def _configure_build_command_parser(
@@ -251,6 +265,8 @@ def main(args: argparse.Namespace) -> int:
                 f"Tauri {command} skipped because the feature is disabled by active profile '{profile.profile_id}'."
             )
             return 0
+        if command == "stop":
+            return run.stop(args)
         logger.fail(f"Tauri feature is disabled by active profile '{profile.profile_id}'.")
         return 1
 
@@ -258,6 +274,7 @@ def main(args: argparse.Namespace) -> int:
         "doctor": doctor.main,
         "install": install.main,
         "run": run.main,
+        "stop": run.stop,
         "build": build.main,
         "install-appimage": installappimage.main,
         "test": test.main,

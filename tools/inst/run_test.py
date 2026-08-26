@@ -14,21 +14,26 @@ from typing import Any
 
 from tools import logger
 from tools.config import ConfigLoadError, resolve_configuration, validate_configuration
-from tools.core.context import load_context
+from tools.core.context import ProjectContext, load_context
+from tools.core.filesystem import FilesystemSafetyError
 from tools.inst import e2e as e2e_runtime
 from tools.inst import report as report_writer
 from tools.inst import stop as service_cleanup
 from tools.process import prepare_command
 from tools.profiles import runtime as profile_runtime
 
-CONTEXT = load_context()
-ROOT = CONTEXT.project_root
-TOOLS_ROOT = CONTEXT.tools_root
-FRONTEND_DIR = CONTEXT.paths.frontend
-BACKEND_DIR = CONTEXT.paths.backend
-REPORT_ROOT = CONTEXT.state_root
+TOOLS_ROOT = Path(__file__).resolve().parents[1]
+ROOT = TOOLS_ROOT.parent
 CONSOLE_TAIL_LINES = 12
 REPORT_TAIL_LINES = 80
+
+
+def _context(context: ProjectContext | None = None) -> ProjectContext:
+    """Resolve test inputs and state paths for the current target project."""
+
+    if context is not None:
+        return context
+    return load_context(project_root=ROOT, tools_root=TOOLS_ROOT)
 
 
 @dataclass(slots=True)
@@ -98,7 +103,14 @@ def _run(
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     try:
-        return subprocess.run(prepare_command(cmd), cwd=cwd, env=env, text=True, capture_output=True, check=False)
+        return subprocess.run(
+            prepare_command(cmd),
+            cwd=cwd,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
     except OSError as exc:
         return subprocess.CompletedProcess(cmd, 127, stdout="", stderr=str(exc))
 
@@ -119,16 +131,19 @@ def _expand_suites(value: str) -> list[str]:
 
 
 def _backend_python() -> Path:
-    if BACKEND_DIR is None:
-        return CONTEXT.state_root / "unconfigured-backend" / "python"
-    windows_python = BACKEND_DIR / ".venv" / "Scripts" / "python.exe"
-    unix_python = BACKEND_DIR / ".venv" / "bin" / "python"
+    context = _context()
+    backend_dir = context.paths.backend
+    if backend_dir is None:
+        return context.state_root / "unconfigured-backend" / "python"
+    windows_python = backend_dir / ".venv" / "Scripts" / "python.exe"
+    unix_python = backend_dir / ".venv" / "bin" / "python"
     return windows_python if windows_python.exists() else unix_python
 
 
 def _tooling_python() -> Path:
-    windows_python = CONTEXT.venv_root / "Scripts" / "python.exe"
-    unix_python = CONTEXT.venv_root / "bin" / "python"
+    tooling_venv = _context().venv_root
+    windows_python = tooling_venv / "Scripts" / "python.exe"
+    unix_python = tooling_venv / "bin" / "python"
     if windows_python.exists():
         return windows_python
     return unix_python
@@ -143,7 +158,9 @@ def _needs_backend_runtime(selected_suites: list[str]) -> bool:
 def _backend_runtime_imports(selected_suites: list[str]) -> str:
     modules = ["jsonschema", "pydantic_settings", "pytest", "uvicorn"]
     profile = profile_runtime.active_profile(ROOT)
-    if profile.has_feature("database") and {"database", "postgres"}.intersection(selected_suites):
+    if profile.has_feature("database") and {"database", "postgres"}.intersection(
+        selected_suites
+    ):
         modules.extend(["sqlalchemy", "alembic"])
     if profile.has_feature("postgres") and "postgres" in selected_suites:
         modules.append("psycopg")
@@ -182,7 +199,7 @@ def _ensure_backend_runtime(selected_suites: list[str]) -> SuiteResult | None:
     started = time.monotonic()
     command = [
         sys.executable,
-        str(TOOLS_ROOT / "control.py"),
+        str(_context().tools_root / "control.py"),
         "install",
         "--skip-frontend",
         "--skip-playwright",
@@ -204,7 +221,9 @@ def _ensure_backend_runtime(selected_suites: list[str]) -> SuiteResult | None:
             detail=f"Initial probe failed: {probe_detail}",
         )
 
-    repaired_ok, repaired_detail, repaired_command = _probe_backend_runtime(selected_suites)
+    repaired_ok, repaired_detail, repaired_command = _probe_backend_runtime(
+        selected_suites
+    )
     if not repaired_ok:
         return SuiteResult(
             "backend-preflight",
@@ -269,9 +288,7 @@ def _run_schema_suite() -> SuiteResult:
     schema_path = ROOT / "shared" / "schema" / "input.schema.json"
     valid_path = ROOT / "shared" / "examples" / "valid.json"
     invalid_path = ROOT / "shared" / "examples" / "invalid.json"
-    detail = (
-        "Schema: shared/schema/input.schema.json; examples: shared/examples/valid.json, shared/examples/invalid.json"
-    )
+    detail = "Schema: shared/schema/input.schema.json; examples: shared/examples/valid.json, shared/examples/invalid.json"
 
     if not schema_path.exists() or not valid_path.exists() or not invalid_path.exists():
         return SuiteResult(
@@ -319,7 +336,11 @@ def _run_schema_suite() -> SuiteResult:
             detail=detail,
         )
     except ImportError:
-        schema_python = _backend_python() if profile_runtime.feature_enabled("backend", ROOT) else _tooling_python()
+        schema_python = (
+            _backend_python()
+            if profile_runtime.feature_enabled("backend", ROOT)
+            else _tooling_python()
+        )
         if not schema_python.exists():
             return SuiteResult(
                 "schema",
@@ -357,19 +378,28 @@ def _run_schema_suite() -> SuiteResult:
 def _run_api_suite() -> SuiteResult:
     started = time.monotonic()
     if not profile_runtime.feature_enabled("backend", ROOT):
-        return SuiteResult("api", "SKIP", "backend feature disabled", time.monotonic() - started)
+        return SuiteResult(
+            "api", "SKIP", "backend feature disabled", time.monotonic() - started
+        )
 
-    if BACKEND_DIR is None:
-        return SuiteResult("api", "FAIL", "backend path is not configured", time.monotonic() - started)
-    api_tests = BACKEND_DIR / "tests" / "api"
+    backend_dir = _context().paths.backend
+    if backend_dir is None:
+        return SuiteResult(
+            "api", "FAIL", "backend path is not configured", time.monotonic() - started
+        )
+    api_tests = backend_dir / "tests" / "api"
     if not api_tests.exists():
-        return SuiteResult("api", "FAIL", "backend/tests/api missing", time.monotonic() - started)
+        return SuiteResult(
+            "api", "FAIL", "backend/tests/api missing", time.monotonic() - started
+        )
 
     backend_python = _backend_python()
     if not backend_python.exists():
         fallback_python = shutil.which("python3") or shutil.which("python")
         if fallback_python is None:
-            return SuiteResult("api", "FAIL", "python runtime missing", time.monotonic() - started)
+            return SuiteResult(
+                "api", "FAIL", "python runtime missing", time.monotonic() - started
+            )
         backend_python = Path(fallback_python)
 
     command = [str(backend_python), "-m", "pytest", "-q", str(api_tests)]
@@ -395,11 +425,19 @@ def _run_database_suite() -> SuiteResult:
             time.monotonic() - started,
         )
 
-    if BACKEND_DIR is None:
-        return SuiteResult("database", "FAIL", "backend path is not configured", time.monotonic() - started)
-    tests_dir = BACKEND_DIR / "tests" / "db"
+    backend_dir = _context().paths.backend
+    if backend_dir is None:
+        return SuiteResult(
+            "database",
+            "FAIL",
+            "backend path is not configured",
+            time.monotonic() - started,
+        )
+    tests_dir = backend_dir / "tests" / "db"
     if not tests_dir.exists():
-        return SuiteResult("database", "FAIL", "backend/tests/db missing", time.monotonic() - started)
+        return SuiteResult(
+            "database", "FAIL", "backend/tests/db missing", time.monotonic() - started
+        )
     command = [str(_backend_python()), "-m", "pytest", "-q", str(tests_dir)]
     completed = _run(command, cwd=ROOT)
     return _result_from_completed(
@@ -431,9 +469,15 @@ def _run_postgres_suite() -> SuiteResult:
             time.monotonic() - started,
         )
 
-    if BACKEND_DIR is None:
-        return SuiteResult("postgres", "FAIL", "backend path is not configured", time.monotonic() - started)
-    tests_dir = BACKEND_DIR / "tests" / "integration"
+    backend_dir = _context().paths.backend
+    if backend_dir is None:
+        return SuiteResult(
+            "postgres",
+            "FAIL",
+            "backend path is not configured",
+            time.monotonic() - started,
+        )
+    tests_dir = backend_dir / "tests" / "integration"
     if not tests_dir.exists():
         return SuiteResult(
             "postgres",
@@ -457,9 +501,11 @@ def _run_postgres_suite() -> SuiteResult:
 def _run_frontend_suite() -> SuiteResult:
     started = time.monotonic()
     if not profile_runtime.feature_enabled("frontend", ROOT):
-        return SuiteResult("frontend", "SKIP", "frontend feature disabled", time.monotonic() - started)
+        return SuiteResult(
+            "frontend", "SKIP", "frontend feature disabled", time.monotonic() - started
+        )
 
-    frontend_dir = FRONTEND_DIR
+    frontend_dir = _context().paths.frontend
     package_json = frontend_dir / "package.json"
     if not package_json.exists():
         return SuiteResult(
@@ -471,7 +517,9 @@ def _run_frontend_suite() -> SuiteResult:
 
     npm = shutil.which("npm")
     if npm is None:
-        return SuiteResult("frontend", "FAIL", "npm not found", time.monotonic() - started)
+        return SuiteResult(
+            "frontend", "FAIL", "npm not found", time.monotonic() - started
+        )
 
     command = [npm, "test"]
     completed = _run(command, cwd=frontend_dir)
@@ -488,13 +536,16 @@ def _run_frontend_suite() -> SuiteResult:
 
 def _run_tools_suite() -> SuiteResult:
     started = time.monotonic()
-    tests_dir = TOOLS_ROOT / "tests"
+    context = _context()
+    tests_dir = context.tools_root / "tests"
     if not tests_dir.exists():
-        return SuiteResult("tools", "FAIL", "tools/tests missing", time.monotonic() - started)
+        return SuiteResult(
+            "tools", "FAIL", "tools/tests missing", time.monotonic() - started
+        )
 
     python = str(_tooling_python())
     test_paths = [tests_dir]
-    case_study_tests = CONTEXT.docs_root / "case-study" / "tests"
+    case_study_tests = context.docs_root / "case-study" / "tests"
     if case_study_tests.exists():
         test_paths.append(case_study_tests)
     command = [python, "-m", "pytest", "-q", *(str(path) for path in test_paths)]
@@ -512,7 +563,8 @@ def _run_tools_suite() -> SuiteResult:
 
 def _run_e2e_suite() -> SuiteResult:
     started = time.monotonic()
-    e2e_tests = FRONTEND_DIR / "tests" / "e2e"
+    frontend_dir = _context().paths.frontend
+    e2e_tests = frontend_dir / "tests" / "e2e"
     if not e2e_tests.exists():
         return SuiteResult(
             "e2e",
@@ -537,13 +589,13 @@ def _run_e2e_suite() -> SuiteResult:
         )
 
     command = [npm, "run", "test:e2e"]
-    completed = _run(command, cwd=FRONTEND_DIR, env=environment)
+    completed = _run(command, cwd=frontend_dir, env=environment)
     return _result_from_completed(
         name="e2e",
         completed=completed,
         started=started,
         command=command,
-        cwd=FRONTEND_DIR,
+        cwd=frontend_dir,
         ok_message="playwright e2e suite passed",
         fail_message="playwright e2e suite failed",
     )
@@ -552,11 +604,13 @@ def _run_e2e_suite() -> SuiteResult:
 def _run_tauri_suite() -> SuiteResult:
     started = time.monotonic()
     if not profile_runtime.feature_enabled("tauri", ROOT):
-        return SuiteResult("tauri", "SKIP", "tauri feature disabled", time.monotonic() - started)
+        return SuiteResult(
+            "tauri", "SKIP", "tauri feature disabled", time.monotonic() - started
+        )
 
     command = [
         sys.executable,
-        str(TOOLS_ROOT / "control.py"),
+        str(_context().tools_root / "control.py"),
         "tauri",
         "test",
         "--cargo",
@@ -587,7 +641,9 @@ def _run_e2e_cleanup(started: float) -> SuiteResult | None:
             detail=str(exc),
         )
     relevant = {"FRONTEND_PORT", "BACKEND_PORT"}
-    issues = [issue for issue in validate_configuration(resolved) if issue.name in relevant]
+    issues = [
+        issue for issue in validate_configuration(resolved) if issue.name in relevant
+    ]
     if issues:
         return SuiteResult(
             "service-bootstrap",
@@ -618,23 +674,34 @@ def _run_e2e_cleanup(started: float) -> SuiteResult | None:
 
 
 def _e2e_configured() -> bool:
-    frontend_dir = FRONTEND_DIR
-    return (frontend_dir / "tests" / "e2e").exists() or any(frontend_dir.glob("playwright.config.*"))
+    frontend_dir = _context().paths.frontend
+    return (frontend_dir / "tests" / "e2e").exists() or any(
+        frontend_dir.glob("playwright.config.*")
+    )
 
 
-def _start_services_if_needed(selected_suites: list[str], no_start: bool) -> tuple[bool, SuiteResult]:
+def _start_services_if_needed(
+    selected_suites: list[str], no_start: bool
+) -> tuple[bool, SuiteResult]:
     requires_services = "e2e" in selected_suites and _e2e_configured()
     if not requires_services:
         return False, SuiteResult("service-bootstrap", "SKIP", "not required", 0.0)
     if no_start:
-        return False, SuiteResult("service-bootstrap", "SKIP", "disabled by --no-start", 0.0)
+        return False, SuiteResult(
+            "service-bootstrap", "SKIP", "disabled by --no-start", 0.0
+        )
 
     started = time.monotonic()
     cleanup_failure = _run_e2e_cleanup(started)
     if cleanup_failure is not None:
         return False, cleanup_failure
 
-    command = [sys.executable, str(TOOLS_ROOT / "control.py"), "run", "--detach"]
+    command = [
+        sys.executable,
+        str(_context().tools_root / "control.py"),
+        "run",
+        "--detach",
+    ]
     completed = _run(command, cwd=ROOT)
     if completed.returncode == 0:
         return True, SuiteResult(
@@ -670,7 +737,12 @@ def _stop_services_if_started(started: bool) -> SuiteResult:
     teardown_started = time.monotonic()
     if not started:
         return SuiteResult("service-teardown", "SKIP", "not required", 0.0)
-    command = [sys.executable, str(TOOLS_ROOT / "control.py"), "stop", "--tracked-only"]
+    command = [
+        sys.executable,
+        str(_context().tools_root / "control.py"),
+        "stop",
+        "--tracked-only",
+    ]
     completed = _run(command, cwd=ROOT)
     return _result_from_completed(
         name="service-teardown",
@@ -684,18 +756,30 @@ def _stop_services_if_started(started: bool) -> SuiteResult:
 
 
 def _print_suite_guide() -> None:
-    logger.info("Template project test suites")
+    logger.info("Project tooling test suites")
     print()
     print("Use an explicit suite command:")
     print("  python tools/control.py test --suite api      # Backend API only")
     print("  python tools/control.py test --suite schema   # Schema validation only")
-    print("  python tools/control.py test --suite database # SQLAlchemy database unit tests")
-    print("  python tools/control.py test --suite postgres # Optional PostgreSQL integration test")
-    print("  python tools/control.py test --suite frontend # Frontend unit tests with npm test")
-    print("  python tools/control.py test --suite e2e      # Frontend E2E with Playwright")
+    print(
+        "  python tools/control.py test --suite database # SQLAlchemy database unit tests"
+    )
+    print(
+        "  python tools/control.py test --suite postgres # Optional PostgreSQL integration test"
+    )
+    print(
+        "  python tools/control.py test --suite frontend # Frontend unit tests with npm test"
+    )
+    print(
+        "  python tools/control.py test --suite e2e      # Frontend E2E with Playwright"
+    )
     print("  python tools/control.py test --suite tools    # Restored tooling tests")
-    print("  python tools/control.py test --suite tauri    # Tauri structure, cargo check, and Rust tests")
-    print("  python tools/control.py test --suite all      # Complete configured test run")
+    print(
+        "  python tools/control.py test --suite tauri    # Tauri structure, cargo check, and Rust tests"
+    )
+    print(
+        "  python tools/control.py test --suite all      # Complete configured test run"
+    )
     print()
     print("Useful options:")
     print("  --no-start       Do not start frontend/backend automatically for E2E")
@@ -792,8 +876,10 @@ def _write_report_if_requested(
         overall=overall,
     )
     try:
-        written_paths = report_writer.write_test_report(REPORT_ROOT, payload, report_mode)
-    except (OSError, ValueError) as exc:
+        written_paths = report_writer.write_test_report(
+            _context().state_root, payload, report_mode
+        )
+    except (FilesystemSafetyError, OSError, ValueError) as exc:
         logger.fail(f"failed to write test report: {exc}")
         return False
 
@@ -830,7 +916,11 @@ def _run_selected_suite(suite: str, *, bootstrap_failed: bool) -> SuiteResult:
 
 def main(args: argparse.Namespace) -> int:
     if getattr(args, "report", None) == "done":
-        removed = report_writer.clean_reports(REPORT_ROOT)
+        try:
+            removed = report_writer.clean_reports(_context().state_root)
+        except FilesystemSafetyError as exc:
+            logger.fail(f"failed to remove test reports safely: {exc}")
+            return 1
         if removed:
             logger.ok("removed .report")
         else:
@@ -844,7 +934,9 @@ def main(args: argparse.Namespace) -> int:
     selected_suites = _expand_suites(args.suite)
 
     preflight = _ensure_backend_runtime(selected_suites)
-    started_by_runner, bootstrap = _start_services_if_needed(selected_suites, args.no_start)
+    started_by_runner, bootstrap = _start_services_if_needed(
+        selected_suites, args.no_start
+    )
 
     results: list[SuiteResult] = []
     if preflight is not None:
@@ -852,7 +944,8 @@ def main(args: argparse.Namespace) -> int:
 
     try:
         results.extend(
-            _run_selected_suite(suite, bootstrap_failed=bootstrap.status == "FAIL") for suite in selected_suites
+            _run_selected_suite(suite, bootstrap_failed=bootstrap.status == "FAIL")
+            for suite in selected_suites
         )
     finally:
         teardown = _stop_services_if_started(started_by_runner)

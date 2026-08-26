@@ -12,16 +12,22 @@ from typing import Any
 import tomllib
 
 from tools import logger
-from tools.core.context import load_context
+from tools.core.context import ProjectContext, load_context
 from tools.profiles import runtime as profile_runtime
 
-CONTEXT = load_context()
-ROOT = CONTEXT.project_root
-TOOLS_ROOT = CONTEXT.tools_root
-FRONTEND_DIR = CONTEXT.paths.frontend
-BACKEND_DIR = CONTEXT.paths.backend
-TAURI_DIR = CONTEXT.paths.tauri
-SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
+TOOLS_ROOT = Path(__file__).resolve().parents[1]
+ROOT = TOOLS_ROOT.parent
+SEMVER = re.compile(
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
+)
+
+
+def _context(context: ProjectContext | None = None) -> ProjectContext:
+    """Resolve release metadata paths for the current target project."""
+
+    if context is not None:
+        return context
+    return load_context(project_root=ROOT, tools_root=TOOLS_ROOT)
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,7 +38,8 @@ class ReleaseCheck:
 
 
 def source_version() -> str:
-    for path in (ROOT / "VERSION", TOOLS_ROOT / "VERSION"):
+    context = _context()
+    for path in (context.project_root / "VERSION", context.tools_root / "VERSION"):
         try:
             value = path.read_text(encoding="utf-8").strip()
         except OSError:
@@ -45,7 +52,7 @@ def source_version() -> str:
 def _read_json(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
-        raise ValueError(f"{path} must contain a JSON object")
+        raise TypeError(f"{path} must contain a JSON object")
     return payload
 
 
@@ -57,32 +64,48 @@ def collect_version_checks() -> list[ReleaseCheck]:
         ReleaseCheck(
             "version:source",
             "OK" if SEMVER.fullmatch(expected) else "FAIL",
-            f"VERSION={expected}" if SEMVER.fullmatch(expected) else f"VERSION is not SemVer: {expected}",
+            f"VERSION={expected}"
+            if SEMVER.fullmatch(expected)
+            else f"VERSION is not SemVer: {expected}",
         )
     ]
     profile = profile_runtime.active_profile(ROOT)
+    context = _context()
+    frontend_dir = context.paths.frontend
+    tauri_dir = context.paths.tauri
     versions: list[tuple[str, str]] = []
     try:
         if profile.has_feature("frontend"):
-            package = _read_json(FRONTEND_DIR / "package.json")
-            package_lock = _read_json(FRONTEND_DIR / "package-lock.json")
+            package = _read_json(frontend_dir / "package.json")
+            package_lock = _read_json(frontend_dir / "package-lock.json")
             lock_packages = package_lock.get("packages", {})
-            lock_root = lock_packages.get("", {}) if isinstance(lock_packages, dict) else {}
+            lock_root = (
+                lock_packages.get("", {}) if isinstance(lock_packages, dict) else {}
+            )
             versions.extend(
                 [
                     ("frontend/package.json", str(package.get("version", ""))),
-                    ("frontend/package-lock.json", str(package_lock.get("version", ""))),
+                    (
+                        "frontend/package-lock.json",
+                        str(package_lock.get("version", "")),
+                    ),
                     (
                         "frontend/package-lock.json root package",
-                        str(lock_root.get("version", "")) if isinstance(lock_root, dict) else "",
+                        str(lock_root.get("version", ""))
+                        if isinstance(lock_root, dict)
+                        else "",
                     ),
                 ]
             )
         if profile.has_feature("tauri"):
-            tauri = _read_json(TAURI_DIR / "tauri.conf.json")
-            cargo = tomllib.loads((TAURI_DIR / "Cargo.toml").read_text(encoding="utf-8"))
+            tauri = _read_json(tauri_dir / "tauri.conf.json")
+            cargo = tomllib.loads(
+                (tauri_dir / "Cargo.toml").read_text(encoding="utf-8")
+            )
             cargo_name = str(cargo.get("package", {}).get("name", ""))
-            cargo_lock = tomllib.loads((TAURI_DIR / "Cargo.lock").read_text(encoding="utf-8"))
+            cargo_lock = tomllib.loads(
+                (tauri_dir / "Cargo.lock").read_text(encoding="utf-8")
+            )
             locked_root = next(
                 (
                     item
@@ -94,12 +117,28 @@ def collect_version_checks() -> list[ReleaseCheck]:
             versions.extend(
                 [
                     ("src-tauri/tauri.conf.json", str(tauri.get("version", ""))),
-                    ("src-tauri/Cargo.toml", str(cargo.get("package", {}).get("version", ""))),
-                    ("src-tauri/Cargo.lock root package", str(locked_root.get("version", ""))),
+                    (
+                        "src-tauri/Cargo.toml",
+                        str(cargo.get("package", {}).get("version", "")),
+                    ),
+                    (
+                        "src-tauri/Cargo.lock root package",
+                        str(locked_root.get("version", "")),
+                    ),
                 ]
             )
-    except (OSError, ValueError, json.JSONDecodeError, tomllib.TOMLDecodeError) as exc:
-        checks.append(ReleaseCheck("version:metadata", "FAIL", f"Could not read version metadata: {exc}"))
+    except (
+        OSError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+        tomllib.TOMLDecodeError,
+    ) as exc:
+        checks.append(
+            ReleaseCheck(
+                "version:metadata", "FAIL", f"Could not read version metadata: {exc}"
+            )
+        )
         return checks
 
     for path, actual in versions:
@@ -114,103 +153,70 @@ def collect_version_checks() -> list[ReleaseCheck]:
 
 
 def _placeholder_checks() -> list[ReleaseCheck]:
-    # The source repository intentionally owns the canonical scaffold identity.
-    # Generated projects do not include CI workflow sources and must still replace
-    # every known placeholder before their first release.
-    if (ROOT / ".github" / "workflows" / "profiles.yml").is_file():
+    context = _context()
+    if not context.config_exists:
         return [
             ReleaseCheck(
-                "template-identity",
-                "OK",
-                "canonical template identity is expected in the template source repository",
+                "project-identity",
+                "WARN",
+                "project-tooling.toml is absent; release identity is inferred from the directory name",
             )
         ]
-
-    profile = profile_runtime.active_profile(ROOT)
-    targets: list[tuple[Path, tuple[str, ...]]] = []
-    if profile.has_feature("frontend"):
-        targets.extend(
-            [
-                (FRONTEND_DIR / "package.json", ("template-project", "project-template")),
-                (FRONTEND_DIR / "index.html", ("Template Project",)),
-                (FRONTEND_DIR / "src" / "main.ts", ("Template Project",)),
-            ]
+    return [
+        ReleaseCheck(
+            "project-identity",
+            "OK",
+            f"project identity is configured as {context.config.project_name!r}",
         )
-    if profile.has_feature("backend") and BACKEND_DIR is not None:
-        targets.extend(
-            [
-                (BACKEND_DIR / "app" / "config" / "settings.py", ("Template Project API",)),
-                (BACKEND_DIR / "app" / "api" / "health.py", ("template-backend",)),
-            ]
-        )
-    targets.append((TOOLS_ROOT / "inst" / "build.py", ("template-project-web.zip",)))
-    if profile.has_feature("cloud"):
-        targets.append(
-            (ROOT / "deployment" / "compose.yaml", ("Template Project", "template-project", "project-template"))
-        )
-    if profile.has_feature("tauri"):
-        targets.extend(
-            [
-                (
-                    TAURI_DIR / "tauri.conf.json",
-                    ("Template Project", "template-project", "project-template", "com.example.templateproject"),
-                ),
-                (TAURI_DIR / "Cargo.toml", ("Template Project", "project-template")),
-                (TAURI_DIR / "app-icon.svg", ("Template Project",)),
-            ]
-        )
-
-    checks: list[ReleaseCheck] = []
-    for path, placeholders in targets:
-        try:
-            content = path.read_text(encoding="utf-8")
-        except OSError as exc:
-            checks.append(ReleaseCheck("template-identity", "FAIL", f"Could not read {path}: {exc}"))
-            continue
-        matches = [placeholder for placeholder in placeholders if placeholder in content]
-        if matches:
-            checks.append(
-                ReleaseCheck(
-                    "template-identity",
-                    "FAIL",
-                    f"Template identifier still present: {path.relative_to(ROOT)} -> {', '.join(matches)}",
-                )
-            )
-    if not checks:
-        checks.append(
-            ReleaseCheck("template-identity", "OK", "release identity contains no known template placeholders")
-        )
-    return checks
+    ]
 
 
 def _tauri_security_checks() -> list[ReleaseCheck]:
     if not profile_runtime.feature_enabled("tauri", ROOT):
-        return [ReleaseCheck("tauri-security", "OK", "Tauri disabled by active profile")]
+        return [
+            ReleaseCheck("tauri-security", "OK", "Tauri disabled by active profile")
+        ]
+    tauri_dir = _context().paths.tauri
     try:
-        config = _read_json(TAURI_DIR / "tauri.conf.json")
-        capabilities = _read_json(TAURI_DIR / "capabilities" / "default.json")
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        return [ReleaseCheck("tauri-security", "FAIL", f"Could not read Tauri security configuration: {exc}")]
+        config = _read_json(tauri_dir / "tauri.conf.json")
+        capabilities = _read_json(tauri_dir / "capabilities" / "default.json")
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        return [
+            ReleaseCheck(
+                "tauri-security",
+                "FAIL",
+                f"Could not read Tauri security configuration: {exc}",
+            )
+        ]
     csp = config.get("app", {}).get("security", {}).get("csp")
     hardened_csp = (
-        isinstance(csp, str) and "default-src 'self'" in csp and "'unsafe-eval'" not in csp and "*" not in csp
+        isinstance(csp, str)
+        and "default-src 'self'" in csp
+        and "'unsafe-eval'" not in csp
+        and "*" not in csp
     )
     checks = [
         ReleaseCheck(
             "tauri-csp",
             "OK" if hardened_csp else "WARN",
-            "Tauri CSP is explicitly restricted" if hardened_csp else "Tauri CSP is not production hardened.",
+            "Tauri CSP is explicitly restricted"
+            if hardened_csp
+            else "Tauri CSP is not production hardened.",
         )
     ]
     permissions = capabilities.get("permissions", [])
     unexpected = (
-        [item for item in permissions if item != "core:default"] if isinstance(permissions, list) else ["invalid"]
+        [item for item in permissions if item != "core:default"]
+        if isinstance(permissions, list)
+        else ["invalid"]
     )
     checks.append(
         ReleaseCheck(
             "tauri-capabilities",
             "OK" if not unexpected else "WARN",
-            "only core:default is enabled" if not unexpected else f"review additional permissions: {unexpected}",
+            "only core:default is enabled"
+            if not unexpected
+            else f"review additional permissions: {unexpected}",
         )
     )
     return checks
@@ -232,7 +238,9 @@ def _git_check() -> ReleaseCheck:
     return ReleaseCheck(
         "git",
         "OK" if not probe.stdout.strip() else "FAIL",
-        "working tree is clean" if not probe.stdout.strip() else "working tree contains uncommitted changes",
+        "working tree is clean"
+        if not probe.stdout.strip()
+        else "working tree contains uncommitted changes",
     )
 
 
@@ -281,28 +289,39 @@ def sync_versions() -> int:
         logger.fail(f"VERSION is missing or not valid SemVer: {expected or '<empty>'}")
         return 1
     profile = profile_runtime.active_profile(ROOT)
+    context = _context()
+    frontend_dir = context.paths.frontend
+    tauri_dir = context.paths.tauri
     try:
         if profile.has_feature("frontend"):
-            package_path = FRONTEND_DIR / "package.json"
+            package_path = frontend_dir / "package.json"
             package = _read_json(package_path)
             package["version"] = expected
-            package_path.write_text(json.dumps(package, indent=2) + "\n", encoding="utf-8", newline="\n")
+            package_path.write_text(
+                json.dumps(package, indent=2) + "\n", encoding="utf-8", newline="\n"
+            )
 
-            lock_path = FRONTEND_DIR / "package-lock.json"
+            lock_path = frontend_dir / "package-lock.json"
             package_lock = _read_json(lock_path)
             package_lock["version"] = expected
             packages = package_lock.get("packages")
             if isinstance(packages, dict) and isinstance(packages.get(""), dict):
                 packages[""]["version"] = expected
-            lock_path.write_text(json.dumps(package_lock, indent=2) + "\n", encoding="utf-8", newline="\n")
+            lock_path.write_text(
+                json.dumps(package_lock, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
 
         if profile.has_feature("tauri"):
-            tauri_path = TAURI_DIR / "tauri.conf.json"
+            tauri_path = tauri_dir / "tauri.conf.json"
             tauri = _read_json(tauri_path)
             tauri["version"] = expected
-            tauri_path.write_text(json.dumps(tauri, indent=2) + "\n", encoding="utf-8", newline="\n")
+            tauri_path.write_text(
+                json.dumps(tauri, indent=2) + "\n", encoding="utf-8", newline="\n"
+            )
 
-            cargo_path = TAURI_DIR / "Cargo.toml"
+            cargo_path = tauri_dir / "Cargo.toml"
             cargo_text = cargo_path.read_text(encoding="utf-8")
             cargo_text, replacements = re.subn(
                 r'(\[package\][\s\S]*?^version\s*=\s*")[^"]+("\s*$)',
@@ -317,14 +336,22 @@ def sync_versions() -> int:
 
             cargo = tomllib.loads(cargo_text)
             package_name = str(cargo.get("package", {}).get("name", ""))
-            lock_path = TAURI_DIR / "Cargo.lock"
+            lock_path = tauri_dir / "Cargo.lock"
             lock_text = lock_path.read_text(encoding="utf-8")
             pattern = rf'(\[\[package\]\]\nname = "{re.escape(package_name)}"\nversion = ")[^"]+("\n)'
-            lock_text, replacements = re.subn(pattern, rf"\g<1>{expected}\g<2>", lock_text, count=1)
+            lock_text, replacements = re.subn(
+                pattern, rf"\g<1>{expected}\g<2>", lock_text, count=1
+            )
             if replacements != 1:
                 raise ValueError("Cargo.lock root package version could not be located")
             lock_path.write_text(lock_text, encoding="utf-8", newline="\n")
-    except (OSError, ValueError, json.JSONDecodeError, tomllib.TOMLDecodeError) as exc:
+    except (
+        OSError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+        tomllib.TOMLDecodeError,
+    ) as exc:
         logger.fail(f"Could not synchronize version metadata: {exc}")
         return 1
     logger.ok(f"Synchronized enabled component metadata to {expected}")

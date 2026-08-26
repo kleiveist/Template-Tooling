@@ -10,18 +10,21 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tools import logger
-from tools.core.context import load_context
+from tools.core.context import ProjectContext, load_context
 from tools.inst.tooling_runtime import TOOLING_RUNTIME_PROBE
 from tools.process import prepare_command
 from tools.profiles import runtime as profile_runtime
 
-CONTEXT = load_context()
-ROOT = CONTEXT.project_root
-TOOLS_ROOT = CONTEXT.tools_root
-FRONTEND_DIR = CONTEXT.paths.frontend
-BACKEND_DIR = CONTEXT.paths.backend
-TOOLS_REQUIREMENTS = TOOLS_ROOT / "requirements.txt"
-TOOLS_VENV = CONTEXT.venv_root
+TOOLS_ROOT = Path(__file__).resolve().parents[1]
+ROOT = TOOLS_ROOT.parent
+
+
+def _context(context: ProjectContext | None = None) -> ProjectContext:
+    """Resolve paths for the current target instead of freezing them at import time."""
+
+    if context is not None:
+        return context
+    return load_context(project_root=ROOT, tools_root=TOOLS_ROOT)
 
 
 @dataclass(slots=True)
@@ -32,7 +35,9 @@ class StepResult:
 
 
 def _run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(prepare_command(cmd), cwd=cwd, text=True, capture_output=True, check=False)
+    return subprocess.run(
+        prepare_command(cmd), cwd=cwd, text=True, capture_output=True, check=False
+    )
 
 
 def _tail(text: str, limit: int = 8) -> str:
@@ -43,8 +48,9 @@ def _tail(text: str, limit: int = 8) -> str:
 
 
 def _ensure_env_file() -> StepResult:
-    env = ROOT / ".env"
-    example = CONTEXT.resources.examples / ".env.example"
+    context = _context()
+    env = context.project_root / ".env"
+    example = context.resources.examples / ".env.example"
 
     if env.exists():
         return StepResult("env", "OK", ".env already exists (not modified)")
@@ -56,17 +62,23 @@ def _ensure_env_file() -> StepResult:
             ".env is absent and was not created. Copy the tooling .env example manually when overrides are needed.",
         )
 
-    return StepResult("env", "WARN", ".env and .env.example are absent; template defaults remain active")
+    return StepResult(
+        "env",
+        "WARN",
+        ".env and .env.example are absent; built-in defaults remain active",
+    )
 
 
 def _install_frontend() -> StepResult:
-    frontend_dir = FRONTEND_DIR
+    frontend_dir = _context().paths.frontend
     if not (frontend_dir / "package.json").exists():
         return StepResult("frontend", "FAIL", "missing frontend/package.json")
 
     npm = shutil.which("npm")
     if npm is None:
-        return StepResult("frontend", "FAIL", "npm not found. Action: install Node.js and npm.")
+        return StepResult(
+            "frontend", "FAIL", "npm not found. Action: install Node.js and npm."
+        )
 
     lockfile = frontend_dir / "package-lock.json"
     install_action = "ci" if lockfile.exists() else "install"
@@ -76,10 +88,16 @@ def _install_frontend() -> StepResult:
     completed = _run(command, cwd=frontend_dir)
     elapsed = time.monotonic() - started
     if completed.returncode == 0:
-        return StepResult("frontend", "OK", f"npm {install_action} completed ({elapsed:.1f}s)")
+        return StepResult(
+            "frontend", "OK", f"npm {install_action} completed ({elapsed:.1f}s)"
+        )
 
     details = _tail((completed.stdout or "") + "\n" + (completed.stderr or ""))
-    return StepResult("frontend", "FAIL", f"npm {install_action} failed after {elapsed:.1f}s: {details}")
+    return StepResult(
+        "frontend",
+        "FAIL",
+        f"npm {install_action} failed after {elapsed:.1f}s: {details}",
+    )
 
 
 def _ensure_backend_venv_with_uv(backend_dir: Path) -> subprocess.CompletedProcess[str]:
@@ -107,7 +125,14 @@ def _install_backend_with_uv(
 ) -> subprocess.CompletedProcess[str]:
     python_bin = _venv_python(backend_dir / ".venv")
     return _run(
-        ["uv", "pip", "install", "--python", str(python_bin), *_requirement_arguments(requirements)],
+        [
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            str(python_bin),
+            *_requirement_arguments(requirements),
+        ],
         cwd=ROOT,
     )
 
@@ -137,9 +162,13 @@ def _create_backend_venv(venv_dir: Path, clear: bool) -> tuple[bool, str]:
         return False, f"{action} failed after {elapsed:.1f}s: {details}"
 
     if clear:
-        logger.info(f"Backend virtualenv rebuilt in {elapsed:.1f}s (seed={seed_python})")
+        logger.info(
+            f"Backend virtualenv rebuilt in {elapsed:.1f}s (seed={seed_python})"
+        )
     else:
-        logger.info(f"Backend virtualenv created in {elapsed:.1f}s (seed={seed_python})")
+        logger.info(
+            f"Backend virtualenv created in {elapsed:.1f}s (seed={seed_python})"
+        )
     return True, "venv ready"
 
 
@@ -189,11 +218,15 @@ def _inspect_backend_venv(py: Path, venv_dir: Path) -> tuple[bool, str]:
 
     configured_version = _read_venv_version(venv_dir)
     if configured_version and not configured_version.startswith(f"{runtime}."):
-        return False, (f"venv interpreter mismatch: pyvenv.cfg version={configured_version}, runtime={runtime}")
+        return False, (
+            f"venv interpreter mismatch: pyvenv.cfg version={configured_version}, runtime={runtime}"
+        )
 
     runtime_prefix = Path(str(state.get("prefix", ""))).resolve()
     if runtime_prefix != venv_dir.resolve():
-        return False, (f"venv prefix mismatch: expected={venv_dir.resolve()}, runtime={runtime_prefix}")
+        return False, (
+            f"venv prefix mismatch: expected={venv_dir.resolve()}, runtime={runtime_prefix}"
+        )
 
     if not site_packages:
         return False, "venv probe did not return a site-packages directory"
@@ -220,7 +253,9 @@ def _ensure_backend_venv_consistency(py: Path, venv_dir: Path) -> tuple[bool, st
         return True, "venv is consistent"
 
     if "error while loading shared libraries" in reason:
-        logger.warn("venv python shared library resolution failed; attempting rebuild with system python3")
+        logger.warn(
+            "venv python shared library resolution failed; attempting rebuild with system python3"
+        )
         rebuilt, rebuild_msg = _rebuild_backend_venv(venv_dir, reason)
         if not rebuilt:
             return False, rebuild_msg
@@ -256,7 +291,9 @@ def _ensure_backend_venv_consistency(py: Path, venv_dir: Path) -> tuple[bool, st
     return True, "venv repaired"
 
 
-def _install_backend_with_pip(backend_dir: Path, requirements: list[Path]) -> tuple[bool, str]:
+def _install_backend_with_pip(
+    backend_dir: Path, requirements: list[Path]
+) -> tuple[bool, str]:
     venv_dir = backend_dir / ".venv"
     if not venv_dir.exists():
         logger.info("Creating backend virtualenv")
@@ -266,8 +303,12 @@ def _install_backend_with_pip(backend_dir: Path, requirements: list[Path]) -> tu
 
     py = _venv_python(venv_dir)
     if not py.exists():
-        logger.warn(f"venv python not found at {py}; attempting automatic rebuild repair")
-        rebuilt, rebuild_msg = _rebuild_backend_venv(venv_dir, f"venv python is missing at {py}")
+        logger.warn(
+            f"venv python not found at {py}; attempting automatic rebuild repair"
+        )
+        rebuilt, rebuild_msg = _rebuild_backend_venv(
+            venv_dir, f"venv python is missing at {py}"
+        )
         if not rebuilt:
             return False, rebuild_msg
         if not py.exists():
@@ -307,25 +348,34 @@ def _install_backend_with_pip(backend_dir: Path, requirements: list[Path]) -> tu
 
 def _backend_requirements() -> list[Path]:
     profile = profile_runtime.active_profile(ROOT)
-    if BACKEND_DIR is None:
+    backend_dir = _context().paths.backend
+    if backend_dir is None:
         return []
-    requirements = [BACKEND_DIR / "requirements.txt"]
+    requirements = [backend_dir / "requirements.txt"]
     if profile.has_feature("database"):
-        requirements.append(BACKEND_DIR / "requirements-database.txt")
+        requirements.append(backend_dir / "requirements-database.txt")
     if profile.has_feature("postgres"):
-        requirements.append(BACKEND_DIR / "requirements-postgres.txt")
+        requirements.append(backend_dir / "requirements-postgres.txt")
     return requirements
 
 
 def _install_backend() -> StepResult:
-    backend_dir = BACKEND_DIR
+    backend_dir = _context().paths.backend
     if backend_dir is None:
-        return StepResult("backend", "FAIL", "backend path is not configured in project-tooling.toml")
+        return StepResult(
+            "backend", "FAIL", "backend path is not configured in project-tooling.toml"
+        )
     requirements = _backend_requirements()
 
-    missing = [path.relative_to(ROOT).as_posix() for path in requirements if not path.exists()]
+    missing = [
+        path.relative_to(ROOT).as_posix() for path in requirements if not path.exists()
+    ]
     if missing:
-        return StepResult("backend", "FAIL", f"missing backend requirement file(s): {', '.join(missing)}")
+        return StepResult(
+            "backend",
+            "FAIL",
+            f"missing backend requirement file(s): {', '.join(missing)}",
+        )
 
     uv = shutil.which("uv")
     if uv is not None:
@@ -342,15 +392,23 @@ def _install_backend() -> StepResult:
         if pip_ok:
             return StepResult("backend", "WARN", "uv failed; pip fallback succeeded")
         uv_details = _tail((uv_venv.stdout or "") + "\n" + (uv_venv.stderr or ""))
-        return StepResult("backend", "FAIL", f"uv path failed ({uv_details}); fallback failed: {pip_msg}")
+        return StepResult(
+            "backend",
+            "FAIL",
+            f"uv path failed ({uv_details}); fallback failed: {pip_msg}",
+        )
 
     logger.info("uv not found; using pip/venv fallback for backend installation")
     pip_ok, pip_msg = _install_backend_with_pip(backend_dir, requirements)
     if pip_ok:
         return StepResult(
-            "backend", "OK", "installed dependencies with the supported pip/venv fallback (uv is optional)"
+            "backend",
+            "OK",
+            "installed dependencies with the supported pip/venv fallback (uv is optional)",
         )
-    return StepResult("backend", "FAIL", f"backend install failed without uv: {pip_msg}")
+    return StepResult(
+        "backend", "FAIL", f"backend install failed without uv: {pip_msg}"
+    )
 
 
 def _tooling_runtime_ready(python: Path) -> bool:
@@ -361,65 +419,88 @@ def _tooling_runtime_ready(python: Path) -> bool:
 
 
 def _install_tooling_runtime() -> StepResult:
-    tooling_python = _venv_python(TOOLS_VENV)
+    context = _context()
+    tooling_venv = context.venv_root
+    tooling_requirements = context.tools_root / "requirements.txt"
+    tooling_python = _venv_python(tooling_venv)
     if _tooling_runtime_ready(tooling_python):
-        return StepResult("tooling", "OK", f"{TOOLS_VENV} already provides quality and test dependencies")
+        return StepResult(
+            "tooling",
+            "OK",
+            f"{tooling_venv} already provides quality and test dependencies",
+        )
 
-    if not TOOLS_REQUIREMENTS.exists():
+    if not tooling_requirements.exists():
         return StepResult("tooling", "FAIL", "missing tools/requirements.txt")
 
-    if TOOLS_VENV.exists():
-        consistent, reason = _inspect_backend_venv(tooling_python, TOOLS_VENV)
+    if tooling_venv.exists():
+        consistent, reason = _inspect_backend_venv(tooling_python, tooling_venv)
         if not consistent:
             logger.info(f"Rebuilding shared tooling virtualenv because {reason}")
-            rebuilt, rebuild_message = _create_backend_venv(TOOLS_VENV, clear=True)
+            rebuilt, rebuild_message = _create_backend_venv(tooling_venv, clear=True)
             if not rebuilt:
-                return StepResult("tooling", "FAIL", f"tooling venv rebuild failed: {rebuild_message}")
+                return StepResult(
+                    "tooling", "FAIL", f"tooling venv rebuild failed: {rebuild_message}"
+                )
     else:
         logger.info("Creating shared tooling virtualenv")
-        command = [_select_venv_seed_python(), "-m", "venv", str(TOOLS_VENV)]
+        command = [_select_venv_seed_python(), "-m", "venv", str(tooling_venv)]
         created = _run(command, cwd=ROOT)
         if created.returncode != 0:
             details = _tail((created.stdout or "") + "\n" + (created.stderr or ""))
-            return StepResult("tooling", "FAIL", f"tooling venv creation failed: {details}")
+            return StepResult(
+                "tooling", "FAIL", f"tooling venv creation failed: {details}"
+            )
 
-    tooling_python = _venv_python(TOOLS_VENV)
+    tooling_python = _venv_python(tooling_venv)
     if not tooling_python.exists():
-        return StepResult("tooling", "FAIL", f"tooling venv python not found at {tooling_python}")
+        return StepResult(
+            "tooling", "FAIL", f"tooling venv python not found at {tooling_python}"
+        )
 
     logger.info("Installing shared tooling test requirements")
     completed = _run(
-        [str(tooling_python), "-m", "pip", "install", "-r", str(TOOLS_REQUIREMENTS)],
+        [str(tooling_python), "-m", "pip", "install", "-r", str(tooling_requirements)],
         cwd=ROOT,
     )
     if completed.returncode != 0:
         details = _tail((completed.stdout or "") + "\n" + (completed.stderr or ""))
-        return StepResult("tooling", "FAIL", f"tooling dependency install failed: {details}")
+        return StepResult(
+            "tooling", "FAIL", f"tooling dependency install failed: {details}"
+        )
     return StepResult("tooling", "OK", "installed shared tooling test requirements")
 
 
 def _install_playwright() -> StepResult:
-    frontend_dir = FRONTEND_DIR
+    frontend_dir = _context().paths.frontend
     if not (frontend_dir / "package.json").exists():
         return StepResult("playwright", "FAIL", "missing frontend/package.json")
 
     npx = shutil.which("npx")
     if npx is None:
-        return StepResult("playwright", "FAIL", "npx not found. Action: install Node.js and npm.")
+        return StepResult(
+            "playwright", "FAIL", "npx not found. Action: install Node.js and npm."
+        )
 
     logger.info("Installing Playwright Chromium browser")
     started = time.monotonic()
     completed = _run([npx, "playwright", "install", "chromium"], cwd=frontend_dir)
     elapsed = time.monotonic() - started
     if completed.returncode == 0:
-        return StepResult("playwright", "OK", f"Chromium installation completed ({elapsed:.1f}s)")
+        return StepResult(
+            "playwright", "OK", f"Chromium installation completed ({elapsed:.1f}s)"
+        )
 
     details = _tail((completed.stdout or "") + "\n" + (completed.stderr or ""))
-    return StepResult("playwright", "FAIL", f"playwright install failed after {elapsed:.1f}s: {details}")
+    return StepResult(
+        "playwright",
+        "FAIL",
+        f"playwright install failed after {elapsed:.1f}s: {details}",
+    )
 
 
 def _playwright_configured() -> bool:
-    frontend_dir = FRONTEND_DIR
+    frontend_dir = _context().paths.frontend
     if (frontend_dir / "tests" / "e2e").exists():
         return True
     if any(frontend_dir.glob("playwright.config.*")):
@@ -458,14 +539,22 @@ def main(args: argparse.Namespace) -> int:
     if args.skip_frontend:
         results.append(StepResult("frontend", "OK", "skipped by flag"))
     elif not frontend_enabled:
-        results.append(StepResult("frontend", "OK", f"disabled by active profile '{profile.profile_id}'"))
+        results.append(
+            StepResult(
+                "frontend", "OK", f"disabled by active profile '{profile.profile_id}'"
+            )
+        )
     else:
         results.append(_install_frontend())
 
     if args.skip_backend:
         results.append(StepResult("backend", "OK", "skipped by flag"))
     elif not backend_enabled:
-        results.append(StepResult("backend", "OK", f"disabled by active profile '{profile.profile_id}'"))
+        results.append(
+            StepResult(
+                "backend", "OK", f"disabled by active profile '{profile.profile_id}'"
+            )
+        )
     else:
         results.append(_install_backend())
 
@@ -477,14 +566,26 @@ def main(args: argparse.Namespace) -> int:
     if args.skip_playwright:
         results.append(StepResult("playwright", "OK", "skipped by flag"))
     elif not frontend_enabled:
-        results.append(StepResult("playwright", "OK", "frontend disabled by active profile"))
+        results.append(
+            StepResult("playwright", "OK", "frontend disabled by active profile")
+        )
     elif not _playwright_configured():
-        results.append(StepResult("playwright", "OK", "not configured; optional browser install skipped"))
+        results.append(
+            StepResult(
+                "playwright", "OK", "not configured; optional browser install skipped"
+            )
+        )
     else:
         # Only attempt playwright setup if frontend install did not fail hard.
-        frontend_failed = any(item.name == "frontend" and item.status == "FAIL" for item in results)
+        frontend_failed = any(
+            item.name == "frontend" and item.status == "FAIL" for item in results
+        )
         if frontend_failed:
-            results.append(StepResult("playwright", "WARN", "skipped because frontend install failed"))
+            results.append(
+                StepResult(
+                    "playwright", "WARN", "skipped because frontend install failed"
+                )
+            )
         else:
             results.append(_install_playwright())
 

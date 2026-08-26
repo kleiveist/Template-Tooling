@@ -9,14 +9,27 @@ from pathlib import Path
 
 from tools import logger
 from tools.config import ConfigLoadError, resolve_configuration
-from tools.core.context import load_context
+from tools.core.context import ProjectContext, load_context
 from tools.profiles import runtime as profile_runtime
 
-CONTEXT = load_context()
-ROOT = CONTEXT.project_root
-FRONTEND_DIR = CONTEXT.paths.frontend
-DEPLOYMENT_DIR = ROOT / "deployment"
-COMPOSE_FILE = DEPLOYMENT_DIR / "compose.yaml"
+TOOLS_ROOT = Path(__file__).resolve().parents[1]
+ROOT = TOOLS_ROOT.parent
+
+
+def _context(context: ProjectContext | None = None) -> ProjectContext:
+    """Resolve container inputs from the current target project."""
+
+    if context is not None:
+        return context
+    return load_context(project_root=ROOT, tools_root=TOOLS_ROOT)
+
+
+def _deployment_dir() -> Path:
+    return _context().project_root / "deployment"
+
+
+def _compose_file() -> Path:
+    return _deployment_dir() / "compose.yaml"
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +41,9 @@ class ContainerCheck:
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     try:
-        return subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
+        return subprocess.run(
+            command, cwd=ROOT, capture_output=True, text=True, check=False
+        )
     except OSError as exc:
         return subprocess.CompletedProcess(command, 127, stdout="", stderr=str(exc))
 
@@ -38,12 +53,14 @@ def _docker() -> str | None:
 
 
 def _required_files() -> tuple[Path, ...]:
+    context = _context()
+    deployment_dir = _deployment_dir()
     return (
-        ROOT / ".dockerignore",
-        COMPOSE_FILE,
-        DEPLOYMENT_DIR / "docker" / "backend.Dockerfile",
-        DEPLOYMENT_DIR / "docker" / "frontend.Dockerfile",
-        DEPLOYMENT_DIR / "docker" / "nginx.conf",
+        context.project_root / ".dockerignore",
+        _compose_file(),
+        deployment_dir / "docker" / "backend.Dockerfile",
+        deployment_dir / "docker" / "frontend.Dockerfile",
+        deployment_dir / "docker" / "nginx.conf",
     )
 
 
@@ -96,16 +113,22 @@ def collect_checks(
     )
 
     compose = _run([docker, "compose", "version"])
-    compose_status = "OK" if compose.returncode == 0 else ("FAIL" if require_docker else "WARN")
+    compose_status = (
+        "OK" if compose.returncode == 0 else ("FAIL" if require_docker else "WARN")
+    )
     checks.append(
         ContainerCheck(
             "compose",
             compose_status,
-            (compose.stdout or compose.stderr).strip() or "Docker Compose plugin is unavailable",
+            (compose.stdout or compose.stderr).strip()
+            or "Docker Compose plugin is unavailable",
         )
     )
-    if validate_compose and compose.returncode == 0 and COMPOSE_FILE.exists():
-        configured = _run([docker, "compose", "--file", str(COMPOSE_FILE), "config", "--quiet"])
+    compose_file = _compose_file()
+    if validate_compose and compose.returncode == 0 and compose_file.exists():
+        configured = _run(
+            [docker, "compose", "--file", str(compose_file), "config", "--quiet"]
+        )
         checks.append(
             ContainerCheck(
                 "compose-config",
@@ -124,20 +147,23 @@ def _tail(value: str, limit: int = 6) -> str:
 
 
 def _image_prefix() -> str:
-    package_path = FRONTEND_DIR / "package.json"
+    context = _context()
+    package_path = context.paths.frontend / "package.json"
+    fallback = context.config.project_name
     try:
         import json
 
         package = json.loads(package_path.read_text(encoding="utf-8"))
-        raw = str(package.get("name", "template-project")).removesuffix("-frontend")
+        raw = str(package.get("name", fallback)).removesuffix("-frontend")
     except (OSError, ValueError):
-        raw = "template-project"
+        raw = fallback
     normalized = re.sub(r"[^a-z0-9._-]+", "-", raw.lower()).strip("-.")
-    return normalized or "template-project"
+    return normalized or "project"
 
 
 def _version() -> str:
-    for path in (ROOT / "VERSION", CONTEXT.tools_root / "VERSION"):
+    context = _context()
+    for path in (context.project_root / "VERSION", context.tools_root / "VERSION"):
         try:
             value = path.read_text(encoding="utf-8").strip()
         except OSError:
@@ -153,7 +179,7 @@ def _build_component(component: str, *, no_cache: bool = False) -> int:
         logger.fail("Docker is required for container builds but was not found.")
         return 1
 
-    dockerfile = DEPLOYMENT_DIR / "docker" / f"{component}.Dockerfile"
+    dockerfile = _deployment_dir() / "docker" / f"{component}.Dockerfile"
     if not dockerfile.exists():
         logger.fail(f"Container definition missing: {dockerfile.relative_to(ROOT)}")
         return 1
@@ -183,7 +209,9 @@ def _build_component(component: str, *, no_cache: bool = False) -> int:
     logger.info(f"Building {component} container image")
     completed = _run(command)
     if completed.returncode != 0:
-        logger.fail(f"{component} container build failed: {_tail(completed.stderr or completed.stdout)}")
+        logger.fail(
+            f"{component} container build failed: {_tail(completed.stderr or completed.stdout)}"
+        )
         return 1
     logger.ok(f"container image: {_image_prefix()}/{component}:{_version()}")
     return 0
@@ -192,12 +220,17 @@ def _build_component(component: str, *, no_cache: bool = False) -> int:
 def build(args: argparse.Namespace) -> int:
     profile = profile_runtime.active_profile(ROOT)
     if not profile.has_feature("cloud"):
-        logger.fail(f"Container builds are disabled by active profile '{profile.profile_id}'.")
+        logger.fail(
+            f"Container builds are disabled by active profile '{profile.profile_id}'."
+        )
         return 1
 
     component = getattr(args, "component", "all")
     components = ("backend", "frontend") if component == "all" else (component,)
-    failures = sum(_build_component(item, no_cache=bool(getattr(args, "no_cache", False))) for item in components)
+    failures = sum(
+        _build_component(item, no_cache=bool(getattr(args, "no_cache", False)))
+        for item in components
+    )
     return 1 if failures else 0
 
 

@@ -35,12 +35,14 @@ def test_web_build_runs_npm_build_and_reports_dist(monkeypatch, tmp_path) -> Non
     frontend = root / "frontend"
     dist = frontend / "dist"
     web_artifact_dir = root / ".dist" / "web"
-    web_zip_path = web_artifact_dir / "template-project-web.zip"
+    web_zip_path = web_artifact_dir / "web-build.zip"
     frontend.mkdir(parents=True)
     (frontend / "package.json").write_text("{}", encoding="utf-8")
     calls: list[tuple[list[str], Path | None]] = []
 
-    def fake_run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    def fake_run(
+        cmd: list[str], cwd: Path | None = None
+    ) -> subprocess.CompletedProcess[str]:
         calls.append((cmd, cwd))
         (dist / "assets").mkdir(parents=True)
         (dist / "index.html").write_text("<html></html>", encoding="utf-8")
@@ -48,11 +50,9 @@ def test_web_build_runs_npm_build_and_reports_dist(monkeypatch, tmp_path) -> Non
         return subprocess.CompletedProcess(cmd, 0, stdout="built", stderr="")
 
     monkeypatch.setattr(build, "ROOT", root)
-    monkeypatch.setattr(build, "FRONTEND_DIR", frontend)
-    monkeypatch.setattr(build, "DIST_DIR", dist)
-    monkeypatch.setattr(build, "WEB_ARTIFACT_DIR", web_artifact_dir)
-    monkeypatch.setattr(build, "WEB_ZIP_PATH", web_zip_path)
-    monkeypatch.setattr(build.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None)
+    monkeypatch.setattr(
+        build.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None
+    )
     monkeypatch.setattr(build, "_run", fake_run)
 
     assert build.main(control._build_parser().parse_args(["build"])) == 0
@@ -69,10 +69,6 @@ def test_web_build_fails_when_npm_is_missing(monkeypatch, tmp_path) -> None:
     (frontend / "package.json").write_text("{}", encoding="utf-8")
 
     monkeypatch.setattr(build, "ROOT", root)
-    monkeypatch.setattr(build, "FRONTEND_DIR", frontend)
-    monkeypatch.setattr(build, "DIST_DIR", frontend / "dist")
-    monkeypatch.setattr(build, "WEB_ARTIFACT_DIR", root / ".dist" / "web")
-    monkeypatch.setattr(build, "WEB_ZIP_PATH", root / ".dist" / "web" / "template-project-web.zip")
     monkeypatch.setattr(build.shutil, "which", lambda name: None)
 
     assert build.main(control._build_parser().parse_args(["build"])) == 1
@@ -84,15 +80,15 @@ def test_web_build_fails_when_dist_is_not_created(monkeypatch, tmp_path) -> None
     frontend.mkdir(parents=True)
     (frontend / "package.json").write_text("{}", encoding="utf-8")
 
-    def fake_run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    def fake_run(
+        cmd: list[str], cwd: Path | None = None
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(cmd, 0, stdout="built", stderr="")
 
     monkeypatch.setattr(build, "ROOT", root)
-    monkeypatch.setattr(build, "FRONTEND_DIR", frontend)
-    monkeypatch.setattr(build, "DIST_DIR", frontend / "dist")
-    monkeypatch.setattr(build, "WEB_ARTIFACT_DIR", root / ".dist" / "web")
-    monkeypatch.setattr(build, "WEB_ZIP_PATH", root / ".dist" / "web" / "template-project-web.zip")
-    monkeypatch.setattr(build.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None)
+    monkeypatch.setattr(
+        build.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None
+    )
     monkeypatch.setattr(build, "_run", fake_run)
 
     assert build.main(control._build_parser().parse_args(["build"])) == 1
@@ -104,15 +100,17 @@ def test_web_build_returns_failure_for_failed_npm_build(monkeypatch, tmp_path) -
     frontend.mkdir(parents=True)
     (frontend / "package.json").write_text("{}", encoding="utf-8")
 
-    def fake_run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(cmd, 1, stdout="type error", stderr="vite failed")
+    def fake_run(
+        cmd: list[str], cwd: Path | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            cmd, 1, stdout="type error", stderr="vite failed"
+        )
 
     monkeypatch.setattr(build, "ROOT", root)
-    monkeypatch.setattr(build, "FRONTEND_DIR", frontend)
-    monkeypatch.setattr(build, "DIST_DIR", frontend / "dist")
-    monkeypatch.setattr(build, "WEB_ARTIFACT_DIR", root / ".dist" / "web")
-    monkeypatch.setattr(build, "WEB_ZIP_PATH", root / ".dist" / "web" / "template-project-web.zip")
-    monkeypatch.setattr(build.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None)
+    monkeypatch.setattr(
+        build.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None
+    )
     monkeypatch.setattr(build, "_run", fake_run)
 
     assert build.main(control._build_parser().parse_args(["build"])) == 1
@@ -125,16 +123,16 @@ def test_web_build_fails_when_dist_is_empty(monkeypatch, tmp_path) -> None:
     frontend.mkdir(parents=True)
     (frontend / "package.json").write_text("{}", encoding="utf-8")
 
-    def fake_run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    def fake_run(
+        cmd: list[str], cwd: Path | None = None
+    ) -> subprocess.CompletedProcess[str]:
         dist.mkdir()
         return subprocess.CompletedProcess(cmd, 0, stdout="built", stderr="")
 
     monkeypatch.setattr(build, "ROOT", root)
-    monkeypatch.setattr(build, "FRONTEND_DIR", frontend)
-    monkeypatch.setattr(build, "DIST_DIR", dist)
-    monkeypatch.setattr(build, "WEB_ARTIFACT_DIR", root / ".dist" / "web")
-    monkeypatch.setattr(build, "WEB_ZIP_PATH", root / ".dist" / "web" / "template-project-web.zip")
-    monkeypatch.setattr(build.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None)
+    monkeypatch.setattr(
+        build.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None
+    )
     monkeypatch.setattr(build, "_run", fake_run)
 
     assert build.main(control._build_parser().parse_args(["build"])) == 1

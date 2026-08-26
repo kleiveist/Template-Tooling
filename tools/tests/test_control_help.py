@@ -42,6 +42,16 @@ def test_bare_docs_prints_documentation_map(capsys) -> None:
     assert "index" in output
 
 
+def test_docs_parsers_default_to_configured_tooling_docs_root() -> None:
+    parser = control._build_parser()
+
+    check_args = parser.parse_args(["docs", "check"])
+    index_args = parser.parse_args(["docs", "index"])
+
+    assert check_args.docs_dir is None
+    assert index_args.docs_dir is None
+
+
 def test_quality_parser_defaults_to_complete_check() -> None:
     parser = control._build_parser()
 
