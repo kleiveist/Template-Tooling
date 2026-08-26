@@ -34,13 +34,16 @@ def _page(title: str, backlink: str, index: str | None = None) -> str:
 
 
 def _project_context(root: Path, *, docs: str = "docs") -> ProjectContext:
+    tools_root = root / "tools"
+    tools_root.mkdir(parents=True, exist_ok=True)
+    (tools_root / "VERSION").write_text("0.1.0\n", encoding="utf-8")
     config = ProjectConfig(
         tooling_version="0.1.0",
         project_name="Docs Fixture",
         profile="web-only",
         paths=ProjectPathConfig(docs=docs),
     )
-    return load_context(root, tools_root=root / "tools", config=config)
+    return load_context(root, tools_root=tools_root, config=config)
 
 
 def test_generated_empty_labels_are_translated_but_authored_text_is_preserved(

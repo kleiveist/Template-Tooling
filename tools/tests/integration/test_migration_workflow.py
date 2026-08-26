@@ -1,0 +1,277 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+
+import pytest
+
+import tools.integration.migrations as migration_model
+from tools.core.state import STATE_SCHEMA_VERSION, load_state
+from tools.integration import service, workflow
+from tools.integration.migrations import (
+    ConditionKind,
+    Migration,
+    MigrationApplicability,
+    MigrationCondition,
+    MigrationRegistry,
+    StructuredKeyAllowlist,
+)
+from tools.integration.model import (
+    IntegrationError,
+    Operation,
+    OperationKind,
+    Ownership,
+    StructuredChange,
+)
+from tools.tests.integration.test_workflow import (
+    TOOLING_VERSION,
+    _portable_project,
+    _snapshot,
+)
+
+
+def _add_file_migration(
+    identifier: str,
+    *,
+    source_schema: int = STATE_SCHEMA_VERSION,
+    postcondition_path: str = "tools/migrated.txt",
+) -> Migration:
+    path = "tools/migrated.txt"
+    return Migration(
+        migration_id=identifier,
+        description="Add deterministic migration evidence",
+        order=10,
+        applies=MigrationApplicability(
+            source_tooling_versions=(TOOLING_VERSION,),
+            target_tooling_version=TOOLING_VERSION,
+            source_state_schemas=(source_schema,),
+            target_state_schema=STATE_SCHEMA_VERSION,
+        ),
+        operations=(
+            Operation(
+                OperationKind.ADD,
+                path,
+                Ownership.TOOLING,
+                b"migrated\n",
+            ),
+        ),
+        preconditions=(
+            MigrationCondition(ConditionKind.PATH_MISSING, path, Ownership.TOOLING),
+        ),
+        postconditions=(
+            MigrationCondition(
+                ConditionKind.PATH_EXISTS,
+                postcondition_path,
+                Ownership.TOOLING,
+            ),
+        ),
+    )
+
+
+def test_runtime_registry_check_apply_and_second_run_are_exactly_idempotent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root, tools = _portable_project(tmp_path)
+    workflow.run_full_fix(root, tools_root=tools)
+    registry = MigrationRegistry((_add_file_migration("add-migration-evidence"),))
+    monkeypatch.setattr(migration_model, "REGISTRY", registry)
+    before_check = _snapshot(root)
+
+    assert (
+        service.run_migrate(
+            check_only=True,
+            json_output=True,
+            project_root=root,
+            tools_root=tools,
+        )
+        == 1
+    )
+    check_payload = json.loads(capsys.readouterr().out)
+
+    assert check_payload["pending_migrations"] == ["add-migration-evidence"]
+    assert {item["path"] for item in check_payload["plan"]["operations"]} == {
+        ".tooling-state/state.toml",
+        "tools/migrated.txt",
+    }
+    assert _snapshot(root) == before_check
+
+    assert (
+        service.run_migrate(
+            json_output=True,
+            project_root=root,
+            tools_root=tools,
+        )
+        == 0
+    )
+    applied_payload = json.loads(capsys.readouterr().out)
+
+    assert applied_payload["pending_migrations"] == []
+    assert applied_payload["applied_migrations"] == ["add-migration-evidence"]
+    assert (tools / "migrated.txt").read_bytes() == b"migrated\n"
+    assert load_state(root).applied_migrations == ("add-migration-evidence",)
+    assert workflow.assess_project(root, tools_root=tools).plan.is_noop
+
+    before_noop = _snapshot(root)
+    assert (
+        service.run_migrate(
+            json_output=True,
+            project_root=root,
+            tools_root=tools,
+        )
+        == 0
+    )
+    noop_payload = json.loads(capsys.readouterr().out)
+    assert noop_payload["applied_migrations"] == []
+    assert noop_payload["report_path"] is None
+    assert _snapshot(root) == before_noop
+
+
+def test_registered_migration_can_convert_an_unsupported_old_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, tools = _portable_project(tmp_path)
+    workflow.run_full_fix(root, tools_root=tools)
+    state_path = root / ".tooling-state" / "state.toml"
+    state_path.write_text(
+        state_path.read_text(encoding="utf-8").replace(
+            f"schema_version = {STATE_SCHEMA_VERSION}",
+            "schema_version = 2",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    registry = MigrationRegistry(
+        (_add_file_migration("convert-old-state", source_schema=2),)
+    )
+    monkeypatch.setattr(migration_model, "REGISTRY", registry)
+
+    migration = workflow.assess_migrations(root, tools_root=tools)
+    applied = workflow.run_migrations(root, tools_root=tools)
+
+    assert migration.pending_ids == ("convert-old-state",)
+    assert migration.source_state_schema == 2
+    assert applied.applied_ids == ("convert-old-state",)
+    state = load_state(root)
+    assert state.schema_version == STATE_SCHEMA_VERSION
+    assert state.applied_migrations == ("convert-old-state",)
+    assert workflow.assess_project(root, tools_root=tools).plan.is_noop
+
+
+def test_unsupported_state_without_registered_conversion_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, tools = _portable_project(tmp_path)
+    workflow.run_full_fix(root, tools_root=tools)
+    state_path = root / ".tooling-state" / "state.toml"
+    state_path.write_text(
+        state_path.read_text(encoding="utf-8").replace(
+            f"schema_version = {STATE_SCHEMA_VERSION}",
+            "schema_version = 2",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(migration_model, "REGISTRY", MigrationRegistry())
+    before = _snapshot(root)
+
+    with pytest.raises(
+        migration_model.MigrationError,
+        match="no registered migration",
+    ):
+        workflow.assess_migrations(root, tools_root=tools)
+
+    assert _snapshot(root) == before
+
+
+def test_failed_postcondition_keeps_migration_and_state_unchanged(
+    tmp_path: Path,
+) -> None:
+    root, tools = _portable_project(tmp_path)
+    workflow.run_full_fix(root, tools_root=tools)
+    state_before = (root / ".tooling-state" / "state.toml").read_bytes()
+    migration = _add_file_migration(
+        "failing-postcondition",
+        postcondition_path="tools/never-created.txt",
+    )
+
+    with pytest.raises(
+        IntegrationError, match="Staged integration verification failed"
+    ):
+        workflow.run_migrations(
+            root,
+            tools_root=tools,
+            registry=MigrationRegistry((migration,)),
+        )
+
+    assert not (tools / "migrated.txt").exists()
+    assert (root / ".tooling-state" / "state.toml").read_bytes() == state_before
+    assert load_state(root).applied_migrations == ()
+
+
+def test_structured_migration_uses_declared_key_union_and_preserves_foreign_data(
+    tmp_path: Path,
+) -> None:
+    root, tools = _portable_project(tmp_path)
+    workflow.run_full_fix(root, tools_root=tools)
+    package = root / "package.json"
+    before = b'{"scripts":{"quality":"old"},"foreign":"keep"}\n'
+    package.write_bytes(before)
+    migration = Migration(
+        migration_id="patch-known-structured-key",
+        description="Patch one explicitly owned package key",
+        order=20,
+        applies=MigrationApplicability(
+            source_tooling_versions=(TOOLING_VERSION,),
+            target_tooling_version=TOOLING_VERSION,
+            source_state_schemas=(STATE_SCHEMA_VERSION,),
+            target_state_schema=STATE_SCHEMA_VERSION,
+        ),
+        operations=(
+            Operation(
+                OperationKind.PATCH,
+                "package.json",
+                Ownership.STRUCTURED,
+                expected_sha256=hashlib.sha256(before).hexdigest(),
+                structured_changes=(StructuredChange("scripts.quality", "new", "old"),),
+            ),
+        ),
+        preconditions=(
+            MigrationCondition(
+                ConditionKind.STRUCTURED_EQUALS,
+                "package.json",
+                Ownership.STRUCTURED,
+                key="scripts.quality",
+                value="old",
+            ),
+        ),
+        postconditions=(
+            MigrationCondition(
+                ConditionKind.STRUCTURED_EQUALS,
+                "package.json",
+                Ownership.STRUCTURED,
+                key="scripts.quality",
+                value="new",
+            ),
+        ),
+        structured_key_allowlist=(
+            StructuredKeyAllowlist("package.json", ("scripts.quality",)),
+        ),
+    )
+
+    applied = workflow.run_migrations(
+        root,
+        tools_root=tools,
+        registry=MigrationRegistry((migration,)),
+    )
+
+    assert applied.applied_ids == ("patch-known-structured-key",)
+    assert json.loads(package.read_text(encoding="utf-8")) == {
+        "scripts": {"quality": "new"},
+        "foreign": "keep",
+    }
+    assert load_state(root).applied_migrations == ("patch-known-structured-key",)

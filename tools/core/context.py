@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from tools.core.filesystem import (
+    FilesystemSafetyError,
+    read_regular_text,
+    validate_root,
+)
 from tools.core.project_config import (
     ProjectConfig,
     ProjectConfigError,
@@ -56,7 +61,9 @@ class ProjectContext:
     def tooling_version(self) -> str:
         return self.config.tooling_version
 
-    def with_config(self, config: ProjectConfig, *, exists: bool | None = None) -> ProjectContext:
+    def with_config(
+        self, config: ProjectConfig, *, exists: bool | None = None
+    ) -> ProjectContext:
         """Return the same filesystem context resolved against another safe config."""
 
         resolved = _project_paths(self.project_root, config)
@@ -72,9 +79,15 @@ class ProjectContext:
 def _read_tooling_version(tools_root: Path) -> str:
     version_path = tools_root / "VERSION"
     try:
-        value = version_path.read_text(encoding="utf-8").strip()
-    except OSError as exc:
-        raise ProjectConfigError(f"Could not read tooling version: {version_path}") from exc
+        value = read_regular_text(
+            version_path,
+            root=tools_root,
+            label="Tooling version",
+        ).strip()
+    except (FilesystemSafetyError, OSError) as exc:
+        raise ProjectConfigError(
+            f"Could not read tooling version: {version_path}"
+        ) from exc
     if not value:
         raise ProjectConfigError(f"Tooling version is empty: {version_path}")
     return value
@@ -86,7 +99,9 @@ def _within_project(project_root: Path, relative: str) -> Path:
     try:
         resolved.relative_to(project_root)
     except ValueError as exc:
-        raise ProjectConfigError(f"Configured path escapes project root: {relative!r}") from exc
+        raise ProjectConfigError(
+            f"Configured path escapes project root: {relative!r}"
+        ) from exc
     return candidate
 
 
@@ -94,7 +109,9 @@ def _project_paths(project_root: Path, config: ProjectConfig) -> ProjectPaths:
     path_config = config.paths
     return ProjectPaths(
         frontend=_within_project(project_root, path_config.frontend),
-        backend=_within_project(project_root, path_config.backend) if path_config.backend else None,
+        backend=_within_project(project_root, path_config.backend)
+        if path_config.backend
+        else None,
         tauri=_within_project(project_root, path_config.tauri),
         docs=_within_project(project_root, path_config.docs),
     )
@@ -121,10 +138,24 @@ def load_context(
 ) -> ProjectContext:
     """Resolve a context without creating configuration, state, logs, or caches."""
 
-    resolved_tools = (tools_root or TOOLS_ROOT).resolve(strict=False)
-    resolved_project = (project_root or resolved_tools.parent).resolve(strict=False)
+    try:
+        resolved_tools = validate_root(Path(tools_root or TOOLS_ROOT).absolute())
+        resolved_project = validate_root(
+            Path(project_root or resolved_tools.parent).absolute()
+        )
+    except FilesystemSafetyError as exc:
+        raise ProjectConfigError(str(exc)) from exc
     config_path = resolved_project / "project-tooling.toml"
-    config_exists = config_path.is_file()
+    try:
+        config_path.lstat()
+    except FileNotFoundError:
+        config_exists = False
+    except OSError as exc:
+        raise ProjectConfigError(
+            f"Could not inspect project configuration: {config_path}"
+        ) from exc
+    else:
+        config_exists = True
     if config is None:
         config = (
             load_project_config(config_path)
@@ -147,7 +178,9 @@ def load_context(
     venv_root = state_root / "venv"
     _validate_state_path(resolved_project, state_root, label="tooling state root")
     _validate_state_path(resolved_project, runtime_root, label="tooling runtime root")
-    _validate_state_path(resolved_project, venv_root, label="tooling virtual environment")
+    _validate_state_path(
+        resolved_project, venv_root, label="tooling virtual environment"
+    )
     return ProjectContext(
         tools_root=resolved_tools,
         project_root=resolved_project,

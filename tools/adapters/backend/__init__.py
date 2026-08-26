@@ -28,45 +28,52 @@ class BackendAdapter(BaseAdapter):
         if context.paths.backend is None:
             return ()
         root = context.paths.backend
-        return (
-            PathRequirement(
-                path=project_relative_path(context, root),
-                ownership=Ownership.PROJECT,
-                kind="directory",
-                required=False,
-                reason="backend feature root",
-            ),
-            PathRequirement(
-                path=project_relative_path(context, root / "app" / "main.py"),
-                ownership=Ownership.PROJECT,
-                kind="file",
-                required=False,
-                reason="FastAPI application marker",
-                marker=True,
-            ),
-            PathRequirement(
-                path=project_relative_path(context, root / "main.py"),
-                ownership=Ownership.PROJECT,
-                kind="file",
-                required=False,
-                reason="FastAPI root application marker",
-                marker=True,
-            ),
-            PathRequirement(
-                path=project_relative_path(context, root / "pyproject.toml"),
-                ownership=Ownership.PROJECT,
-                kind="file",
-                required=False,
-                reason="Python project marker",
-            ),
-            PathRequirement(
-                path=project_relative_path(context, root / "requirements.txt"),
-                ownership=Ownership.PROJECT,
-                kind="file",
-                required=False,
-                reason="Python dependency marker",
-            ),
+        requirements = []
+        if root != context.project_root:
+            requirements.append(
+                PathRequirement(
+                    path=project_relative_path(context, root),
+                    ownership=Ownership.PROJECT,
+                    kind="directory",
+                    required=False,
+                    reason="backend feature root",
+                )
+            )
+        requirements.extend(
+            (
+                PathRequirement(
+                    path=project_relative_path(context, root / "app" / "main.py"),
+                    ownership=Ownership.PROJECT,
+                    kind="file",
+                    required=False,
+                    reason="FastAPI application marker",
+                    marker=True,
+                ),
+                PathRequirement(
+                    path=project_relative_path(context, root / "main.py"),
+                    ownership=Ownership.PROJECT,
+                    kind="file",
+                    required=False,
+                    reason="FastAPI root application marker",
+                    marker=True,
+                ),
+                PathRequirement(
+                    path=project_relative_path(context, root / "pyproject.toml"),
+                    ownership=Ownership.PROJECT,
+                    kind="file",
+                    required=False,
+                    reason="Python project marker",
+                ),
+                PathRequirement(
+                    path=project_relative_path(context, root / "requirements.txt"),
+                    ownership=Ownership.PROJECT,
+                    kind="file",
+                    required=False,
+                    reason="Python dependency marker",
+                ),
+            )
         )
+        return tuple(requirements)
 
     def detect(self, context: ProjectContext) -> AdapterDetection:
         """Require both FastAPI source and dependency evidence."""
@@ -105,9 +112,14 @@ def _safe_contains(
     try:
         relative = project_relative_path(context, path)
         target = safe_join(context.project_root, relative, require_exists=True)
-        return pattern.search(
-            read_regular_text(target, root=context.project_root, label="Backend marker")
-        ) is not None
+        return (
+            pattern.search(
+                read_regular_text(
+                    target, root=context.project_root, label="Backend marker"
+                )
+            )
+            is not None
+        )
     except (FilesystemSafetyError, OSError, UnicodeError):
         return False
 
