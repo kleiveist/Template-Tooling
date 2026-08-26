@@ -11,30 +11,37 @@ class TauriAdapter(BaseAdapter):
 
     def requirements(self, context: ProjectContext) -> tuple[PathRequirement, ...]:
         root = context.paths.tauri
-        return (
-            PathRequirement(
-                path=project_relative_path(context, root),
-                ownership=Ownership.PROJECT,
-                kind="directory",
-                required=False,
-                reason="Tauri feature root",
-            ),
-            PathRequirement(
-                path=project_relative_path(context, root / "Cargo.toml"),
-                ownership=Ownership.PROJECT,
-                kind="file",
-                required=False,
-                reason="Tauri Rust package marker",
-            ),
-            PathRequirement(
-                path=project_relative_path(context, root / "tauri.conf.json"),
-                ownership=Ownership.PROJECT,
-                kind="file",
-                required=False,
-                reason="Tauri configuration marker",
-                marker=True,
-            ),
+        requirements = []
+        if root != context.project_root:
+            requirements.append(
+                PathRequirement(
+                    path=project_relative_path(context, root),
+                    ownership=Ownership.PROJECT,
+                    kind="directory",
+                    required=False,
+                    reason="Tauri feature root",
+                )
+            )
+        requirements.extend(
+            (
+                PathRequirement(
+                    path=project_relative_path(context, root / "Cargo.toml"),
+                    ownership=Ownership.PROJECT,
+                    kind="file",
+                    required=False,
+                    reason="Tauri Rust package marker",
+                ),
+                PathRequirement(
+                    path=project_relative_path(context, root / "tauri.conf.json"),
+                    ownership=Ownership.PROJECT,
+                    kind="file",
+                    required=False,
+                    reason="Tauri configuration marker",
+                    marker=True,
+                ),
+            )
         )
+        return tuple(requirements)
 
 
 __all__ = ["TauriAdapter"]

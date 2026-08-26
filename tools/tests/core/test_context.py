@@ -96,9 +96,39 @@ def test_project_config_is_never_overwritten(tmp_path: Path) -> None:
     assert path.read_text(encoding="utf-8") == "user-owned\n"
 
 
+def test_project_config_reader_never_follows_a_symlink(tmp_path: Path) -> None:
+    external = tmp_path.parent / f"{tmp_path.name}-external-config.toml"
+    external.write_text(
+        render_project_config(ProjectConfig("0.1.0", "External", "web-only")),
+        encoding="utf-8",
+    )
+    linked = tmp_path / "project-tooling.toml"
+    linked.symlink_to(external)
+
+    with pytest.raises(ProjectConfigError, match="Could not read"):
+        load_project_config(linked)
+
+
+def test_context_never_follows_a_symlinked_version_file(tmp_path: Path) -> None:
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    external = tmp_path / "external-version"
+    external.write_text("0.1.0\n", encoding="utf-8")
+    (tools / "VERSION").symlink_to(external)
+
+    with pytest.raises(ProjectConfigError, match="Could not read tooling version"):
+        load_context(tools_root=tools)
+
+
 @pytest.mark.parametrize(
     "unsafe",
-    ["../outside", "/absolute", "C:\\outside", "nested/../../outside", "nested\\child", "."],
+    [
+        "../outside",
+        "/absolute",
+        "C:\\outside",
+        "nested/../../outside",
+        "nested\\child",
+    ],
 )
 def test_project_config_rejects_unsafe_paths(tmp_path: Path, unsafe: str) -> None:
     path = tmp_path / "project-tooling.toml"
@@ -128,6 +158,25 @@ def test_project_config_rejects_unsafe_paths(tmp_path: Path, unsafe: str) -> Non
         load_project_config(path)
 
 
+def test_project_config_supports_product_markers_at_the_project_root(
+    tmp_path: Path,
+) -> None:
+    tools = _copy_runtime_marker(tmp_path)
+    config = ProjectConfig(
+        "0.1.0",
+        "Root application",
+        "desktop-cloud",
+        paths=ProjectPathConfig(frontend=".", backend=".", tauri="."),
+    )
+    create_project_config(tmp_path / "project-tooling.toml", config)
+
+    context = load_context(tools_root=tools)
+
+    assert context.paths.frontend == tmp_path
+    assert context.paths.backend == tmp_path
+    assert context.paths.tauri == tmp_path
+
+
 def test_existing_symlink_path_cannot_escape_project(tmp_path: Path) -> None:
     tools = _copy_runtime_marker(tmp_path)
     outside = tmp_path.parent / f"{tmp_path.name}-outside"
@@ -138,7 +187,9 @@ def test_existing_symlink_path_cannot_escape_project(tmp_path: Path) -> None:
         load_context(tools_root=tools)
 
 
-@pytest.mark.parametrize("relative", [".tooling-state", ".tooling-state/runtime", ".tooling-state/venv"])
+@pytest.mark.parametrize(
+    "relative", [".tooling-state", ".tooling-state/runtime", ".tooling-state/venv"]
+)
 def test_state_and_runtime_symlinks_are_rejected(tmp_path: Path, relative: str) -> None:
     tools = _copy_runtime_marker(tmp_path)
     outside = tmp_path.parent / f"{tmp_path.name}-{relative.replace('/', '-')}"

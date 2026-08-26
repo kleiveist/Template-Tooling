@@ -12,7 +12,7 @@ import shutil
 import stat
 import tempfile
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -22,11 +22,18 @@ from tools.core.filesystem import (
     FilesystemSafetyError,
     atomic_write,
     ensure_directory,
+    read_regular_bytes,
     safe_join,
     safe_relative_path,
     validate_root,
 )
 from tools.core.manifest import is_protected_relative_path
+from tools.core.project_config import (
+    SUPPORTED_SCHEMA_VERSION,
+    ProjectConfig,
+    ProjectPathConfig,
+    render_project_config,
+)
 from tools.integration.model import (
     UNSET,
     IntegrationError,
@@ -50,6 +57,19 @@ _STRUCTURED_FILE_NAMES = {
     "project-tooling.toml",
     "pyproject.toml",
     "tauri.conf.json",
+}
+_WORKFLOW_SUFFIXES = {".yaml", ".yml"}
+_PROJECT_CONFIG_RELATIVE = "project-tooling.toml"
+_PROJECT_CONFIG_KEYS = {
+    "schema_version",
+    "tooling.version",
+    "project.name",
+    "project.profile",
+    "paths.frontend",
+    "paths.backend",
+    "paths.tauri",
+    "paths.docs",
+    "features.optional",
 }
 _DATA_DIRECTORIES = {
     ".data",
@@ -113,6 +133,7 @@ _STAGING_IGNORED_DIRECTORIES = {
 
 Verifier = Callable[[Path], VerificationResult]
 ReportFinalizer = Callable[[VerificationResult, str], None]
+PostApply = Callable[[Path], VerificationResult | None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +146,8 @@ class TransactionRequest:
     report_directory: Path | None = None
     report_finalizer: ReportFinalizer | None = None
     managed_roots: tuple[str, ...] = DEFAULT_MANAGED_ROOTS
+    post_apply: PostApply | None = None
+    structured_key_allowlist: Mapping[str, frozenset[str]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +164,14 @@ class _BackupEntry:
     mode: int | None = None
 
 
+class _ConcurrentCreationError(IntegrationError):
+    """A planned exclusive creation lost a race to another filesystem writer."""
+
+    def __init__(self, path: str) -> None:
+        super().__init__(f"Integration creation target appeared during commit: {path}.")
+        self.path = path
+
+
 def apply_transaction(request: TransactionRequest) -> IntegrationResult:
     """Stage, verify, apply, verify again, and roll back every failed apply."""
 
@@ -150,13 +181,19 @@ def apply_transaction(request: TransactionRequest) -> IntegrationResult:
             "Integration plan contains conflicts; no project files were changed."
         )
     managed_roots = _normalize_managed_roots(request.managed_roots)
-    prepared = _prepare_operations(root, request.plan.operations, managed_roots)
+    structured_key_allowlist = _normalize_structured_key_allowlist(
+        request.structured_key_allowlist
+    )
+    prepared = _prepare_operations(
+        root,
+        request.plan.operations,
+        managed_roots,
+        structured_key_allowlist,
+    )
     if not prepared:
         result = _run_verifier(request.verifier, root)
         if not result.ok:
-            _finalize_report(request.report_finalizer, result, "FAILED")
             raise IntegrationError("No-op integration verification failed.")
-        _finalize_report(request.report_finalizer, result, "INTEGRATED")
         return IntegrationResult("INTEGRATED", request.plan, result, ())
 
     report_directory = _safe_report_directory(root, request.report_directory)
@@ -188,7 +225,19 @@ def apply_transaction(request: TransactionRequest) -> IntegrationResult:
         _validate_preimages(root, prepared)
         try:
             _apply_from_staging(root, staging, prepared)
+            post_apply_result = _run_post_apply(request.post_apply, root)
+            if post_apply_result is not None and not post_apply_result.ok:
+                _finalize_report(
+                    request.report_finalizer,
+                    post_apply_result,
+                    "FAILED",
+                )
+                raise IntegrationError("Post-apply action verification failed.")
             result = _run_verifier(request.verifier, root)
+            if post_apply_result is not None:
+                result = VerificationResult(
+                    (*post_apply_result.findings, *result.findings)
+                )
             if not result.ok:
                 _finalize_report(request.report_finalizer, result, "FAILED")
                 raise IntegrationError("Post-integration verification failed.")
@@ -201,8 +250,17 @@ def apply_transaction(request: TransactionRequest) -> IntegrationResult:
                 journal_path,
             )
         except BaseException as exc:
+            preserve_missing = (
+                (exc.path,) if isinstance(exc, _ConcurrentCreationError) else ()
+            )
             try:
-                _restore_paths(root, backup, affected, backups)
+                _restore_paths(
+                    root,
+                    backup,
+                    affected,
+                    backups,
+                    preserve_missing=preserve_missing,
+                )
             except (OSError, IntegrationError) as rollback_exc:
                 raise IntegrationError(
                     f"Integration failed and rollback could not complete: {rollback_exc}."
@@ -226,6 +284,8 @@ def apply_plan(
     report_directory: Path | None = None,
     report_finalizer: ReportFinalizer | None = None,
     managed_roots: tuple[str, ...] = DEFAULT_MANAGED_ROOTS,
+    post_apply: PostApply | None = None,
+    structured_key_allowlist: Mapping[str, frozenset[str]] | None = None,
 ) -> IntegrationResult:
     """Convenience entry point for callers that do not need a request object."""
 
@@ -237,6 +297,8 @@ def apply_plan(
             report_directory=report_directory,
             report_finalizer=report_finalizer,
             managed_roots=managed_roots,
+            post_apply=post_apply,
+            structured_key_allowlist=structured_key_allowlist or {},
         )
     )
 
@@ -257,10 +319,79 @@ def _normalize_managed_roots(values: Iterable[str]) -> tuple[str, ...]:
     return normalized
 
 
+def _normalize_structured_key_allowlist(
+    values: Mapping[str, frozenset[str]],
+) -> dict[str, frozenset[str]]:
+    if not isinstance(values, Mapping):
+        raise IntegrationError("Structured key allowlist must be a path mapping.")
+    normalized: dict[str, frozenset[str]] = {}
+    claimed: set[str] = set()
+    for raw_path, raw_keys in values.items():
+        path = _safe_relative(raw_path, label="Structured allowlist path")
+        collision_key = path.casefold()
+        if collision_key in claimed:
+            raise IntegrationError(
+                f"Structured allowlist repeats a path with ambiguous casing: {path}."
+            )
+        claimed.add(collision_key)
+        if not _is_supported_structured_target(path):
+            raise IntegrationError(
+                f"Structured allowlist targets an unsupported file: {path}."
+            )
+        if isinstance(raw_keys, (str, bytes)):
+            raise IntegrationError(
+                f"Structured allowlist keys must be a collection at {path}."
+            )
+        try:
+            keys = frozenset(raw_keys)
+        except TypeError as exc:
+            raise IntegrationError(
+                f"Structured allowlist keys are invalid at {path}."
+            ) from exc
+        if not keys or any(
+            not isinstance(key, str)
+            or not key
+            or any(not part for part in key.split("."))
+            for key in keys
+        ):
+            raise IntegrationError(f"Structured allowlist keys are invalid at {path}.")
+        normalized[path] = keys
+    return normalized
+
+
+def _is_supported_structured_target(path: str) -> bool:
+    relative = PurePosixPath(path)
+    if relative.name in _STRUCTURED_FILE_NAMES:
+        return True
+    return (
+        len(relative.parts) == 3
+        and relative.parts[:2] == (".github", "workflows")
+        and relative.suffix.casefold() in _WORKFLOW_SUFFIXES
+    )
+
+
+def _validate_declared_structured_changes(
+    path: str,
+    changes: tuple[StructuredChange, ...],
+    allowlist: Mapping[str, frozenset[str]],
+) -> None:
+    allowed = allowlist.get(path)
+    if allowed is None:
+        raise IntegrationError(
+            f"Structured PATCH has no known-key allowlist for {path}."
+        )
+    unknown = sorted(change.key for change in changes if change.key not in allowed)
+    if unknown:
+        raise IntegrationError(
+            f"Structured PATCH uses undeclared keys at {path}: {', '.join(unknown)}."
+        )
+
+
 def _prepare_operations(
     root: Path,
     operations: tuple[Operation, ...],
     managed_roots: tuple[str, ...],
+    structured_key_allowlist: Mapping[str, frozenset[str]],
 ) -> tuple[_PreparedOperation, ...]:
     prepared: list[_PreparedOperation] = []
     claimed: dict[str, str] = {}
@@ -271,7 +402,13 @@ def _prepare_operations(
             if operation.source_path is not None
             else None
         )
-        _validate_operation_contract(operation, path, source, managed_roots)
+        _validate_operation_contract(
+            operation,
+            path,
+            source,
+            managed_roots,
+            structured_key_allowlist,
+        )
         for claimed_path in (path, source):
             if claimed_path is None:
                 continue
@@ -294,6 +431,7 @@ def _validate_operation_contract(
     path: str,
     source: str | None,
     managed_roots: tuple[str, ...],
+    structured_key_allowlist: Mapping[str, frozenset[str]],
 ) -> None:
     kind = operation.kind
     if not isinstance(kind, OperationKind):
@@ -320,11 +458,16 @@ def _validate_operation_contract(
                 "Structured PATCH operations require structured ownership."
             )
     elif operation.ownership is Ownership.STRUCTURED:
-        if kind is not OperationKind.PATCH:
+        is_project_config_add = (
+            kind is OperationKind.ADD and path == _PROJECT_CONFIG_RELATIVE
+        )
+        if kind is not OperationKind.PATCH and not is_project_config_add:
             raise IntegrationError(
-                f"Structured path {path} may only be changed through a key-level PATCH operation."
+                f"Structured path {path} may only be changed through a key-level "
+                "PATCH operation; only the missing root project-tooling.toml may "
+                "be created from canonical content."
             )
-        if PurePosixPath(path).name not in _STRUCTURED_FILE_NAMES:
+        if not _is_supported_structured_target(path):
             raise IntegrationError(
                 f"Unsupported structured configuration target: {path}."
             )
@@ -367,6 +510,22 @@ def _validate_operation_contract(
             )
     if kind is not OperationKind.MOVE and source is not None:
         raise IntegrationError(f"Only MOVE operations may define source_path: {path}.")
+
+    if operation.ownership is Ownership.STRUCTURED and kind is OperationKind.ADD:
+        assert content is not None
+        _validate_canonical_project_config(content)
+    elif (
+        operation.ownership is Ownership.STRUCTURED
+        and kind is OperationKind.PATCH
+        and path == _PROJECT_CONFIG_RELATIVE
+    ):
+        _validate_project_config_changes(changes)
+    elif operation.ownership is Ownership.STRUCTURED and kind is OperationKind.PATCH:
+        _validate_declared_structured_changes(
+            path,
+            changes,
+            structured_key_allowlist,
+        )
 
     if kind in {
         OperationKind.UPDATE,
@@ -492,6 +651,13 @@ def _apply_from_staging(
         if operation.kind is OperationKind.DELETE:
             _delete_file(_safe_target(root, item.path), root)
             continue
+        if (
+            operation.kind is OperationKind.ADD
+            and operation.ownership is Ownership.STRUCTURED
+            and item.path == _PROJECT_CONFIG_RELATIVE
+        ):
+            _create_from_stage(root, staging, item.path)
+            continue
         _replace_from_stage(root, staging, item.path)
 
 
@@ -546,6 +712,12 @@ def _apply_structured_patch(path: Path, operation: Operation, *, root: Path) -> 
                 operation.structured_changes,
                 operation.path,
             ).encode("utf-8")
+        elif path.suffix.casefold() in _WORKFLOW_SUFFIXES:
+            rendered = _patch_yaml_text(
+                text,
+                operation.structured_changes,
+                operation.path,
+            ).encode("utf-8")
         else:
             raise IntegrationError(
                 f"Unsupported structured configuration format: {operation.path}."
@@ -593,6 +765,155 @@ def _apply_structured_changes(
                 f"Structured value changed after planning in {relative}: {change.key}."
             )
         cursor[key] = change.value
+
+
+def _validate_canonical_project_config(content: bytes) -> None:
+    """Accept only the exact deterministic rendering of the supported schema."""
+
+    try:
+        text = content.decode("utf-8")
+        document = tomllib.loads(text)
+    except (UnicodeError, tomllib.TOMLDecodeError) as exc:
+        raise IntegrationError(
+            "New project-tooling.toml content must be valid canonical UTF-8 TOML."
+        ) from exc
+
+    expected_top_level = {
+        "schema_version",
+        "tooling",
+        "project",
+        "paths",
+        "features",
+    }
+    if set(document) != expected_top_level:
+        raise IntegrationError(
+            "New project-tooling.toml content must contain only the supported schema keys."
+        )
+    schema_version = document["schema_version"]
+    if isinstance(schema_version, bool) or schema_version != SUPPORTED_SCHEMA_VERSION:
+        raise IntegrationError(
+            "New project-tooling.toml content has an unsupported schema version."
+        )
+
+    tooling = _project_config_table(document, "tooling", {"version"})
+    project = _project_config_table(document, "project", {"name", "profile"})
+    paths = _project_config_table(
+        document,
+        "paths",
+        {"frontend", "backend", "tauri", "docs"},
+    )
+    features = _project_config_table(document, "features", {"optional"})
+    config = ProjectConfig(
+        schema_version=SUPPORTED_SCHEMA_VERSION,
+        tooling_version=_project_config_string(tooling["version"], "tooling.version"),
+        project_name=_project_config_string(project["name"], "project.name"),
+        profile=_project_config_string(project["profile"], "project.profile"),
+        paths=ProjectPathConfig(
+            frontend=_project_config_path(paths["frontend"], "paths.frontend"),
+            backend=_project_config_path(
+                paths["backend"], "paths.backend", allow_empty=True
+            ),
+            tauri=_project_config_path(paths["tauri"], "paths.tauri"),
+            docs=_project_config_path(paths["docs"], "paths.docs"),
+        ),
+        optional_features=_project_config_features(features["optional"]),
+    )
+    canonical = render_project_config(config).encode("utf-8")
+    if content != canonical:
+        raise IntegrationError(
+            "New project-tooling.toml content must use the canonical project configuration rendering."
+        )
+
+
+def _project_config_table(
+    document: Mapping[str, Any], name: str, keys: set[str]
+) -> dict[str, Any]:
+    value = document.get(name)
+    if not isinstance(value, dict) or set(value) != keys:
+        raise IntegrationError(
+            f"New project-tooling.toml [{name}] must contain only supported keys."
+        )
+    return value
+
+
+def _project_config_string(value: Any, key: str, *, allow_empty: bool = False) -> str:
+    if not isinstance(value, str) or value != value.strip():
+        raise IntegrationError(
+            f"New project-tooling.toml {key} must be a normalized string."
+        )
+    if not value and not allow_empty:
+        raise IntegrationError(f"New project-tooling.toml {key} must not be empty.")
+    return value
+
+
+def _project_config_path(value: Any, key: str, *, allow_empty: bool = False) -> str:
+    normalized = _project_config_string(value, key, allow_empty=allow_empty)
+    if not normalized:
+        return ""
+    if normalized == ".":
+        return normalized
+    try:
+        return safe_relative_path(normalized)
+    except FilesystemSafetyError as exc:
+        raise IntegrationError(
+            f"New project-tooling.toml {key} must be a safe project-relative path."
+        ) from exc
+
+
+def _project_config_features(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, (list, tuple)):
+        raise IntegrationError(
+            "New project-tooling.toml features.optional must be a list of strings."
+        )
+    features: list[str] = []
+    for feature in value:
+        normalized = _project_config_string(feature, "features.optional item")
+        if normalized in features:
+            raise IntegrationError(
+                "New project-tooling.toml features.optional must not contain duplicates."
+            )
+        features.append(normalized)
+    return tuple(features)
+
+
+def _validate_project_config_changes(
+    changes: tuple[StructuredChange, ...],
+) -> None:
+    seen: set[str] = set()
+    for change in changes:
+        if change.key in seen:
+            raise IntegrationError(
+                f"Structured key is patched more than once: {change.key}."
+            )
+        seen.add(change.key)
+        if change.key not in _PROJECT_CONFIG_KEYS:
+            raise IntegrationError(
+                "project-tooling.toml PATCH may change only supported schema keys: "
+                f"{change.key}."
+            )
+        if change.key == "schema_version":
+            if (
+                isinstance(change.value, bool)
+                or change.value != SUPPORTED_SCHEMA_VERSION
+            ):
+                raise IntegrationError(
+                    "project-tooling.toml PATCH cannot select an unsupported schema version."
+                )
+        elif change.key in {
+            "paths.frontend",
+            "paths.backend",
+            "paths.tauri",
+            "paths.docs",
+        }:
+            _project_config_path(
+                change.value,
+                change.key,
+                allow_empty=change.key == "paths.backend",
+            )
+        elif change.key == "features.optional":
+            _project_config_features(change.value)
+        else:
+            _project_config_string(change.value, change.key)
 
 
 def _patch_toml_text(
@@ -680,6 +1001,118 @@ def _patch_toml_text(
             f"TOML PATCH could not locate a safe scalar assignment in {relative}: {missing[0]}."
         )
     return "".join(replacements.get(index, line) for index, line in enumerate(lines))
+
+
+def _patch_yaml_text(
+    text: str,
+    changes: tuple[StructuredChange, ...],
+    relative: str,
+) -> str:
+    """Patch existing scalar mapping keys in a GitHub workflow byte-conservatively."""
+
+    change_by_path = {tuple(change.key.split(".")): change for change in changes}
+    if len(change_by_path) != len(changes):
+        raise IntegrationError("Structured workflow key is patched more than once.")
+    lines = text.splitlines(keepends=True)
+    stack: list[tuple[int, str]] = []
+    replacements: dict[int, str] = {}
+    matched: set[tuple[str, ...]] = set()
+    seen_paths: set[tuple[str, ...]] = set()
+    mapping_line = re.compile(
+        r"^(?P<indent> *)(?P<key>[A-Za-z_][A-Za-z0-9_-]*):(?P<rhs>.*)$"
+    )
+
+    for index, line in enumerate(lines):
+        body, newline = _split_newline(line)
+        if body.startswith("\t") or "\t" in body[: len(body) - len(body.lstrip())]:
+            raise IntegrationError(
+                f"Workflow YAML must use spaces for indentation: {relative}."
+            )
+        comment = _toml_comment_index(body)
+        code = body if comment is None else body[:comment]
+        match = mapping_line.fullmatch(code)
+        if match is None:
+            continue
+        indent = len(match.group("indent"))
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+        key = match.group("key")
+        path = (*tuple(item[1] for item in stack), key)
+        if path in seen_paths:
+            raise IntegrationError(
+                f"Workflow YAML repeats a mapping key in {relative}: {'.'.join(path)}."
+            )
+        seen_paths.add(path)
+        rhs = match.group("rhs")
+        if not rhs.strip():
+            stack.append((indent, key))
+            continue
+        change = change_by_path.get(path)
+        if change is None:
+            continue
+        expression = rhs.strip()
+        if expression.startswith(("|", ">", "&", "*")):
+            raise IntegrationError(
+                f"Workflow PATCH supports only existing scalar values in {relative}: {change.key}."
+            )
+        if change.expected is not UNSET:
+            current = _yaml_scalar(expression)
+            if current != change.expected:
+                raise IntegrationError(
+                    f"Structured value changed after planning in {relative}: {change.key}."
+                )
+        prefix = body[: match.start("rhs")]
+        leading = rhs[: len(rhs) - len(rhs.lstrip())]
+        trailing = rhs[len(rhs.rstrip()) :]
+        rendered_comment = "" if comment is None else body[comment:]
+        replacements[index] = (
+            prefix
+            + leading
+            + _yaml_value(change.value)
+            + trailing
+            + rendered_comment
+            + newline
+        )
+        matched.add(path)
+
+    missing = [".".join(path) for path in change_by_path if path not in matched]
+    if missing:
+        raise IntegrationError(
+            f"Workflow PATCH could not locate a safe existing scalar in {relative}: {missing[0]}."
+        )
+    return "".join(replacements.get(index, line) for index, line in enumerate(lines))
+
+
+def _yaml_scalar(expression: str) -> Any:
+    try:
+        return json.loads(expression)
+    except json.JSONDecodeError:
+        pass
+    lowered = expression.casefold()
+    if lowered in {"true", "false"}:
+        return lowered == "true"
+    if lowered in {"null", "~"}:
+        return None
+    if re.fullmatch(r"-?(?:0|[1-9]\d*)", expression):
+        return int(expression)
+    if re.fullmatch(r"-?(?:0|[1-9]\d*)\.\d+(?:[eE][+-]?\d+)?", expression):
+        return float(expression)
+    if len(expression) >= 2 and expression.startswith("'") and expression.endswith("'"):
+        return expression[1:-1].replace("''", "'")
+    return expression
+
+
+def _yaml_value(value: Any) -> str:
+    if value is not None and not isinstance(value, (str, bool, int, float)):
+        raise IntegrationError(
+            f"Unsupported workflow scalar type: {type(value).__name__}."
+        )
+    try:
+        return json.dumps(value, ensure_ascii=False, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise IntegrationError(
+            f"Unsupported workflow scalar type: {type(value).__name__}."
+        ) from exc
 
 
 def _mapping_value(
@@ -877,6 +1310,8 @@ def _restore_paths(
     backup: Path,
     affected: tuple[str, ...],
     backups: tuple[_BackupEntry, ...],
+    *,
+    preserve_missing: tuple[str, ...] = (),
 ) -> None:
     by_path = {item.path: item for item in backups}
     if set(by_path) != set(affected):
@@ -885,6 +1320,8 @@ def _restore_paths(
         )
     for relative in reversed(affected):
         entry = by_path[relative]
+        if entry.kind == "missing" and relative in preserve_missing:
+            continue
         target = _safe_target(root, relative)
         if entry.kind == "missing":
             _delete_for_rollback(target, root)
@@ -926,6 +1363,90 @@ def _replace_from_stage(root: Path, staging: Path, relative: str) -> None:
         root=root,
         mode=_file_mode(source),
     )
+
+
+def _create_from_stage(root: Path, staging: Path, relative: str) -> None:
+    """Atomically create one verified staged file without replacing a late arrival."""
+
+    source = _safe_target(staging, relative)
+    try:
+        content = read_regular_bytes(
+            source,
+            root=staging,
+            label="Verified staged project configuration",
+        )
+        mode = _file_mode(source)
+    except FilesystemSafetyError as exc:
+        raise IntegrationError(
+            f"Verified staged file is missing or unsafe: {relative}."
+        ) from exc
+
+    try:
+        target = _safe_target(root, relative)
+    except IntegrationError as exc:
+        candidate = root / Path(relative)
+        if _path_exists(candidate):
+            raise _ConcurrentCreationError(relative) from exc
+        raise
+    if _path_exists(target):
+        raise _ConcurrentCreationError(relative)
+
+    descriptor: int | None = None
+    temporary: Path | None = None
+    try:
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{target.name}.", dir=target.parent
+        )
+        temporary = Path(temporary_name)
+        if hasattr(os, "fchmod"):
+            os.fchmod(descriptor, mode)
+        with os.fdopen(descriptor, "wb") as handle:
+            descriptor = None
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if not hasattr(os, "fchmod"):
+            os.chmod(temporary, mode)
+        try:
+            os.link(temporary, target)
+        except FileExistsError as exc:
+            raise _ConcurrentCreationError(relative) from exc
+        except OSError as exc:
+            if _path_exists(target):
+                raise _ConcurrentCreationError(relative) from exc
+            raise IntegrationError(
+                f"Could not create integration target exclusively: {relative}."
+            ) from exc
+        _fsync_directory(target.parent)
+    except _ConcurrentCreationError:
+        raise
+    except OSError as exc:
+        raise IntegrationError(
+            f"Could not create integration target exclusively: {relative}."
+        ) from exc
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def _fsync_directory(directory: Path) -> None:
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(
+            directory,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+        )
+        os.fsync(descriptor)
+    except OSError:
+        return
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 def _write_journal(
@@ -1215,6 +1736,18 @@ def _run_verifier(verifier: Verifier, root: Path) -> VerificationResult:
     result = verifier(root)
     if not isinstance(result, VerificationResult):
         raise IntegrationError("Integration verifier returned an invalid result.")
+    return result
+
+
+def _run_post_apply(
+    post_apply: PostApply | None,
+    root: Path,
+) -> VerificationResult | None:
+    if post_apply is None:
+        return None
+    result = post_apply(root)
+    if result is not None and not isinstance(result, VerificationResult):
+        raise IntegrationError("Post-apply action returned an invalid result.")
     return result
 
 

@@ -51,6 +51,7 @@ def _apply(
     verifier=lambda _root: _verification(),
     *,
     finalizer=None,
+    structured_key_allowlist=None,
 ):
     return apply_transaction(
         TransactionRequest(
@@ -58,6 +59,7 @@ def _apply(
             plan,
             verifier,
             report_finalizer=finalizer,
+            structured_key_allowlist=structured_key_allowlist or {},
         )
     )
 
@@ -360,7 +362,11 @@ def test_structured_json_patch_preserves_unknown_keys(tmp_path: Path) -> None:
         )
     )
 
-    _apply(root, plan)
+    _apply(
+        root,
+        plan,
+        structured_key_allowlist={"frontend/package.json": frozenset({"scripts.test"})},
+    )
 
     payload = json.loads(package.read_text(encoding="utf-8"))
     assert payload == {
@@ -400,7 +406,11 @@ def test_structured_toml_patch_preserves_unknown_tables(tmp_path: Path) -> None:
         )
     )
 
-    _apply(root, plan)
+    _apply(
+        root,
+        plan,
+        structured_key_allowlist={"pyproject.toml": frozenset({"tool.demo.enabled"})},
+    )
 
     expected = before.replace(b"enabled = false", b"enabled = true", 1)
     assert pyproject.read_bytes() == expected
@@ -431,6 +441,160 @@ def test_structured_toml_patch_preserves_indented_assignment(tmp_path: Path) -> 
     _apply(root, plan)
 
     assert config.read_bytes() == before.replace(b'"client"', b'"frontend"')
+
+
+def test_structured_patch_requires_an_explicit_exact_key_allowlist(
+    tmp_path: Path,
+) -> None:
+    root = _project(tmp_path)
+    package = root / "package.json"
+    before = b'{"scripts":{"test":"old"},"foreign":"keep"}\n'
+    package.write_bytes(before)
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.PATCH,
+                "package.json",
+                Ownership.STRUCTURED,
+                expected_sha256=_digest(before),
+                structured_changes=(StructuredChange("scripts.test", "new", "old"),),
+            ),
+        )
+    )
+
+    with pytest.raises(IntegrationError, match="no known-key allowlist"):
+        _apply(root, plan)
+    with pytest.raises(IntegrationError, match="undeclared keys"):
+        _apply(
+            root,
+            plan,
+            structured_key_allowlist={"package.json": frozenset({"scripts.quality"})},
+        )
+
+    assert package.read_bytes() == before
+    assert not (root / ".tooling-state").exists()
+
+
+@pytest.mark.parametrize(
+    ("path", "before", "change"),
+    (
+        (
+            "desktop/tauri.conf.json",
+            b'{"build":{"beforeBuildCommand":"old"},"foreign":true}\n',
+            StructuredChange("build.beforeBuildCommand", "new", "old"),
+        ),
+        (
+            "desktop/Cargo.toml",
+            b'[package]\nname = "demo"\nversion = "0.1.0"\n',
+            StructuredChange("package.version", "0.2.0", "0.1.0"),
+        ),
+    ),
+)
+def test_supported_structured_files_patch_only_declared_keys(
+    tmp_path: Path,
+    path: str,
+    before: bytes,
+    change: StructuredChange,
+) -> None:
+    root = _project(tmp_path)
+    target = root / path
+    target.parent.mkdir(parents=True)
+    target.write_bytes(before)
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.PATCH,
+                path,
+                Ownership.STRUCTURED,
+                expected_sha256=_digest(before),
+                structured_changes=(change,),
+            ),
+        )
+    )
+
+    _apply(
+        root,
+        plan,
+        structured_key_allowlist={path: frozenset({change.key})},
+    )
+
+    assert target.read_bytes() != before
+    if target.suffix == ".json":
+        assert json.loads(target.read_text(encoding="utf-8"))["foreign"] is True
+    else:
+        assert b'name = "demo"' in target.read_bytes()
+
+
+def test_workflow_patch_preserves_unmentioned_bytes_and_comments(
+    tmp_path: Path,
+) -> None:
+    root = _project(tmp_path)
+    workflow = root / ".github/workflows/quality.yml"
+    workflow.parent.mkdir(parents=True)
+    before = (
+        b"# authored workflow\r\n"
+        b"name: Quality\r\n"
+        b"on:\r\n"
+        b"  push:\r\n"
+        b"permissions:\r\n"
+        b"  contents: read  # retain spacing and comment\r\n"
+        b"jobs:\r\n"
+        b"  test:\r\n"
+        b"    runs-on: ubuntu-latest\r\n"
+    )
+    workflow.write_bytes(before)
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.PATCH,
+                ".github/workflows/quality.yml",
+                Ownership.STRUCTURED,
+                expected_sha256=_digest(before),
+                structured_changes=(
+                    StructuredChange("permissions.contents", "write", "read"),
+                ),
+            ),
+        )
+    )
+
+    _apply(
+        root,
+        plan,
+        structured_key_allowlist={
+            ".github/workflows/quality.yml": frozenset({"permissions.contents"})
+        },
+    )
+
+    assert workflow.read_bytes() == before.replace(
+        b"contents: read  #", b'contents: "write"  #'
+    )
+
+
+def test_non_workflow_yaml_is_not_a_structured_target(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    target = root / "config.yaml"
+    before = b"enabled: false\n"
+    target.write_bytes(before)
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.PATCH,
+                "config.yaml",
+                Ownership.STRUCTURED,
+                expected_sha256=_digest(before),
+                structured_changes=(StructuredChange("enabled", True, False),),
+            ),
+        )
+    )
+
+    with pytest.raises(IntegrationError, match="unsupported file"):
+        _apply(
+            root,
+            plan,
+            structured_key_allowlist={"config.yaml": frozenset({"enabled"})},
+        )
+
+    assert target.read_bytes() == before
 
 
 @pytest.mark.parametrize(

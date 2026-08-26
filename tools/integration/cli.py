@@ -111,3 +111,26 @@ def main(args: argparse.Namespace) -> int:
     if action == "export":
         return service.run_export(output=getattr(args, "output", None))
     return 2
+
+
+def standalone_main(argv: list[str] | None = None) -> int:
+    """Parse only integration commands for the safe early control dispatch."""
+
+    parser = argparse.ArgumentParser(
+        prog="python tools/control.py",
+        description="Portable tooling integration and maintenance commands.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    subparsers = parser.add_subparsers(dest="command", metavar="<command>")
+    configure_parser(
+        subparsers,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    args = parser.parse_args(argv)
+    if args.command is None:
+        parser.print_help()
+        return 0
+    return main(args)
+
+
+__all__ = ["configure_parser", "main", "standalone_main"]

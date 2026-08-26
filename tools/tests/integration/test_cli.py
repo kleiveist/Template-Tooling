@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from tools import control
+from tools.integration import service
 
 
 def test_root_help_exposes_portable_integration_commands(capsys) -> None:
@@ -51,22 +52,27 @@ def test_bare_tooling_prints_maintenance_map(capsys) -> None:
 
 
 @pytest.mark.parametrize(
-    "arguments",
+    ("arguments", "service_name"),
     (
-        ["integrate", "--check"],
-        ["integrate", "--full-fix"],
-        ["tooling", "migrate", "--check"],
-        ["tooling", "verify"],
-        ["tooling", "export"],
+        (["integrate", "--check"], "run_check"),
+        (["integrate", "--full-fix"], "run_full_fix"),
+        (["tooling", "migrate", "--check"], "run_migrate"),
+        (["tooling", "verify"], "run_verify"),
+        (["tooling", "export"], "run_export"),
     ),
 )
-def test_phase_three_service_boundary_fails_closed_without_traceback(
-    tmp_path, monkeypatch, capsys, arguments: list[str]
+def test_phase_five_commands_dispatch_to_the_portable_service(
+    monkeypatch: pytest.MonkeyPatch,
+    arguments: list[str],
+    service_name: str,
 ) -> None:
-    monkeypatch.chdir(tmp_path)
+    calls: list[dict[str, object]] = []
 
-    assert control.main(arguments) == 2
+    def fake_service(**kwargs: object) -> int:
+        calls.append(kwargs)
+        return 0
 
-    output = capsys.readouterr().out
-    assert "NOT_READY" in output
-    assert list(tmp_path.iterdir()) == []
+    monkeypatch.setattr(service, service_name, fake_service)
+
+    assert control.main(arguments) == 0
+    assert len(calls) == 1

@@ -10,6 +10,12 @@ from typing import Any
 
 import tomllib
 
+from tools.core.filesystem import (
+    FilesystemSafetyError,
+    read_regular_text,
+)
+from tools.core.filesystem import safe_relative_path as filesystem_relative_path
+
 SUPPORTED_SCHEMA_VERSION = 1
 
 
@@ -53,7 +59,9 @@ def _required_string(payload: dict[str, Any], key: str, *, table: str) -> str:
     return value.strip()
 
 
-def _path_string(payload: dict[str, Any], key: str, *, allow_empty: bool = False) -> str:
+def _path_string(
+    payload: dict[str, Any], key: str, *, allow_empty: bool = False
+) -> str:
     value = payload.get(key, "")
     if not isinstance(value, str):
         raise ProjectConfigError(f"[paths].{key} must be a string.")
@@ -77,8 +85,22 @@ def _validate_relative_path(value: str, *, key: str) -> None:
         raise ProjectConfigError(
             f"[paths].{key} must use portable '/' separators: {value!r}."
         )
-    if value in {".", ".."} or ".." in posix.parts or ".." in windows.parts:
-        raise ProjectConfigError(f"[paths].{key} must not escape the project root: {value!r}.")
+    if value == ".":
+        return
+    if value == ".." or ".." in posix.parts or ".." in windows.parts:
+        raise ProjectConfigError(
+            f"[paths].{key} must not escape the project root: {value!r}."
+        )
+    try:
+        normalized = filesystem_relative_path(value)
+    except FilesystemSafetyError as exc:
+        raise ProjectConfigError(
+            f"[paths].{key} is not a canonical portable path: {value!r}."
+        ) from exc
+    if normalized != value:
+        raise ProjectConfigError(
+            f"[paths].{key} is not a canonical portable path: {value!r}."
+        )
 
 
 def _features(payload: dict[str, Any]) -> tuple[str, ...]:
@@ -88,7 +110,9 @@ def _features(payload: dict[str, Any]) -> tuple[str, ...]:
     features: list[str] = []
     for item in value:
         if not isinstance(item, str) or not item.strip():
-            raise ProjectConfigError("[features].optional must contain non-empty strings.")
+            raise ProjectConfigError(
+                "[features].optional must contain non-empty strings."
+            )
         feature = item.strip()
         if feature not in features:
             features.append(feature)
@@ -99,10 +123,17 @@ def load_project_config(path: Path) -> ProjectConfig:
     """Load and validate a project configuration without modifying the filesystem."""
 
     try:
-        with path.open("rb") as handle:
-            payload = tomllib.load(handle)
-    except OSError as exc:
-        raise ProjectConfigError(f"Could not read project configuration: {path}") from exc
+        payload = tomllib.loads(
+            read_regular_text(
+                path,
+                root=path.parent,
+                label="Project tooling configuration",
+            )
+        )
+    except (FilesystemSafetyError, OSError) as exc:
+        raise ProjectConfigError(
+            f"Could not read project configuration: {path}"
+        ) from exc
     except tomllib.TOMLDecodeError as exc:
         raise ProjectConfigError(f"Invalid TOML in {path}: {exc}") from exc
 
@@ -193,7 +224,9 @@ def create_project_config(path: Path, config: ProjectConfig) -> None:
     try:
         descriptor = os.open(path, flags, 0o644)
     except FileExistsError as exc:
-        raise ProjectConfigError(f"Refusing to overwrite existing project configuration: {path}") from exc
+        raise ProjectConfigError(
+            f"Refusing to overwrite existing project configuration: {path}"
+        ) from exc
     try:
         payload = render_project_config(config).encode("utf-8")
         with os.fdopen(descriptor, "wb") as handle:

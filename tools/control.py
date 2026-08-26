@@ -8,14 +8,27 @@ import traceback
 from collections.abc import Callable
 from pathlib import Path
 
+# ``integrate --check`` promises a byte-for-byte read-only project inspection.
+# Disable local bytecode caches before importing any package from the copied
+# tooling tree so merely starting the command cannot mutate the target.
+sys.dont_write_bytecode = True
+
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 if str(PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(PACKAGE_ROOT))
 
-from tools.core.context import load_context
 
-CONTEXT = load_context()
-ROOT = CONTEXT.project_root
+def _is_direct_integration_invocation(argv: list[str]) -> bool:
+    return bool(argv) and argv[0].lower() in {"integrate", "tooling"}
+
+
+# Integration must remain diagnosable even when the project configuration is
+# malformed.  Avoid importing unrelated command modules that eagerly resolve
+# project state before the integration service can report that error safely.
+if __name__ == "__main__" and _is_direct_integration_invocation(sys.argv[1:]):
+    from tools.integration.cli import standalone_main
+
+    raise SystemExit(standalone_main(sys.argv[1:]))
 
 logger = importlib.import_module("tools.logger")
 build = importlib.import_module("tools.inst.build")
@@ -100,9 +113,12 @@ def _handle_build(args: argparse.Namespace) -> int:
     if args.build_command == "web":
         return build.main(args)
     if args.build_command == "desktop":
-        if not profile_runtime.feature_enabled("tauri", ROOT):
-            profile = profile_runtime.active_profile(ROOT)
-            logger.fail(f"Tauri desktop build is disabled by active profile '{profile.profile_id}'.")
+        project_root = PACKAGE_ROOT
+        if not profile_runtime.feature_enabled("tauri", project_root):
+            profile = profile_runtime.active_profile(project_root)
+            logger.fail(
+                f"Tauri desktop build is disabled by active profile '{profile.profile_id}'."
+            )
             return 1
         return tauri_build.main(args)
     if args.build_command == "container":
@@ -192,9 +208,9 @@ def main(argv: list[str] | None = None) -> int:
         code = handler(args)
         return 0 if code is None else int(code)
     except KeyboardInterrupt:
-        logger.warn("Interrupted by user")
+        logger.warn("Interrupted by user")  # noqa: G010 - project status logger
         return 130
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc:  # noqa: BLE001 - final CLI error boundary
         logger.fail(f"Unhandled error: {exc}")
         for line in traceback.format_exc().strip().splitlines():
             logger.info(line)
