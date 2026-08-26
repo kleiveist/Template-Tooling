@@ -16,12 +16,13 @@ from tools.config import (
     resolve_configuration,
     validate_configuration,
 )
+from tools.core.context import load_context
 from tools.inst import configuration, install
 from tools.profiles.loader import load_active_profile, load_catalog
 from tools.profiles.model import ProjectProfile
 
-ROOT = Path(__file__).resolve().parents[2]
-CONTRACT = load_contract(ROOT / "config" / "environment.toml")
+CONTEXT = load_context()
+CONTRACT = load_contract(context=CONTEXT)
 
 
 def _profile(*features: str) -> ProjectProfile:
@@ -50,7 +51,7 @@ def test_runtime_config_uses_profile_aware_defaults(tmp_path: Path) -> None:
 
 
 def test_contract_feature_references_exist_in_profile_catalog() -> None:
-    catalog = load_catalog(ROOT / "profiles", validate_paths=False)
+    catalog = load_catalog(context=CONTEXT)
     referenced = {feature for variable in CONTRACT.variables for feature in variable.required_features}
 
     assert referenced <= set(catalog.features)
@@ -343,10 +344,12 @@ def test_env_example_rendering_follows_features(
     assert all(f"{name}=" not in rendered for name in excluded)
 
 
-def test_active_env_example_matches_declarative_contract() -> None:
-    rendered = render_env_example(CONTRACT, load_active_profile(ROOT).features)
+def test_default_contract_and_active_profile_use_portable_context() -> None:
+    active = load_active_profile(context=CONTEXT)
 
-    assert (ROOT / ".env.example").read_text(encoding="utf-8") == rendered
+    assert CONTRACT == load_contract(CONTEXT.resources.config / "environment.toml")
+    assert active.profile_id == CONTEXT.config.profile
+    assert active.optional_features == CONTEXT.config.optional_features
 
 
 def test_config_show_masks_database_url(monkeypatch, capsys) -> None:

@@ -7,9 +7,20 @@ __pycache__/
 htmlcov/
 .venv/
 venv/
+.runtime/
+.dist/
+dist/
+target/
+*.log
 *.egg-info/
 .DS_Store
 docs/toolingdocs/case-study/.build/
 tools/.runtime/
 tools/quality/rust_analyzer/target/
 .tooling-state/
+
+# The verified analyzer binary is a deliberate runtime resource. Other files
+# emitted beside it remain build output.
+!tools/quality/rust_analyzer/dist/
+tools/quality/rust_analyzer/dist/*
+!tools/quality/rust_analyzer/dist/rust_quality_analyzer.wasm

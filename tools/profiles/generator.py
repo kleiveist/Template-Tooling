@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from tools.config.loader import load_contract, render_env_example
+from tools.core.context import ProjectContext, load_context
 from tools.profiles.loader import resolve_profile
 from tools.profiles.model import ProfileCatalog, ProjectProfile
 
@@ -72,13 +73,15 @@ def build_scaffold_plan(
     project_name: str | None = None,
     project_slug: str | None = None,
     identifier: str | None = None,
+    context: ProjectContext | None = None,
 ) -> ScaffoldPlan:
     root = project_root.resolve()
     target = target_dir.resolve()
+    selected_context = context or load_context(project_root=root)
     profile = resolve_profile(catalog, profile_id, optional_features=optional_features)
     relative_paths = _ordered_relative_paths(catalog, profile)
     source_paths = tuple(root / relative for relative in relative_paths)
-    contract = load_contract(root / "config" / "environment.toml")
+    contract = load_contract(context=selected_context)
     env_example = render_env_example(contract, profile.features)
     identity = resolve_project_identity(
         profile,
@@ -431,7 +434,6 @@ def _configure_project_identity(
 
     if profile.has_feature("backend"):
         _replace_text(target_dir / ".env.example", f"{source.name} API", f"{identity.name} API")
-        _replace_text(target_dir / "config" / "environment.toml", f"{source.name} API", f"{identity.name} API")
         _replace_text(
             target_dir / "backend" / "app" / "config" / "settings.py",
             f"{source.name} API",

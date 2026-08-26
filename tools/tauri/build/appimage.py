@@ -5,9 +5,10 @@ import os
 import re
 import shutil
 import stat
-import tomllib
 from pathlib import Path
 from typing import Iterable
+
+import tomllib
 
 from tools import logger
 from tools.tauri import common, paths
@@ -419,13 +420,14 @@ def _tauri_version() -> str:
             return version
     except (OSError, tomllib.TOMLDecodeError):
         pass
-    try:
-        version = (paths.ROOT / "VERSION").read_text(encoding="utf-8").strip()
-    except OSError as exc:
-        raise AppImageInstallError("Could not determine the AppImage version from Cargo.toml or VERSION") from exc
-    if not version:
-        raise AppImageInstallError("Could not determine the AppImage version from Cargo.toml or VERSION")
-    return version
+    for version_path in (paths.ROOT / "VERSION", paths.TOOLS_DIR / "VERSION"):
+        try:
+            version = version_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if version:
+            return version
+    raise AppImageInstallError("Could not determine the AppImage version from Cargo.toml or VERSION")
 
 
 def _data_home() -> Path:

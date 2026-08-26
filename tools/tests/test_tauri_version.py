@@ -23,7 +23,19 @@ def test_appimage_version_falls_back_to_canonical_version(monkeypatch, tmp_path:
 
 def test_appimage_version_fails_when_all_version_sources_are_unavailable(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(paths, "ROOT", tmp_path)
+    monkeypatch.setattr(paths, "TOOLS_DIR", tmp_path / "tools")
     monkeypatch.setattr(paths, "TAURI_DIR", tmp_path / "src-tauri")
 
     with pytest.raises(appimage.AppImageInstallError, match="Cargo.toml or VERSION"):
         appimage._tauri_version()
+
+
+def test_appimage_version_uses_portable_tooling_version(monkeypatch, tmp_path: Path) -> None:
+    tools_dir = tmp_path / "tools"
+    tools_dir.mkdir()
+    (tools_dir / "VERSION").write_text("0.1.0\n", encoding="utf-8")
+    monkeypatch.setattr(paths, "ROOT", tmp_path)
+    monkeypatch.setattr(paths, "TOOLS_DIR", tools_dir)
+    monkeypatch.setattr(paths, "TAURI_DIR", tmp_path / "src-tauri")
+
+    assert appimage._tauri_version() == "0.1.0"

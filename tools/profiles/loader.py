@@ -1,10 +1,17 @@
 from __future__ import annotations
 
-import tomllib
 from pathlib import Path
 from typing import Any
 
-from tools.profiles.model import FeatureDefinition, ProfileCatalog, ProfileDefinition, ProjectProfile
+import tomllib
+
+from tools.core.context import ProjectContext, load_context
+from tools.profiles.model import (
+    FeatureDefinition,
+    ProfileCatalog,
+    ProfileDefinition,
+    ProjectProfile,
+)
 from tools.profiles.validator import (
     ProfileLookupError,
     resolve_optional_features,
@@ -12,9 +19,6 @@ from tools.profiles.validator import (
     validate_feature_selection,
 )
 
-ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_PROFILES_DIR = ROOT / "profiles"
-DEFAULT_PROJECT_PROFILE = ROOT / "project-profile.toml"
 SUPPORTED_SCHEMA_VERSION = 1
 
 
@@ -92,9 +96,16 @@ def _optional_str_list(value: Any, *, default: tuple[str, ...] = ()) -> tuple[st
 def load_catalog(
     profiles_dir: Path | None = None,
     *,
-    validate_paths: bool = True,
+    validate_paths: bool = False,
+    context: ProjectContext | None = None,
 ) -> ProfileCatalog:
-    directory = (profiles_dir or DEFAULT_PROFILES_DIR).resolve()
+    if profiles_dir is None:
+        selected_context = context or load_context()
+        directory = selected_context.resources.profiles.resolve()
+        validation_root = selected_context.project_root
+    else:
+        directory = profiles_dir.resolve()
+        validation_root = directory.parent
     features_path = directory / "features.toml"
     payload = _read_toml(features_path)
 
@@ -138,7 +149,7 @@ def load_catalog(
         features=features,
         profiles=profiles,
     )
-    validate_catalog(catalog, project_root=directory.parent, validate_paths=validate_paths)
+    validate_catalog(catalog, project_root=validation_root, validate_paths=validate_paths)
     return catalog
 
 
@@ -187,8 +198,18 @@ def load_project_profile(
     profile_path: Path | None = None,
     *,
     catalog: ProfileCatalog | None = None,
+    context: ProjectContext | None = None,
 ) -> ProjectProfile:
-    path = (profile_path or DEFAULT_PROJECT_PROFILE).resolve()
+    if profile_path is None:
+        selected_context = context or load_context()
+        selected_catalog = catalog or load_catalog(context=selected_context)
+        return resolve_profile(
+            selected_catalog,
+            selected_context.config.profile,
+            optional_features=selected_context.config.optional_features,
+        )
+
+    path = profile_path.resolve()
     payload = _read_toml(path)
     schema_version = _schema_version(payload, context=str(path))
 
@@ -217,46 +238,13 @@ def load_project_profile(
     )
 
 
-def load_active_profile(project_root: Path | None = None) -> ProjectProfile:
-    root = (project_root or ROOT).resolve()
-    profiles_dir = root / "profiles"
-    if not profiles_dir.exists():
-        return _infer_profile_from_scaffold(root)
+def load_active_profile(
+    project_root: Path | None = None,
+    *,
+    context: ProjectContext | None = None,
+) -> ProjectProfile:
+    """Resolve active profile decisions from ``project-tooling.toml``."""
 
-    # A derived project retains the complete catalog for reference, but only
-    # enabled feature paths are expected to exist in that scaffold.
-    catalog = load_catalog(profiles_dir, validate_paths=False)
-    profile_path = root / "project-profile.toml"
-    if profile_path.exists():
-        return load_project_profile(profile_path, catalog=catalog)
-    return resolve_profile(catalog, "full-platform")
-
-
-def _infer_profile_from_scaffold(project_root: Path) -> ProjectProfile:
-    features: list[str] = []
-
-    if (project_root / "frontend" / "package.json").exists():
-        features.append("frontend")
-
-    if (project_root / "backend" / "app" / "main.py").exists():
-        features.append("backend")
-
-    if (project_root / "src-tauri" / "tauri.conf.json").exists():
-        features.append("tauri")
-
-    optional_features: list[str] = []
-    if (project_root / "backend" / "app" / "db").exists():
-        features.append("database")
-        optional_features.append("database")
-    if (project_root / "backend" / "requirements-postgres.txt").exists():
-        features.append("postgres")
-        optional_features.append("postgres")
-
-    return ProjectProfile(
-        schema_version=1,
-        profile_id="inferred-project",
-        name="Inferred project",
-        description="Profile inferred from the directories present in the current project root.",
-        features=tuple(features),
-        optional_features=tuple(optional_features),
-    )
+    selected_context = context or load_context(project_root=project_root)
+    catalog = load_catalog(context=selected_context)
+    return load_project_profile(catalog=catalog, context=selected_context)

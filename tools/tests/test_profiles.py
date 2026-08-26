@@ -4,18 +4,21 @@ import json
 import shutil
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
 
 import pytest
+import tomllib
 
 from tools import control
+from tools.core.context import load_context
+from tools.core.project_config import ProjectConfig, create_project_config
 from tools.inst import stop
-from tools.profiles import generator, loader, validator
+from tools.profiles import generator, loader, runtime, validator
 from tools.profiles.model import ProjectProfile
 
 ROOT = Path(__file__).resolve().parents[2]
-PROFILES_DIR = ROOT / "profiles"
+CONTEXT = load_context()
+PROFILES_DIR = CONTEXT.resources.profiles
 HAS_BACKEND_SOURCE = (ROOT / "backend" / "app" / "main.py").exists()
 HAS_TAURI_SOURCE = (ROOT / "src-tauri" / "tauri.conf.json").exists()
 HAS_DATABASE_SOURCE = (ROOT / "backend" / "app" / "db" / "engine.py").exists()
@@ -23,7 +26,7 @@ HAS_CLOUD_SOURCE = (ROOT / "deployment" / "compose.yaml").exists()
 
 
 def test_all_declared_profiles_load() -> None:
-    catalog = loader.load_catalog(PROFILES_DIR, validate_paths=False)
+    catalog = loader.load_catalog()
 
     assert list(sorted(catalog.profiles)) == [
         "desktop-cloud",
@@ -32,6 +35,27 @@ def test_all_declared_profiles_load() -> None:
         "web-cloud",
         "web-only",
     ]
+
+
+def test_active_profile_uses_project_context_decisions(tmp_path: Path) -> None:
+    create_project_config(
+        tmp_path / "project-tooling.toml",
+        ProjectConfig(
+            tooling_version=CONTEXT.tooling_version,
+            project_name="Context project",
+            profile="web-cloud",
+            optional_features=("postgres",),
+        ),
+    )
+    context = load_context(project_root=tmp_path)
+
+    active = loader.load_active_profile(context=context)
+
+    assert active.profile_id == "web-cloud"
+    assert active.features == ("frontend", "backend", "cloud", "database", "postgres")
+    assert active.optional_features == ("postgres",)
+    assert runtime.active_profile(context=context) == active
+    assert runtime.feature_enabled("postgres", context=context)
 
 
 @pytest.mark.skipif(

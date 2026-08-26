@@ -17,10 +17,12 @@ from tools.config import (
     resolve_configuration,
     validate_configuration,
 )
+from tools.core.context import load_context
 from tools.profiles import runtime as profile_runtime
 
-ROOT = Path(__file__).resolve().parents[2]
-BACKEND_DIR = ROOT / "backend"
+CONTEXT = load_context()
+ROOT = CONTEXT.project_root
+BACKEND_DIR = CONTEXT.paths.backend
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +52,8 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
 
 
 def _backend_python() -> Path:
+    if BACKEND_DIR is None:
+        return CONTEXT.state_root / "unconfigured-backend" / "python"
     candidates = [
         BACKEND_DIR / ".venv" / "Scripts" / "python.exe",
         BACKEND_DIR / ".venv" / "bin" / "python",
@@ -65,6 +69,8 @@ def _backend_python() -> Path:
 
 
 def _run_probe(script: str) -> subprocess.CompletedProcess[str]:
+    if BACKEND_DIR is None:
+        return subprocess.CompletedProcess([], 127, "", "backend path is not configured")
     python = _backend_python()
     if not python.exists():
         return subprocess.CompletedProcess([str(python)], 127, "", "backend virtualenv is missing")
@@ -206,6 +212,9 @@ def _migration_preflight() -> bool:
 
 def _run_alembic(arguments: list[str]) -> int:
     if not _migration_preflight():
+        return 1
+    if BACKEND_DIR is None:
+        logger.fail("Backend path is not configured in project-tooling.toml.")
         return 1
 
     command = [str(_backend_python()), "-m", "alembic", "-c", "alembic.ini", *arguments]

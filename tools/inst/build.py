@@ -9,11 +9,13 @@ import zipfile
 from pathlib import Path
 
 from tools import logger
+from tools.core.context import load_context
 from tools.process import prepare_command
 from tools.profiles import runtime as profile_runtime
 
-ROOT = Path(__file__).resolve().parents[2]
-FRONTEND_DIR = ROOT / "frontend"
+CONTEXT = load_context()
+ROOT = CONTEXT.project_root
+FRONTEND_DIR = CONTEXT.paths.frontend
 DIST_DIR = FRONTEND_DIR / "dist"
 WEB_ARTIFACT_DIR = ROOT / ".dist" / "web"
 WEB_ZIP_PATH = WEB_ARTIFACT_DIR / "template-project-web.zip"

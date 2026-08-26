@@ -5,12 +5,17 @@ import argparse
 import importlib
 import sys
 import traceback
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+if str(PACKAGE_ROOT) not in sys.path:
+    sys.path.insert(0, str(PACKAGE_ROOT))
+
+from tools.core.context import load_context
+
+CONTEXT = load_context()
+ROOT = CONTEXT.project_root
 
 logger = importlib.import_module("tools.logger")
 build = importlib.import_module("tools.inst.build")

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import signal
 import subprocess
 import time
@@ -20,7 +21,7 @@ from tools.config import (
 from tools.profiles import runtime as profile_runtime
 from tools.tauri import cache, common, paths
 
-RUNTIME_DIR = paths.ROOT / "tools" / ".runtime"
+RUNTIME_DIR = paths.RUNTIME_DIR
 LOG_DIR = RUNTIME_DIR / "logs"
 STATE_FILE = RUNTIME_DIR / "tauri_run_state.json"
 
@@ -122,14 +123,23 @@ def _run_foreground(
 
 def _dev_config_override(frontend_port: int, frontend_host: str = "127.0.0.1") -> str:
     client_host = "127.0.0.1" if frontend_host in {"0.0.0.0", "::", "[::]"} else frontend_host
+    frontend_directory = Path(os.path.relpath(paths.FRONTEND_DIR, paths.TAURI_DIR)).as_posix()
+    shell_directory = _shell_argument(frontend_directory)
+    shell_host = _shell_argument(frontend_host)
     return json.dumps(
         {
             "build": {
-                "beforeDevCommand": (f"cd ../frontend && npm run dev -- --host {frontend_host} --port {frontend_port}"),
+                "beforeDevCommand": (
+                    f"cd {shell_directory} && npm run dev -- --host {shell_host} --port {frontend_port}"
+                ),
                 "devUrl": f"http://{client_host}:{frontend_port}",
             }
         }
     )
+
+
+def _shell_argument(value: str) -> str:
+    return subprocess.list2cmdline([value]) if os.name == "nt" else shlex.quote(value)
 
 
 def _run_detached(

@@ -5,9 +5,17 @@ import os
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-FRONTEND_DIR = ROOT / "frontend"
-TAURI_DIR = ROOT / "src-tauri"
+from tools.core.context import load_context
+
+_CONTEXT = load_context()
+ROOT = _CONTEXT.project_root
+TOOLS_DIR = _CONTEXT.tools_root
+RESOURCES_DIR = _CONTEXT.resources.root
+STATE_DIR = _CONTEXT.state_root
+RUNTIME_DIR = _CONTEXT.runtime_root / "tauri"
+VENV_DIR = _CONTEXT.venv_root
+FRONTEND_DIR = _CONTEXT.paths.frontend
+TAURI_DIR = _CONTEXT.paths.tauri
 DIST_DIR = ROOT / ".dist" / "desktop"
 
 FRONTEND_PACKAGE_JSON = FRONTEND_DIR / "package.json"

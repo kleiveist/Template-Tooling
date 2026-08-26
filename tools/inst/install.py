@@ -10,13 +10,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tools import logger
+from tools.core.context import load_context
 from tools.inst.tooling_runtime import TOOLING_RUNTIME_PROBE
 from tools.process import prepare_command
 from tools.profiles import runtime as profile_runtime
 
-ROOT = Path(__file__).resolve().parents[2]
-TOOLS_REQUIREMENTS = ROOT / "tools" / "requirements.txt"
-TOOLS_VENV = ROOT / "tools" / ".venv"
+CONTEXT = load_context()
+ROOT = CONTEXT.project_root
+TOOLS_ROOT = CONTEXT.tools_root
+FRONTEND_DIR = CONTEXT.paths.frontend
+BACKEND_DIR = CONTEXT.paths.backend
+TOOLS_REQUIREMENTS = TOOLS_ROOT / "requirements.txt"
+TOOLS_VENV = CONTEXT.venv_root
 
 
 @dataclass(slots=True)
@@ -39,7 +44,7 @@ def _tail(text: str, limit: int = 8) -> str:
 
 def _ensure_env_file() -> StepResult:
     env = ROOT / ".env"
-    example = ROOT / ".env.example"
+    example = CONTEXT.resources.examples / ".env.example"
 
     if env.exists():
         return StepResult("env", "OK", ".env already exists (not modified)")
@@ -48,14 +53,14 @@ def _ensure_env_file() -> StepResult:
         return StepResult(
             "env",
             "WARN",
-            ".env is absent and was not created. Copy .env.example manually when local overrides are needed.",
+            ".env is absent and was not created. Copy the tooling .env example manually when overrides are needed.",
         )
 
     return StepResult("env", "WARN", ".env and .env.example are absent; template defaults remain active")
 
 
 def _install_frontend() -> StepResult:
-    frontend_dir = ROOT / "frontend"
+    frontend_dir = FRONTEND_DIR
     if not (frontend_dir / "package.json").exists():
         return StepResult("frontend", "FAIL", "missing frontend/package.json")
 
@@ -302,16 +307,20 @@ def _install_backend_with_pip(backend_dir: Path, requirements: list[Path]) -> tu
 
 def _backend_requirements() -> list[Path]:
     profile = profile_runtime.active_profile(ROOT)
-    requirements = [ROOT / "backend" / "requirements.txt"]
+    if BACKEND_DIR is None:
+        return []
+    requirements = [BACKEND_DIR / "requirements.txt"]
     if profile.has_feature("database"):
-        requirements.append(ROOT / "backend" / "requirements-database.txt")
+        requirements.append(BACKEND_DIR / "requirements-database.txt")
     if profile.has_feature("postgres"):
-        requirements.append(ROOT / "backend" / "requirements-postgres.txt")
+        requirements.append(BACKEND_DIR / "requirements-postgres.txt")
     return requirements
 
 
 def _install_backend() -> StepResult:
-    backend_dir = ROOT / "backend"
+    backend_dir = BACKEND_DIR
+    if backend_dir is None:
+        return StepResult("backend", "FAIL", "backend path is not configured in project-tooling.toml")
     requirements = _backend_requirements()
 
     missing = [path.relative_to(ROOT).as_posix() for path in requirements if not path.exists()]
@@ -354,7 +363,7 @@ def _tooling_runtime_ready(python: Path) -> bool:
 def _install_tooling_runtime() -> StepResult:
     tooling_python = _venv_python(TOOLS_VENV)
     if _tooling_runtime_ready(tooling_python):
-        return StepResult("tooling", "OK", "tools/.venv already provides quality and test dependencies")
+        return StepResult("tooling", "OK", f"{TOOLS_VENV} already provides quality and test dependencies")
 
     if not TOOLS_REQUIREMENTS.exists():
         return StepResult("tooling", "FAIL", "missing tools/requirements.txt")
@@ -390,7 +399,7 @@ def _install_tooling_runtime() -> StepResult:
 
 
 def _install_playwright() -> StepResult:
-    frontend_dir = ROOT / "frontend"
+    frontend_dir = FRONTEND_DIR
     if not (frontend_dir / "package.json").exists():
         return StepResult("playwright", "FAIL", "missing frontend/package.json")
 
@@ -410,7 +419,7 @@ def _install_playwright() -> StepResult:
 
 
 def _playwright_configured() -> bool:
-    frontend_dir = ROOT / "frontend"
+    frontend_dir = FRONTEND_DIR
     if (frontend_dir / "tests" / "e2e").exists():
         return True
     if any(frontend_dir.glob("playwright.config.*")):

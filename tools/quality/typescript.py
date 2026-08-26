@@ -6,8 +6,9 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from tools.core.context import load_context
 from tools.process import prepare_command
-from tools.quality.model import CheckResult, Finding, QualityConfig, RULES, Severity
+from tools.quality.model import RULES, CheckResult, Finding, QualityConfig, Severity
 from tools.quality.scanner import SourceMetrics
 
 
@@ -42,7 +43,7 @@ class TypeScriptAnalysis:
 
 
 def _source_paths(root: Path, metrics: list[SourceMetrics]) -> list[Path]:
-    frontend = root / "frontend"
+    frontend = load_context(project_root=root).paths.frontend
     extensions = {".js", ".jsx", ".ts", ".tsx"}
     return [
         source.path
@@ -61,8 +62,9 @@ def analyze_typescript(
         result.detail = "no JavaScript or TypeScript sources present"
         return TypeScriptAnalysis((), ()), result
     node = shutil.which("node")
-    script = root / "frontend/scripts/quality-ast.mjs"
-    typescript = root / "frontend/node_modules/typescript"
+    frontend = load_context(project_root=root).paths.frontend
+    script = frontend / "scripts" / "quality-ast.mjs"
+    typescript = frontend / "node_modules" / "typescript"
     if node is None or not script.is_file() or not typescript.exists():
         result.passed = False
         result.detail = "TypeScript AST tooling is unavailable. Action: run 'python tools/control.py install'."

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from tools.core.context import load_context
 from tools.quality.model import (
     RULES,
     CheckResult,
@@ -43,14 +45,16 @@ class _RustSource(Protocol):
     rust_functions: tuple[RustFunctionMetric, ...]
 
 
-_ROOT = Path(__file__).resolve().parents[2]
-_ANALYZER = Path(__file__).with_name("rust_ast.py")
+_CONTEXT = load_context()
+_ROOT = _CONTEXT.project_root
+_ANALYZER = _CONTEXT.tools_root / "quality" / "rust_ast.py"
 
 
 def _tooling_python() -> Path | None:
     candidates = (
-        _ROOT / "tools/.venv/Scripts/python.exe",
-        _ROOT / "tools/.venv/bin/python",
+        _CONTEXT.venv_root / "Scripts" / "python.exe",
+        _CONTEXT.venv_root / "bin" / "python",
+        Path(sys.executable),
     )
     return next((candidate for candidate in candidates if candidate.is_file()), None)
 

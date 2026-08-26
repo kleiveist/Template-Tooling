@@ -5,16 +5,18 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
+from tools.core.context import load_context
 from tools.process import prepare_command
 from tools.quality.model import (
+    RULES,
     CheckResult,
     ExceptionEntry,
     Finding,
     QualityConfig,
-    RULES,
     ScopeLimits,
     Severity,
 )
@@ -46,17 +48,25 @@ def _executable(candidates: list[Path], fallback: str) -> str | None:
 
 
 def _ruff(root: Path) -> str | None:
+    context = load_context(project_root=root)
+    interpreter_directory = Path(sys.executable).resolve().parent
     return _executable(
-        [root / "tools/.venv/bin/ruff", root / "tools/.venv/Scripts/ruff.exe"],
+        [
+            context.venv_root / "bin" / "ruff",
+            context.venv_root / "Scripts" / "ruff.exe",
+            interpreter_directory / "ruff",
+            interpreter_directory / "ruff.exe",
+        ],
         "ruff",
     )
 
 
 def _frontend_binary(root: Path, name: str) -> str | None:
+    frontend = load_context(project_root=root).paths.frontend
     return _executable(
         [
-            root / f"frontend/node_modules/.bin/{name}",
-            root / f"frontend/node_modules/.bin/{name}.cmd",
+            frontend / "node_modules" / ".bin" / name,
+            frontend / "node_modules" / ".bin" / f"{name}.cmd",
         ],
         name,
     )
@@ -78,11 +88,20 @@ def _python_paths(metrics: list[SourceMetrics], root: Path) -> list[str]:
 
 
 def _frontend_exists(root: Path) -> bool:
-    return (root / "frontend/package.json").is_file()
+    return (load_context(project_root=root).paths.frontend / "package.json").is_file()
 
 
 def _rust_exists(root: Path) -> bool:
-    return (root / "src-tauri/Cargo.toml").is_file()
+    return (load_context(project_root=root).paths.tauri / "Cargo.toml").is_file()
+
+
+def _frontend_root(root: Path) -> Path:
+    return load_context(project_root=root).paths.frontend
+
+
+def _tauri_manifest(root: Path) -> str:
+    context = load_context(project_root=root)
+    return (context.paths.tauri / "Cargo.toml").relative_to(context.project_root).as_posix()
 
 
 def run_python_lint(root: Path, metrics: list[SourceMetrics]) -> CheckResult:
@@ -161,7 +180,7 @@ def _run_frontend_script(
             detail="npm is unavailable. Action: install Node.js and npm.",
         )
     separator = ["--"] if arguments else []
-    completed = _run([npm, "run", script, *separator, *arguments], cwd=root / "frontend")
+    completed = _run([npm, "run", script, *separator, *arguments], cwd=_frontend_root(root))
     return _tool_result(
         name,
         completed,
@@ -209,7 +228,7 @@ def _cargo_command(
 def run_rust_format(root: Path) -> CheckResult:
     return _cargo_command(
         root,
-        ["fmt", "--all", "--manifest-path", "src-tauri/Cargo.toml", "--", "--check"],
+        ["fmt", "--all", "--manifest-path", _tauri_manifest(root), "--", "--check"],
         "Rust formatting",
     )
 
@@ -273,7 +292,7 @@ def run_rust_lint(
                 "clippy",
                 "--locked",
                 "--manifest-path",
-                "src-tauri/Cargo.toml",
+                _tauri_manifest(root),
                 "--all-targets",
                 "--all-features",
                 "--",
@@ -296,7 +315,7 @@ def run_rust_check(root: Path) -> CheckResult:
             "check",
             "--locked",
             "--manifest-path",
-            "src-tauri/Cargo.toml",
+            _tauri_manifest(root),
             "--all-targets",
             "--all-features",
         ],
@@ -464,7 +483,7 @@ _ESLINT_SYMBOL_PATTERN = re.compile(r"(?:Function|Method) '([^']+)'", re.IGNOREC
 
 def _eslint_sources(metrics: list[SourceMetrics], root: Path) -> list[str]:
     extensions = {".js", ".jsx", ".ts", ".tsx"}
-    frontend = root / "frontend"
+    frontend = _frontend_root(root)
     return [
         str(source.path.relative_to(frontend))
         for source in metrics
@@ -573,7 +592,7 @@ def run_typescript_metrics(
             json.dumps(rules, separators=(",", ":")),
             *paths,
         ],
-        cwd=root / "frontend",
+        cwd=_frontend_root(root),
     )
     if completed.returncode not in {0, 1}:
         result.passed = False

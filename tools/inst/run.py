@@ -21,11 +21,15 @@ from tools.config import (
     is_server_only_name,
     load_runtime_config,
 )
+from tools.core.context import load_context
 from tools.process import prepare_command, process_start_token
 from tools.profiles import runtime as profile_runtime
 
-ROOT = Path(__file__).resolve().parents[2]
-RUNTIME_DIR = ROOT / "tools" / ".runtime"
+CONTEXT = load_context()
+ROOT = CONTEXT.project_root
+FRONTEND_DIR = CONTEXT.paths.frontend
+BACKEND_DIR = CONTEXT.paths.backend
+RUNTIME_DIR = CONTEXT.runtime_root
 LOG_DIR = RUNTIME_DIR / "logs"
 STATE_FILE = RUNTIME_DIR / "run_state.json"
 
@@ -110,7 +114,7 @@ def _backend_process_environment(config: RuntimeConfig) -> dict[str, str]:
 
 def _frontend_service(config: RuntimeConfig) -> tuple[ServiceDef | None, list[str]]:
     errors: list[str] = []
-    frontend_dir = ROOT / "frontend"
+    frontend_dir = FRONTEND_DIR
     assert config.frontend_host is not None
     assert config.frontend_port is not None
     if not (frontend_dir / "package.json").exists():
@@ -167,9 +171,11 @@ def _backend_runtime_error(backend_python: Path) -> str | None:
 
 def _backend_service(config: RuntimeConfig) -> tuple[ServiceDef | None, list[str]]:
     errors: list[str] = []
-    backend_dir = ROOT / "backend"
+    backend_dir = BACKEND_DIR
     assert config.backend_host is not None
     assert config.backend_port is not None
+    if backend_dir is None:
+        return None, ["Backend path is not configured in project-tooling.toml."]
     if not (backend_dir / "app" / "main.py").exists():
         errors.append("Missing backend/app/main.py")
 
