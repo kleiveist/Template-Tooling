@@ -279,7 +279,10 @@ def test_failed_staged_action_leaves_live_project_unchanged(tmp_path: Path) -> N
         verifier_calls += 1
         return _verification()
 
-    with pytest.raises(IntegrationError, match="Staged action verification failed"):
+    with pytest.raises(
+        IntegrationError,
+        match="staged-action: isolated action failed",
+    ):
         _apply(root, plan, verifier, staged_action=staged_action)
 
     assert verifier_calls == 0

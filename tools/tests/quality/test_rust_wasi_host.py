@@ -407,6 +407,17 @@ def test_resource_trap_is_controlled(monkeypatch: pytest.MonkeyPatch) -> None:
         rust_ast._execute(b"wasm", "")
 
 
+def test_resource_trap_is_controlled_without_exit_trap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime, _state = _fake_runtime(start_result="trap")
+    del runtime.ExitTrap
+    monkeypatch.setattr(rust_ast, "_load_wasmtime", lambda: runtime)
+
+    with pytest.raises(rust_ast.RustSyntaxError, match="resource trap: all fuel consumed"):
+        rust_ast._execute(b"wasm", "")
+
+
 def test_analyzer_exit_uses_stderr_and_cli_exit_two(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

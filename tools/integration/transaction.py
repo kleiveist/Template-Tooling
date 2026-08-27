@@ -37,6 +37,7 @@ from tools.core.project_config import (
 )
 from tools.integration.model import (
     UNSET,
+    FindingStatus,
     IntegrationError,
     IntegrationPlan,
     IntegrationResult,
@@ -260,8 +261,10 @@ def apply_transaction(request: TransactionRequest) -> IntegrationResult:
                 staged_action_result,
                 "FAILED",
             )
+            detail = _verification_failure_detail(staged_action_result, staging)
+            suffix = f" Details: {detail}" if detail else ""
             raise IntegrationError(
-                "Staged action verification failed; target remains unchanged."
+                f"Staged action verification failed; target remains unchanged.{suffix}"
             )
         staged_result = _run_verifier(request.verifier, staging)
         if not staged_result.ok:
@@ -2094,6 +2097,22 @@ def _run_staged_action(
     if not isinstance(result, VerificationResult):
         raise IntegrationError("Staged action returned an invalid result.")
     return result
+
+
+def _verification_failure_detail(result: VerificationResult, root: Path) -> str:
+    """Return bounded, redacted details for a failed staged action."""
+
+    failures = tuple(
+        f"{finding.check}: {finding.message}"
+        for finding in result.findings
+        if finding.status is FindingStatus.FAIL
+    )
+    if not failures:
+        return ""
+    detail = sanitize_text("; ".join(failures), root).strip()
+    if not detail:
+        return ""
+    return " ".join(detail.splitlines())[:1200]
 
 
 def _snapshot_staged_outputs(

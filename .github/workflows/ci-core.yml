@@ -86,5 +86,14 @@ jobs:
       - name: Run portable unit and integration support suite
         shell: pwsh
         run: |
-          & $env:TOOLING_PYTHON -m pytest -q -p no:cacheprovider tools/tests/core tools/tests/adapters tools/tests/integration
+          $junit = Join-Path $env:RUNNER_TEMP "python-support-${{ matrix.python }}.junit.xml"
+          & $env:TOOLING_PYTHON -m pytest -q -p no:cacheprovider --junitxml=$junit tools/tests/core tools/tests/adapters tools/tests/integration
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: python-support-${{ matrix.python }}-junit
+          path: ${{ runner.temp }}/python-support-${{ matrix.python }}.junit.xml
+          if-no-files-found: warn
+          retention-days: 7

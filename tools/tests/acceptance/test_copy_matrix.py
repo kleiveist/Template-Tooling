@@ -211,6 +211,7 @@ def test_copied_tooling_matrix_is_read_only_integrated_and_idempotent(
     )
 
     assert _snapshot_tree(root) == before_check
+    assert first_check.get("status") == "FIX_REQUIRED", first_check
     assert first_check["plan"]["conflicts"] == []
     assert first_check["plan"]["required_changes"] > 0
     assert first_check["profile"]["id"] == case.expected_profile

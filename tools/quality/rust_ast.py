@@ -285,12 +285,28 @@ def _start_export(runtime: ModuleType, engine: Any, store: Any, linker: Any, art
 def _invoke(runtime: ModuleType, start: Any, store: Any) -> int:
     try:
         start(store)
-    except runtime.ExitTrap as exc:
-        return exc.code
-    except runtime.Trap as exc:
-        raise RustSyntaxError(f"Rust WASI analyzer resource trap: {exc}") from exc
-    except (TypeError, runtime.WasmtimeError) as exc:
-        raise RustSyntaxError(f"Rust WASI analyzer execution failed: {exc}") from exc
+    except BaseException as exc:
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)) or not isinstance(
+            exc, Exception
+        ):
+            raise
+        exit_trap = getattr(runtime, "ExitTrap", None)
+        if isinstance(exit_trap, type) and isinstance(exc, exit_trap):
+            code = getattr(exc, "code", None)
+            if isinstance(code, int):
+                return code
+            raise RustSyntaxError(
+                f"Rust WASI analyzer execution failed: {exc}"
+            ) from exc
+        trap = getattr(runtime, "Trap", None)
+        if isinstance(trap, type) and isinstance(exc, trap):
+            raise RustSyntaxError(f"Rust WASI analyzer resource trap: {exc}") from exc
+        wasmtime_error = getattr(runtime, "WasmtimeError", None)
+        if isinstance(exc, TypeError) or (
+            isinstance(wasmtime_error, type) and isinstance(exc, wasmtime_error)
+        ):
+            raise RustSyntaxError(f"Rust WASI analyzer execution failed: {exc}") from exc
+        raise
     return 0
 
 
