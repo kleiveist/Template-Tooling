@@ -277,6 +277,13 @@ def _validated_members(archive: tarfile.TarFile) -> tuple[tarfile.TarInfo, ...]:
         names.add(name)
         if not (member.isfile() or member.isdir() or member.issym()):
             raise CaseStudyError(f"TinyTeX archive object is unsupported: {name}")
+        if member.isfile():
+            mode = (member.mode & 0o755) | 0o600
+            if not mode & 0o100:
+                mode &= ~0o111
+            member.mode = mode
+        elif member.isdir():
+            member.mode = (member.mode & 0o755) | 0o700
         if member.issym():
             target = _normalized_link_target(name, member.linkname)
             if not target.parts or target.parts[0] != ".TinyTeX":
@@ -295,7 +302,13 @@ def _extract(archive_path: Path, destination: Path) -> Path:
         with tarfile.open(archive_path, mode="r:xz") as archive:
             members = _validated_members(archive)
             # Every path and symlink target is validated before extraction.
-            archive.extractall(destination, members=members)
+            # The data filter also removes unsafe permission bits and guarantees
+            # owner read/write access for regular files.  This matters when an
+            # archive records mode 000 and the bootstrap runs as a non-root user.
+            if hasattr(tarfile, "data_filter"):
+                archive.extractall(destination, members=members, filter="data")
+            else:  # Python versions predating extraction filters.
+                archive.extractall(destination, members=members)
     except (OSError, tarfile.TarError) as exc:
         raise CaseStudyError(f"Could not extract TinyTeX archive: {exc}") from exc
     extracted = destination / ".TinyTeX"

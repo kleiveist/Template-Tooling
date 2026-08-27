@@ -347,8 +347,8 @@
     },
     {
       "path": "docs/toolingdocs/case-study/scripts/environment.py",
-      "sha256": "sha256:3655ff9838146e25df019d5b7438d96e982c6ec93da5c4aef704034e457a2d9c",
-      "size": 21186,
+      "sha256": "sha256:f98e1e263066bf66e7dcf83ad180406064edd7225ed0e6ae9d9b23a5e87f5681",
+      "size": 21884,
       "kind": "file",
       "executable": false
     },
@@ -732,8 +732,8 @@
     },
     {
       "path": "docs/toolingdocs/case-study/tests/test_environment.py",
-      "sha256": "sha256:7ac5c18ffc59ef99ebbc2dc6b128c17818753127f7238aaf54397ac55fd870bc",
-      "size": 4517,
+      "sha256": "sha256:d59c6b052c1c7ef20e16c260fcac053e70ad294994bd3f5e28a3256369dd9a8c",
+      "size": 4581,
       "kind": "file",
       "executable": false
     },
@@ -2635,5 +2635,5 @@
       "executable": false
     }
   ],
-  "digest": "sha256:577d907ed01f03bbec2e4b21e135c99be1ace7228ec15e352994361ea476fde8"
+  "digest": "sha256:7ee52e53d5ab86ecbade5f7c2c4166d4c12592f986a3ad76fa4547ab665708fd"
 }

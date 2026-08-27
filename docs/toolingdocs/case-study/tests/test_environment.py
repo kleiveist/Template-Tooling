@@ -85,6 +85,7 @@ def test_safe_tinytex_archive_extracts_internal_files_and_links(tmp_path: Path) 
     extracted = environment._extract(archive_path, tmp_path / "output")
 
     assert (extracted / "tool").read_bytes() == b"payload"
+    assert (extracted / "tool").stat().st_mode & 0o600 == 0o600
     assert (extracted / "bin" / "tool").is_symlink()
     assert (extracted / "bin" / "tool").resolve() == (extracted / "tool").resolve()
 
