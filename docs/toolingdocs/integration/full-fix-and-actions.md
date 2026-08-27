@@ -46,8 +46,8 @@ service.
 
 ## Fixed staged actions
 
-Plan paths determine whether Full-Fix must run `dependencies`, `quality` and `tests`, in
-that order. Callers cannot supply a command or shell fragment.
+Plan paths determine whether Full-Fix must run `dependencies`, `quality`, `tests`, and `build`,
+in that order. Callers cannot supply a command or shell fragment.
 
 - Locked-dependency validation currently supports only a safe `package.json` paired
   with `package-lock.json`. It runs `npm ci --ignore-scripts --offline --no-audit
@@ -57,6 +57,10 @@ that order. Callers cannot supply a command or shell fragment.
 - Quality runs isolated Ruff checks on `tools/adapters` and `tools/integration`.
 - Tests run isolated Pytest on `tools/tests/adapters` and
   `tools/tests/integration`, with plugin autoload and cache writes disabled.
+- Build uses only an allowlisted manifest mapping: `npm run build` when the existing
+  `package.json` declares a non-empty `scripts.build`, isolated Python source compilation for a
+  `pyproject.toml`, or `cargo check --locked` for Cargo/Tauri. Missing scripts, lockfiles, or
+  runtimes fail closed; Cargo targets and caches remain disposable staging output.
 
 These actions validate the staged result. Their dependency and build artifacts are not
 published to the target project. Current built-in planning does not add or update

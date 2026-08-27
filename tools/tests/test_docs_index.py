@@ -390,6 +390,22 @@ def test_default_check_is_read_only_and_ignores_root_markdown(
     assert after == before
 
 
+def test_documentation_files_ignore_local_readmes(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    assets = docs / "assets"
+    assets.mkdir(parents=True)
+    (docs / "index.md").write_text("# Documentation\n", encoding="utf-8")
+    (assets / "README.md").write_text("# Asset notes\n", encoding="utf-8")
+    (assets / "diagram.md").write_text("# Diagram\n", encoding="utf-8")
+
+    documents = {
+        path.relative_to(docs).as_posix()
+        for path in docs_index._documentation_files(docs)
+    }
+
+    assert documents == {"assets/diagram.md", "index.md"}
+
+
 def test_index_uses_custom_configured_docs_root_without_touching_readme(
     tmp_path,
 ) -> None:

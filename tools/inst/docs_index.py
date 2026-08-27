@@ -346,7 +346,14 @@ def _documentation_files(docs_root: Path) -> list[Path]:
                 f"Tooling documentation contains a symbolic link: "
                 f"{path.relative_to(docs_root).as_posix()}."
             )
-        if path.is_file() and path.suffix.casefold() == ".md":
+        # README files document assets or local conventions.  They are deliberately
+        # link-checked elsewhere, but they are not navigation pages and therefore
+        # do not need generated backlink/index markers.
+        if (
+            path.is_file()
+            and path.suffix.casefold() == ".md"
+            and path.name != "README.md"
+        ):
             files.append(path)
     return sorted(files)
 

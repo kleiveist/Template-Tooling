@@ -1,64 +1,73 @@
 <!-- AUTO-GENERATED:backlink START -->
-[← Tooling documentation](../index.md)
+[Portable tooling documentation](../index.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 # Portable tooling case study / Fallstudie zum portablen Tooling
 
-This directory contains a newly written, bilingual case study of the portable tooling
-architecture. The English and German editions use the same evidence model and diagrams, but
-each edition is a complete document rather than a short translation note.
+This directory contains the audited source architecture for a newly authored German and
+English case study of portable tooling. The editions have the same numbered chapters,
+appendices, labels, diagrams, evidence identifiers, tables, limitations, and bibliography
+keys; each is nevertheless an independently written document.
 
-Dieser Ordner enthält eine vollständig neu verfasste, zweisprachige Fallstudie zur portablen
-Toolingarchitektur. Die englische und die deutsche Fassung verwenden dasselbe Evidenzmodell
-und dieselben Diagramme; beide Fassungen sind eigenständige vollständige Dokumente.
+Dieser Ordner enthält die auditierte Quellarchitektur einer neu verfassten deutschen und
+englischen Fallstudie zum portablen Tooling. Beide Fassungen haben dieselben nummerierten
+Kapitel, Anhänge, Labels, Diagramme, Evidence-IDs, Tabellen, Einschränkungen und
+Bibliografie-Keys; sie sind dennoch eigenständige Texte.
 
-## Contents / Inhalt
+## Audit boundary / Auditgrenze
 
-- [`source/en/main.tex`](source/en/main.tex): English case study.
-- [`source/de/main.tex`](source/de/main.tex): deutsche Fallstudie.
-- [`assets/architecture-pipeline.tex`](assets/architecture-pipeline.tex): portable LaTeX
-  diagram of the transactional integration pipeline.
-- [`assets/ownership-boundary.tex`](assets/ownership-boundary.tex): portable LaTeX diagram
-  of the project/tooling ownership boundary.
-- [`build.py`](build.py): standard-library build driver for deterministic `pdflatex` runs.
-- [`tests/test_reproducible_build.py`](tests/test_reproducible_build.py): structural and
-  byte-reproducibility tests.
+The technical contract of `kleiveist/Latex-Template` was inspected at
+`76b8efe19662a378eda568eddcdd4c96a5e649de`. Its source declares no license, so no template
+file, earlier chapter, diagram, bibliography entry, PDF, or Git history is vendored here.
+This is a newly authored adaptation of the observed technical contract, not a claim of
+byte-identical upstream compatibility. The complete audit and authoring rules are in
+[Template compatibility audit](TEMPLATE-COMPATIBILITY.md) and
+[case-study guidelines](CASE-STUDY-GUIDELINES.md).
 
-## Reproducible build / Reproduzierbarer Build
+Der technische Vertrag von `kleiveist/Latex-Template` wurde bei
+`76b8efe19662a378eda568eddcdd4c96a5e649de` geprüft. Da der Quellbestand keine Lizenz
+ausweist, werden weder Template-Dateien noch frühere Kapitel, Diagramme, Bibliografieeinträge,
+PDFs oder Git-Historie übernommen. Es handelt sich um eine neu verfasste Anpassung des
+beobachteten technischen Vertrags, nicht um eine Zusage byte-identischer
+Upstream-Kompatibilität.
 
-The builder requires `pdflatex`, fixes time, timezone, locale and TeX cache locations, redirects
-TeX output and runtime state into disposable directories, runs two passes from each source
-directory, and publishes only the final PDFs to an explicitly external output directory. It
-refuses to write into this case-study tree and restores prior editions if grouped publication
-fails.
+## Source layout / Quellstruktur
 
-Der Builder benötigt `pdflatex`, fixiert Zeit, Zeitzone, Locale und TeX-Cachepfade, leitet
-TeX-Ausgaben und Laufzeitzustand in automatisch entfernte Verzeichnisse um, führt zwei Läufe
-aus dem jeweiligen Quellverzeichnis aus und veröffentlicht ausschließlich die fertigen PDFs
-in ein explizit externes Ziel. Ausgaben innerhalb dieses Quellbaums werden abgelehnt; schlägt
-die gemeinsame Veröffentlichung fehl, werden vorherige Fassungen wiederhergestellt.
+- `source/common/` contains the local preamble, macros, bibliography, and neutral template
+  notice.
+- `source/de/` and `source/en/` contain independent editions with chapters `00`–`12` and
+  appendices `a`–`e`.
+- `assets/diagrams/source/` contains the twelve versioned TikZ diagram sources; rendered
+  images are intentionally not committed.
+- `evidence/` contains claim-to-test links and the metrics schema.
+- `scripts/` contains build, cleanup, static verification, and PDF render checks.
+
+## Build and verification / Build und Verifikation
+
+Build outputs are published only under `.tooling-state/docs/case-study/` locally. CI uses a
+fresh `$RUNNER_TEMP` directory. `pdflatex` and `biber` are required for a real PDF build;
+the static verifier is useful without a TeX installation.
 
 ```sh
-python docs/toolingdocs/case-study/build.py --language all --output-dir ../portable-tooling-case-study-output
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/build.py --language de
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/build.py --language en
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/build.py --all
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/build.py --all --clean
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/build.py --all --reproducible
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/verify.py --all
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/clean.py
 ```
-
-The output files are `portable-tooling-case-study-de.pdf` and
-`portable-tooling-case-study-en.pdf`. No PDF, `.aux`, `.log`, `.toc`, SyncTeX or latexmk
-state belongs in the source tree.
-
-Die Ausgabedateien heißen `portable-tooling-case-study-de.pdf` und
-`portable-tooling-case-study-en.pdf`. PDFs, `.aux`-, `.log`-, `.toc`-, SyncTeX- oder
-latexmk-Zustände gehören nicht in den Quellbestand.
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider \
   docs/toolingdocs/case-study/tests
 ```
 
-The PDF test skips with an explicit reason when `pdflatex` is unavailable; all structural
-checks continue to run. / Fehlt `pdflatex`, wird nur der PDF-Test mit expliziter Begründung
-übersprungen; die Strukturprüfungen laufen weiterhin.
+No PDF, auxiliary file, Biber output, SyncTeX file, rendered diagram, or other TeX build
+state belongs in this source tree. / PDFs, Hilfsdateien, Biber-Ausgaben, SyncTeX-Dateien,
+gerenderte Diagramme und sonstiger TeX-Build-Zustand gehören nicht in diesen Quellbaum.
 
 <!-- AUTO-GENERATED:docs-index START -->
-- (no pages)
+- [Case-study guidelines](CASE-STUDY-GUIDELINES.md)
+- [Template compatibility audit](TEMPLATE-COMPATIBILITY.md)
 <!-- AUTO-GENERATED:docs-index END -->

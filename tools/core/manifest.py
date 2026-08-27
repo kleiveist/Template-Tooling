@@ -41,15 +41,18 @@ PROTECTED_DIRECTORIES = {
     ".venv",
     "__pycache__",
     "artifacts",
+    "build",
     "cache",
     "caches",
     "coverage",
     "dist",
+    "generated",
     "htmlcov",
     "log",
     "logs",
     "node_modules",
     "out",
+    "output",
     "playwright-report",
     "runtime",
     "target",
@@ -87,6 +90,9 @@ SENSITIVE_FILE_NAMES = {
 }
 PROTECTED_FILE_SUFFIXES = {
     ".aux",
+    ".bbl",
+    ".bcf",
+    ".blg",
     ".db",
     ".fdb_latexmk",
     ".fls",
@@ -95,6 +101,8 @@ PROTECTED_FILE_SUFFIXES = {
     ".key",
     ".keystore",
     ".log",
+    ".lof",
+    ".lot",
     ".out",
     ".p12",
     ".pdf",
@@ -102,6 +110,7 @@ PROTECTED_FILE_SUFFIXES = {
     ".pfx",
     ".pyc",
     ".pyo",
+    ".run.xml",
     ".sqlite",
     ".sqlite3",
     ".tar",
@@ -566,6 +575,9 @@ def is_protected_relative_path(relative: str) -> bool:
 def _is_protected_relative(relative: str) -> bool:
     parts = PurePosixPath(relative).parts
     lowered = tuple(part.casefold() for part in parts)
+    # ``tools/tauri/build`` is source code, not a generated build directory.
+    if lowered[:3] == ("tools", "tauri", "build"):
+        return False
     if any(
         part in PROTECTED_DIRECTORIES or part.endswith(".egg-info") for part in lowered
     ):

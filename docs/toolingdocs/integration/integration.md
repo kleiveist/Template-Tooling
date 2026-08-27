@@ -29,6 +29,11 @@ inside integration staging.
 
 <!-- AUTO-GENERATED:docs-index START -->
 - [Check](check.md)
+- [Full-Fix](full-fix.md)
 - [Full-Fix and actions](full-fix-and-actions.md)
 - [Migration, verification and drift](migration-verification-and-drift.md)
+- [Migrations](migrations.md)
+- [Rollback and recovery](rollback-and-recovery.md)
+- [Tooling replacement](tooling-replacement.md)
+- [Verification](verification.md)
 <!-- AUTO-GENERATED:docs-index END -->

@@ -242,6 +242,14 @@ def test_export_rejects_symlinks_without_publishing_a_partial_target(
         ("tools/generated.whl", False, "protected file"),
         ("docs/toolingdocs/coverage.xml", False, "protected file"),
         ("docs/toolingdocs/lcov.info", False, "protected file"),
+        ("docs/toolingdocs/case-study/main.bbl", False, "protected file"),
+        ("docs/toolingdocs/case-study/main.bcf", False, "protected file"),
+        ("docs/toolingdocs/case-study/main.blg", False, "protected file"),
+        ("docs/toolingdocs/case-study/main.lof", False, "protected file"),
+        ("docs/toolingdocs/case-study/main.lot", False, "protected file"),
+        ("docs/toolingdocs/case-study/main.run.xml", False, "protected file"),
+        ("docs/toolingdocs/case-study/output", True, "protected directory"),
+        ("docs/toolingdocs/case-study/generated", True, "protected directory"),
     ),
 )
 def test_export_fails_closed_for_nonportable_objects(

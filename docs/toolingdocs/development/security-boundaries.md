@@ -50,7 +50,10 @@ allowlisted dependency key; current built-in operations do not do so. When such 
 needed, it uses a fresh disposable environment and does not publish a live `node_modules` tree.
 
 Staged quality validation runs trusted tooling checks and bounded adapter/integration tests. It
-does not import every target plugin or claim to run the complete product test matrix.
+does not import every target plugin or claim to run the complete product test matrix. A staged
+build is restricted to a fixed manifest mapping; a declared npm build script, Python source, or
+locked Cargo package is still target-controlled behavior and is executed only in the disposable
+staging tree. Any such failure prevents publication and leaves the live target unchanged.
 
 ## Live-command boundary
 

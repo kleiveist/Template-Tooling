@@ -9,11 +9,17 @@ These guides cover the operator-facing workflow after a complete `tools/` and
 root and inspect a read-only command before its mutating counterpart whenever one is available.
 
 <!-- AUTO-GENERATED:docs-index START -->
-- [Install](install.md)
-- [Tests](tests.md)
+- [Building and testing](building-and-testing.md)
 - [Builds](builds.md)
-- [Releases](releases.md)
+- [Custom project paths](custom-project-paths.md)
+- [First integration](first-integration.md)
 - [Folder replacement and migration](folder-replacement.md)
+- [Install](install.md)
+- [Releases](releases.md)
+- [Selecting a profile](selecting-a-profile.md)
+- [Tests](tests.md)
+- [Troubleshooting](troubleshooting.md)
+- [Upgrading tooling](upgrading-tooling.md)
 <!-- AUTO-GENERATED:docs-index END -->
 
 The integration transaction, explicit live actions, and product release checks have different

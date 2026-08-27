@@ -186,6 +186,36 @@ def test_generator_rejects_symlinks_protected_artifacts_and_case_collisions(
         _write(root, tools, docs)
 
 
+@pytest.mark.parametrize(
+    ("relative", "is_directory"),
+    (
+        ("docs/toolingdocs/case-study/main.bbl", False),
+        ("docs/toolingdocs/case-study/main.bcf", False),
+        ("docs/toolingdocs/case-study/main.blg", False),
+        ("docs/toolingdocs/case-study/main.lof", False),
+        ("docs/toolingdocs/case-study/main.lot", False),
+        ("docs/toolingdocs/case-study/main.run.xml", False),
+        ("docs/toolingdocs/case-study/output", True),
+        ("docs/toolingdocs/case-study/generated", True),
+    ),
+)
+def test_generator_rejects_latex_outputs_and_generated_directories(
+    tmp_path: Path,
+    relative: str,
+    is_directory: bool,
+) -> None:
+    root, tools, _docs = _payload(tmp_path)
+    path = root / relative
+    if is_directory:
+        path.mkdir(parents=True)
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("generated\n", encoding="utf-8")
+
+    with pytest.raises(PortablePayloadError, match="protected"):
+        _write(root, tools, _docs)
+
+
 @pytest.mark.parametrize("relative", ["extra.txt", "nested/payload.bin"])
 def test_runtime_dist_allows_only_the_canonical_wasm(
     tmp_path: Path,
