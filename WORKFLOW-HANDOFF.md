@@ -7,7 +7,7 @@
 - Aktueller Ausbau: portable Hosted-CI mit getrennten Qualitäts-, Core-, System-, Acceptance-, Upgrade-, Dokumentations- und Release-Gates
 - Tooling-Version: `0.4.0`
 - Portables Payload-Manifest:
-  `sha256:4d662c30e451f98424fd9e745b49cc81792922a3332108ab77b72b365306ca87`
+  `sha256:d8e82ba8d51fc7c016f365025de66a50282c2d5c6edbd40d731381ec2b10aa94`
 - Ausgangspunkt: `main` bei `9fefcdd`
 
 ## Kurzfassung
@@ -148,7 +148,7 @@ Das Exportmanifest enthält im aktuellen Arbeitsstand 372 Nutzdateieinträge. Mi
 selbst umfasst der reale Export 373 Dateien. Sein Digest ist:
 
 ```text
-sha256:4d662c30e451f98424fd9e745b49cc81792922a3332108ab77b72b365306ca87
+sha256:d8e82ba8d51fc7c016f365025de66a50282c2d5c6edbd40d731381ec2b10aa94
 ```
 
 Das Manifest ist eine Selbstkonsistenzprüfung, keine Signatur oder Herausgeberauthentisierung.
@@ -217,7 +217,7 @@ Ruff für die geänderten Python-Dateien
 => Check und Formatprüfung bestanden
 
 Payload-Manifest im aktuellen Arbeitsstand
-=> 372 Nutzdateien; sha256:4d662c30…6ca87
+=> 372 Nutzdateien; sha256:d8e82ba8…0aa94
 ```
 
 Die 98 Skips der vollständigen lokalen Suite sind begründet und werden zusätzlich durch den
@@ -237,7 +237,7 @@ Zwei reale Exporte aus demselben Source-Stand waren in Dateien, Modi und Zeitste
 Ein Export bestand anschließend den vollständigen unabhängigen Kundensmoke:
 
 ```text
-Export im aktuellen Arbeitsstand: 373 Dateien, Digest sha256:4d662c30…6ca87
+Export im aktuellen Arbeitsstand: 373 Dateien, Digest sha256:d8e82ba8…0aa94
 Kundensmoke: portable customer smoke passed
 Dokumentation: 30 Seiten konsistent
 ```

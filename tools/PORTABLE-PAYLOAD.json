@@ -158,8 +158,8 @@
     },
     {
       "path": "docs/toolingdocs/case-study/README.md",
-      "sha256": "sha256:36b249a785572c198f7c1d1c9c0822fb0b83f2fbf1922990dd8fa6a7c14caad8",
-      "size": 538,
+      "sha256": "sha256:583ec2525ac33408c6be499a5c77eeaf0cb2d8481d63292a150539139e20895a",
+      "size": 537,
       "kind": "file",
       "executable": false
     },
@@ -172,99 +172,99 @@
     },
     {
       "path": "docs/toolingdocs/case-study/assets/diagrams/README.md",
-      "sha256": "sha256:ee18fdef6de6e3937ed2cb3df90d951ed54df876f4d9bc4299dfed52df756c14",
-      "size": 311,
+      "sha256": "sha256:0eea68fb93a6866bd0ed9be88c2f59c2c62f3fce1fde0bd20cdda0cd365fb813",
+      "size": 310,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/assets/diagrams/source/adapter-orchestration.tex",
-      "sha256": "sha256:334d29eebe815819b25d8541a42781a86970a7fd97162cdc880b9b570aafca72",
-      "size": 459,
+      "sha256": "sha256:86d1fe5168a28d6404030e991be2dec2b90f664bf6b2a081d3fbfb9b48e56ac1",
+      "size": 458,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/assets/diagrams/source/backup-rollback.tex",
-      "sha256": "sha256:60073ebdaffbd6083ba8a6d2710b8879e59b415ed172a63198635232b4292fa9",
-      "size": 462,
+      "sha256": "sha256:9d1c95a61e339cb96eedab491ed1af2b149e45de0b277ce9c9e03b1169d0cd23",
+      "size": 461,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/assets/diagrams/source/check-sequence.tex",
-      "sha256": "sha256:54ff0457a43e37cde54d97b5e0c3c22bb6d03327e110fa9b0933a48a7b252046",
-      "size": 419,
+      "sha256": "sha256:2ebed6f05f3043bcbf6b21395559b269c2dc451cd941d235cff4886891b951a7",
+      "size": 418,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/assets/diagrams/source/ci-test-pyramid.tex",
-      "sha256": "sha256:458150fa8e0e609a69d6a09350f20386ac85a69200eb27beb8e6dd7b9d987f98",
-      "size": 463,
+      "sha256": "sha256:d85514a9be5de62ab88c232adf09954b50991abb5ef9a5e3f5c3fba47c640242",
+      "size": 462,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/assets/diagrams/source/export-boundary.tex",
-      "sha256": "sha256:44d8a67c7016aba2760ababeb03f3c1a2c0ab18348b3e8d466f6521c49e8d6c4",
-      "size": 429,
+      "sha256": "sha256:400bf7ca8afe076f10cd9f1f90731b9748adf37ac5144d1b3e49551d0905e819",
+      "size": 428,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/assets/diagrams/source/full-fix-transaction.tex",
-      "sha256": "sha256:63118e4e1315935b71f5af0cee753b369f01572162aca831dfc3d0ac29a95b60",
-      "size": 377,
+      "sha256": "sha256:f82d8e7102c569bf22fa2097399e3024356b221ee3556f110dd3ff397d075356",
+      "size": 376,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/assets/diagrams/source/os-fixture-matrix.tex",
-      "sha256": "sha256:2a263e952e1606608a5f8a5be52d95af79d054d91ac8ff026210d694ad4f9cd9",
-      "size": 447,
+      "sha256": "sha256:fe89f9243050edf0f52e6a8d4a2275b1474b50d1287b9fc40fcf098184852d29",
+      "size": 446,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/assets/diagrams/source/ownership-boundaries.tex",
-      "sha256": "sha256:47c25b8b6634144e4f1d1f97d798a820d0a294b6b0b845de6ae45b4782addf22",
-      "size": 499,
+      "sha256": "sha256:7f6577edc556e2a94a22b5fd13d9df5cb8e3aa6b0ec5e698b0992be3bdab291b",
+      "size": 498,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/assets/diagrams/source/profile-feature-resolution.tex",
-      "sha256": "sha256:d5b6d0a6babadcc11320022f7dc4cd559dbc5b4248036a9d9da61cfb4c434bb4",
-      "size": 459,
+      "sha256": "sha256:8f263817fadcca35f58b763a0753a2c1ccc11727a782b575d7e61bc70fdf28f3",
+      "size": 458,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/assets/diagrams/source/project-context-paths.tex",
-      "sha256": "sha256:110a8be65b2ac52208dcb8d437c70c64b80f4703195214568e0d436fd0cd52d0",
-      "size": 509,
+      "sha256": "sha256:133d04e7af89a21a5aabd673fbbd699a54e271d5c3e05d923d17c30b2bf66405",
+      "size": 508,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/assets/diagrams/source/system-context.tex",
-      "sha256": "sha256:ed86435ff5eda08ac94190e6d3f05a561d73e106ce3070d26f6e10728fa28085",
-      "size": 471,
+      "sha256": "sha256:89b243291152a40ddc2bd8c5fb95eb8a3caa9d0dae023e999fee8943904f9fca",
+      "size": 470,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/assets/diagrams/source/tooling-migration.tex",
-      "sha256": "sha256:fb703c93743c314e43547f4b8106b6443cc07df5d2bf8d07aed0c36c90b3784c",
-      "size": 415,
+      "sha256": "sha256:517bafa596a4179df47d6185ab6092031031346ecb5f83b46d6454b23e93c76e",
+      "size": 414,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/assets/images/README.md",
-      "sha256": "sha256:b40368c1d4bc5868fb190edef94ed65fcf6b2aeccf65525857a85845f0386703",
-      "size": 293,
+      "sha256": "sha256:40e51ae6e2ef8ae07696e402f7078754f049d085aed480a650ab06d1e749f713",
+      "size": 292,
       "kind": "file",
       "executable": false
     },
@@ -298,8 +298,8 @@
     },
     {
       "path": "docs/toolingdocs/case-study/evidence/metrics-schema.json",
-      "sha256": "sha256:2b0b0b947645b869a3a2488155227f522c5e231ec92e27b91cf1f2b23268d149",
-      "size": 979,
+      "sha256": "sha256:37da8b90654558abda487254f70dfb410c58a9d72182760995daf8edb43bf12f",
+      "size": 978,
       "kind": "file",
       "executable": false
     },
@@ -361,29 +361,29 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/common/macros/evidence.tex",
-      "sha256": "sha256:8769a1cf677c80113a53ab204c718f2357a096863fe72fd74039cc0f3cefb891",
-      "size": 100,
+      "sha256": "sha256:cbab847ff10c5d9ffc9e35328f214f1f6a11b17b01783ffc5221cef8802a2b60",
+      "size": 99,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/common/macros/formatting.tex",
-      "sha256": "sha256:c902f50d022c16d4ec9e972f22c7f253410bfe307e92e5477de7a045dd8b5103",
-      "size": 290,
+      "sha256": "sha256:fc1ab674faf710f5c7fad3a3a764cea1289830c74517c690c906d8fc026a1c61",
+      "size": 289,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/common/macros/terminology.tex",
-      "sha256": "sha256:e1f1a774321c620195caccbcb3c73e0b3f7d36558592f888768dc18785668447",
-      "size": 522,
+      "sha256": "sha256:71e5df251a63c3df30f419d6d77d11b98f6c69577ea674fa113d0dfff5fa9c16",
+      "size": 521,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/common/preamble/packages.tex",
-      "sha256": "sha256:97def88f3014c762403ad853badaebaa53048befd0055b2ceccc6a4154b8d0ce",
-      "size": 1073,
+      "sha256": "sha256:9b62eb6d6113ce3e44058b6124718f40d16c18bc1a1f4ebc8e252e33be22c956",
+      "size": 1072,
       "kind": "file",
       "executable": false
     },
@@ -396,8 +396,8 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/common/preamble/typography.tex",
-      "sha256": "sha256:625bd5f0eae01842574cb8a230206ca5e5d17020357f5a7e2e94a3948d5cb9b5",
-      "size": 937,
+      "sha256": "sha256:d77fdd13aa6bfa2059a5921ba0226994a7c479c7e32f1ad34831b10b1511949c",
+      "size": 936,
       "kind": "file",
       "executable": false
     },
@@ -417,64 +417,64 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/common/template/NOTICE.txt",
-      "sha256": "sha256:11d88480c5b8ff6d8c905c50cd7ed3b2acc7899414e20fb6aad4491e9e8cb304",
-      "size": 432,
+      "sha256": "sha256:f23dfb35f44649fa3388bdb8e3069fadadb21904f995708e846add4dae4ed55a",
+      "size": 431,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/appendices/a-cli-reference.tex",
-      "sha256": "sha256:6edd918fc6996174dd1ffe8da67344cd2c8027fd24724f2ce3f9400584861762",
-      "size": 429,
+      "sha256": "sha256:8124be903890b524ccb40b2d5588a11dfaf62498566b96d9bbbd45bc39c883c2",
+      "size": 428,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/appendices/b-profile-matrix.tex",
-      "sha256": "sha256:59124881dab04e72a2433f44590dddf14466d274bfab61645b445b659d4f77d5",
-      "size": 336,
+      "sha256": "sha256:eb0625b58ee122dd26ce6903f91b459cebf21f6862d0e876b864d140bdb7f3fd",
+      "size": 335,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/appendices/c-test-matrix.tex",
-      "sha256": "sha256:f7a66f9ea84a17105ee6aaaf542f7913f855307208ad603ad1d12d556ca01ff8",
-      "size": 439,
+      "sha256": "sha256:19b5c930f7452b43656cf3a2663a61a6bc5e0b279ea0e145200b508bb1229d82",
+      "size": 438,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/appendices/d-migration-evidence.tex",
-      "sha256": "sha256:11dcdc7b1955bf7bdc044f0fee2092c008c653cf64ff9fa455eb5b5043d8bb8a",
-      "size": 416,
+      "sha256": "sha256:a06de86a858c5eb108420f938f46f4aee523b1c6ae6fcca488c826c684b0dc1b",
+      "size": 415,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/appendices/e-reproducibility.tex",
-      "sha256": "sha256:569f4404fdce2d41aa214eb230b6b4a9a771044e53bb35e606b481fd68cfd6c8",
-      "size": 437,
+      "sha256": "sha256:d16220f5226408aeb4b8fcaf2d75d8221be49660a8bf90bd5f54d01c6b197367",
+      "size": 436,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/chapters/00-abstract.tex",
-      "sha256": "sha256:ac0a3b137518bf78198f08bba8d9b3300f71878bf7c835cebd45f0ae70e5c53a",
-      "size": 691,
+      "sha256": "sha256:6f02c92857de7ccd391846e21be44cc2dad834b29ad5c45f2c858ebe22ab2fa9",
+      "size": 690,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/chapters/01-introduction.tex",
-      "sha256": "sha256:b988a14e1d665f93019a14cb50d295bdbe63384a4cbfb4f87d6af46582342bb4",
-      "size": 823,
+      "sha256": "sha256:15a5b3dce15d27e96245488ae0f685500e150edb3021b6941ddb880df72806e2",
+      "size": 822,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/chapters/02-problem-and-initial-state.tex",
-      "sha256": "sha256:e4846e9d8ecb319fc14f18c74ca5c68149efa71c0eda56764cdf1a442d18b6e5",
-      "size": 867,
+      "sha256": "sha256:d7364d389b79f66ab23278ec440df73d48f4cf193e50c1ae6b7162e486cab936",
+      "size": 866,
       "kind": "file",
       "executable": false
     },
@@ -487,8 +487,8 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/chapters/04-architecture.tex",
-      "sha256": "sha256:c926ceb14c7d6d30c43cbc23a5df207a7da40888ae9528d488e035e6f9111db7",
-      "size": 914,
+      "sha256": "sha256:633ca701c97eecb186dcd84d47afb31611af778f6a4755f7b7fe2e7716f3a9fb",
+      "size": 913,
       "kind": "file",
       "executable": false
     },
@@ -501,15 +501,15 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/chapters/06-integration-and-transactions.tex",
-      "sha256": "sha256:e05457075b93d1ed722e596ebc38370a3f02ccaed5e203306d7067a38d0b6377",
-      "size": 929,
+      "sha256": "sha256:4a40cd7727a93e3de2c87e32bf1c50a3d0feb47f62eabbe2c0d11738396b60b5",
+      "size": 928,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/chapters/07-ownership-state-and-security.tex",
-      "sha256": "sha256:e999a791bf8248f09662020537f7e7d0a1080163a1828a53ecaf72877f824443",
-      "size": 988,
+      "sha256": "sha256:d17a60ef3684999460f701c3aabddbb19d906ff72bb16530bf7843ee89dcbb9b",
+      "size": 987,
       "kind": "file",
       "executable": false
     },
@@ -536,15 +536,15 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/chapters/11-limitations-and-validity.tex",
-      "sha256": "sha256:90e4c57fc2e99a1b28504f23f77791b3c84db33f6973a64b7fff2d49081d2f15",
-      "size": 676,
+      "sha256": "sha256:be73941ac8c92fe595e863d9f001465a438f29820b9e2e492cfca18d51578b4d",
+      "size": 675,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/chapters/12-conclusion-and-outlook.tex",
-      "sha256": "sha256:2699e59d5cacd25912d66845a45855906651b19c230b56befc950447863310c2",
-      "size": 699,
+      "sha256": "sha256:16bcbe72501eaca47d57a81d35aa2043465b10b6358a1f616f5a6b3a80191893",
+      "size": 698,
       "kind": "file",
       "executable": false
     },
@@ -564,57 +564,57 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/appendices/a-cli-reference.tex",
-      "sha256": "sha256:8d563e59dcd1130540fc56e9e27ed02ace18a9c4f62d7588cd742bac1c6288bc",
-      "size": 414,
+      "sha256": "sha256:724b020f73945be24c6a55a8896ade68834d21027071c9cf67992fa472be3daa",
+      "size": 413,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/appendices/b-profile-matrix.tex",
-      "sha256": "sha256:7bc5d5d56db4a75201d284b487d7b8474b9d3f4b4214503a7a00a00e521dd5ea",
-      "size": 342,
+      "sha256": "sha256:9cbfa07ce61eaaa38da6b2e84a3f2560db5c6c7a545c1309558ed20abac30969",
+      "size": 341,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/appendices/c-test-matrix.tex",
-      "sha256": "sha256:2ce70a1c6f942dbdc2183ac6526d95b64842a007763af60d1b808b88eff41ef6",
-      "size": 425,
+      "sha256": "sha256:e80777da1f2ed2b368ea2ee527dfe567b1b93384774ea48cc58648a0785adb24",
+      "size": 424,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/appendices/d-migration-evidence.tex",
-      "sha256": "sha256:d792a2666bf3443e41aac92e883a03da964f6fc2db714788bf4abc42443152e9",
-      "size": 386,
+      "sha256": "sha256:fabb0cdc620168d8d8b9f102c577904151feae8bafa99242794bf2c9055dc790",
+      "size": 385,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/appendices/e-reproducibility.tex",
-      "sha256": "sha256:88ab066ce99818a0fa56baf24aa7822d457f7bfa1d42c21414f37ebe4e3dae97",
-      "size": 392,
+      "sha256": "sha256:b35336011137c28d555112b61da3da3a3f335cf9d078e3f0db4ecac6e12e9943",
+      "size": 391,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/chapters/00-abstract.tex",
-      "sha256": "sha256:e3abbc92152f98ba567cc8f282e51263fa8bdd2c591fb9f9552905dd5f9e136a",
-      "size": 684,
+      "sha256": "sha256:39175a78fcfcbf3f89d88a277bbfeefded27e1c3fd798ddd94a43b8d1ca5897c",
+      "size": 683,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/chapters/01-introduction.tex",
-      "sha256": "sha256:c7e280840637150460561289a3d97707872453e57ebfb3ec74c495ba0a02bebc",
-      "size": 726,
+      "sha256": "sha256:14597ddb9a32b958b6f017347e75ad88c610415ee34d39e5df763d141757fa37",
+      "size": 725,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/chapters/02-problem-and-initial-state.tex",
-      "sha256": "sha256:b7fcf84147376ea7a57564b0a7b5599c393e7dd15e68a85ba27253f971866455",
-      "size": 825,
+      "sha256": "sha256:04dd499030c9232959102717b1597cb641c2d3b556ce7168951848e4227bcea2",
+      "size": 824,
       "kind": "file",
       "executable": false
     },
@@ -627,8 +627,8 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/chapters/04-architecture.tex",
-      "sha256": "sha256:53f54bbafaef0b6aa8ad5df0660be60f722282763f893bda944a0ed83770dd66",
-      "size": 877,
+      "sha256": "sha256:c808a5a2a693959658d129153b5d85fd770c83ce3e1f28ad6e112f240735b97d",
+      "size": 876,
       "kind": "file",
       "executable": false
     },
@@ -641,15 +641,15 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/chapters/06-integration-and-transactions.tex",
-      "sha256": "sha256:c05dbf0ae3aaecae4e098ca274b7b124a1f66f40530ef4179449f6f1d990b38b",
-      "size": 846,
+      "sha256": "sha256:9c71dc30d617ff4c19bb280c3c6be1241a7212e101b18f6c6a64f86fea3e057e",
+      "size": 845,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/chapters/07-ownership-state-and-security.tex",
-      "sha256": "sha256:d65dac8c96d8ef72909938be65d8d0edaeb2600c96d1b14f8ac0817f9d3065d7",
-      "size": 901,
+      "sha256": "sha256:83863b2bc9f7bb6745726baba41b29bd689cdcbb0222a6e4ae874a284ba94126",
+      "size": 900,
       "kind": "file",
       "executable": false
     },
@@ -676,15 +676,15 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/chapters/11-limitations-and-validity.tex",
-      "sha256": "sha256:f6b747d431292204629bc97dfc8e6c5e167ee418e7a3b56b967c3f038108b58f",
-      "size": 621,
+      "sha256": "sha256:5d5bd6a6a1aaea244fe7594c0700f28e40a7c3b374b11debd8946fc1b2c041c3",
+      "size": 620,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/chapters/12-conclusion-and-outlook.tex",
-      "sha256": "sha256:f374919d9222cdf15b6d217539f33f3a4a979fc763cb41ff4fd3d02eca1360fd",
-      "size": 677,
+      "sha256": "sha256:870e8a2d4d026247988271eaf028177337e158cd71667c836a263d96f47afc85",
+      "size": 676,
       "kind": "file",
       "executable": false
     },
@@ -2607,5 +2607,5 @@
       "executable": false
     }
   ],
-  "digest": "sha256:4d662c30e451f98424fd9e745b49cc81792922a3332108ab77b72b365306ca87"
+  "digest": "sha256:d8e82ba8d51fc7c016f365025de66a50282c2d5c6edbd40d731381ec2b10aa94"
 }
