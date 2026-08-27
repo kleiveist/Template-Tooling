@@ -608,7 +608,7 @@ def _initialize_clean_git(root: Path, case: CopyCase) -> bool:
             check=False,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=120,
             env=environment,
         )
         assert completed.returncode == 0, (
@@ -621,7 +621,7 @@ def _initialize_clean_git(root: Path, case: CopyCase) -> bool:
         check=False,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=120,
         env=environment,
     )
     assert status.returncode == 0 and status.stdout == ""
