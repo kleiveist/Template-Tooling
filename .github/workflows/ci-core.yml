@@ -1,0 +1,90 @@
+name: Core
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  support-matrix:
+    name: Read support matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      python_primary: ${{ steps.matrix.outputs.python_primary }}
+      python_versions: ${{ steps.matrix.outputs.python_versions }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: matrix
+        name: Read central support contract
+        run: python tools/ci_support.py --github-output
+
+  core-linux:
+    name: core-linux
+    needs: support-matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONHASHSEED: "0"
+      PYTHONNOUSERSITE: "1"
+      TEMPLATE_TOOLING_NESTED_TEST: "1"
+    steps:
+      - name: Check out complete source history
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up isolated tooling environment
+        uses: ./.github/actions/setup-tooling-environment
+        with:
+          python-version: ${{ needs.support-matrix.outputs.python_primary }}
+      - name: Run portable core, adapter, integration, and quality tests
+        shell: pwsh
+        run: |
+          $junit = Join-Path $env:RUNNER_TEMP "core-linux.junit.xml"
+          & $env:TOOLING_PYTHON -m pytest -q -p no:cacheprovider --junitxml=$junit tools/tests/core tools/tests/adapters tools/tests/integration tools/tests/quality
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: core-linux-junit
+          path: ${{ runner.temp }}/core-linux.junit.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+  python-support-matrix:
+    name: python-support-matrix (${{ matrix.python }})
+    needs: support-matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ${{ fromJSON(needs.support-matrix.outputs.python_versions) }}
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONHASHSEED: "0"
+      PYTHONNOUSERSITE: "1"
+      TEMPLATE_TOOLING_NESTED_TEST: "1"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up isolated tooling environment
+        uses: ./.github/actions/setup-tooling-environment
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Run portable unit and integration support suite
+        shell: pwsh
+        run: |
+          & $env:TOOLING_PYTHON -m pytest -q -p no:cacheprovider tools/tests/core tools/tests/adapters tools/tests/integration
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

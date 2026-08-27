@@ -91,7 +91,7 @@ _DEPENDENCY_MANIFEST_NAMES = {
     "uv.lock",
     "yarn.lock",
 }
-_TRANSACTIONAL_ACTION_ORDER = ("dependencies", "quality", "tests")
+_TRANSACTIONAL_ACTION_ORDER = ("dependencies", "quality", "tests", "build")
 _RUST_ANALYZER_RUNTIME = PurePosixPath(
     "quality/rust_analyzer/dist/rust_quality_analyzer.wasm"
 )
@@ -1676,6 +1676,8 @@ def _plan_action_requirements(
                 if dependency_manifest and _structured_dependency_change(operation):
                     required.add("dependencies")
                 required.update(("quality", "tests"))
+                if candidate.name in _ACTION_RELEVANT_STRUCTURED_NAMES:
+                    required.add("build")
             if required:
                 by_path.setdefault(path, set()).update(required)
     return tuple(

@@ -167,6 +167,8 @@ def test_portable_artifact_filter_covers_case_and_python_builds() -> None:
         Path("tools/.PYTEST_CACHE"),
         Path("docs/toolingdocs/BUILD"),
         Path("tools/generated/DIST"),
+        Path("docs/toolingdocs/case-study/OUTPUT"),
+        Path("docs/toolingdocs/case-study/generated"),
         Path("tools/quality/rust_analyzer/DIST"),
         Path("tools/tauri/BUILD"),
     )
@@ -228,7 +230,11 @@ def test_copied_tooling_matrix_is_read_only_integrated_and_idempotent(
     assert first_fix["status"] == "INTEGRATED"
     assert first_fix["report_path"] is not None
     assert first_fix["actions"] == (
-        ["Staged quality action passed.", "Staged tests action passed."]
+        [
+            "Staged quality action passed.",
+            "Staged tests action passed.",
+            "Staged build action passed for 1 declared target(s).",
+        ]
         if package_before
         else []
     )
@@ -354,8 +360,9 @@ def _seed_product(root: Path, name: str) -> tuple[str, ...]:
     def vite(frontend: str = "frontend") -> None:
         write(
             f"{frontend}/package.json",
-            '{"scripts":{"dev":"vite","test":"node -e \\"process.exit(0)\\""},'
-            '"devDependencies":{"vite":"^7.0.0"}}\n',
+            '{"scripts":{"build":"node -e \\"process.exit(0)\\"",'
+            '"dev":"vite","test":"node -e \\"process.exit(0)\\""},'
+            '"devDependencies":{"typescript":"^5.0.0","vite":"^7.0.0"}}\n',
         )
         write(f"{frontend}/src/main.ts", "export const productOwned = true;\n")
 
@@ -503,6 +510,7 @@ def _is_portable_artifact(relative: Path) -> bool:
             and original_relative != PurePosixPath("tools/quality/rust_analyzer/dist")
         )
         or (name == "build" and original_relative != PurePosixPath("tools/tauri/build"))
+        or name in {"generated", "output"}
         or name in _IGNORED_FILE_NAMES
         or relative.suffix.casefold() in _IGNORED_SUFFIXES
         or name.startswith(".coverage.")

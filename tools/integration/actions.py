@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -11,6 +13,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+
+import tomllib
 
 from tools.core.filesystem import (
     FilesystemSafetyError,
@@ -26,6 +30,7 @@ from tools.integration.model import (
     VerificationResult,
 )
 from tools.integration.sanitize import sanitize_text
+from tools.integration.transaction import trigger_test_failpoint
 from tools.process import run_bounded, safe_platform_environment
 
 _DEFAULT_TIMEOUT_SECONDS = 900
@@ -42,6 +47,14 @@ _PYTEST_LAUNCHER = (
     "spec.loader.exec_module(module);"
     "raise SystemExit(pytest.main(sys.argv[1:]))"
 )
+_PYTHON_COMPILE_LAUNCHER = (
+    "import pathlib,sys;"
+    "root=pathlib.Path(sys.argv[1]);"
+    "files=sorted(path for path in root.rglob('*.py') "
+    "if path.is_file() and not path.is_symlink());"
+    "[compile(path.read_bytes(),str(path),'exec',dont_inherit=True) for path in files]"
+)
+_RUSTUP_TOOLCHAIN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
 
 
 class ActionKind(str, Enum):
@@ -50,12 +63,14 @@ class ActionKind(str, Enum):
     DEPENDENCIES = "dependencies"
     QUALITY = "quality"
     TESTS = "tests"
+    BUILD = "build"
 
 
 _ACTION_ORDER = {
     ActionKind.DEPENDENCIES: 0,
     ActionKind.QUALITY: 1,
     ActionKind.TESTS: 2,
+    ActionKind.BUILD: 3,
 }
 
 
@@ -97,6 +112,15 @@ class ActionSpec:
             raise ValueError("Integration action paths must be unique and normalized.")
         object.__setattr__(self, "kind", kind)
         object.__setattr__(self, "paths", paths)
+
+
+@dataclass(frozen=True, slots=True)
+class _BuildCommand:
+    """One fixed build invocation derived from an allowlisted manifest type."""
+
+    command: tuple[str, ...]
+    cwd: Path
+    target: str
 
 
 class ActionRunner:
@@ -194,6 +218,13 @@ def _run_action(
     check = f"transaction-action:{action.kind.value}"
     if action.kind is ActionKind.DEPENDENCIES:
         return _run_dependency_action(root, action, environment)
+    if action.kind is ActionKind.BUILD:
+        return _run_build_action(root, action, environment)
+    if action.kind is ActionKind.QUALITY:
+        try:
+            trigger_test_failpoint("quality_check")
+        except IntegrationError as exc:
+            return _action_failure(check, action.kind, str(exc))
     command = _command(action.kind, root)
     try:
         completed = run_bounded(
@@ -208,21 +239,14 @@ def _run_action(
             stdin=subprocess.DEVNULL,
         )
     except subprocess.TimeoutExpired:
-        return Finding(
+        return _action_failure(
             check,
-            FindingStatus.FAIL,
-            f"Staged {action.kind.value} action timed out after "
-            f"{action.timeout_seconds} seconds.",
-            adapter="transaction-actions",
+            action.kind,
+            f"timed out after {action.timeout_seconds} seconds",
         )
     except (OSError, subprocess.SubprocessError) as exc:
         detail = _safe_detail(exc, root)
-        return Finding(
-            check,
-            FindingStatus.FAIL,
-            f"Staged {action.kind.value} action could not run: {detail}",
-            adapter="transaction-actions",
-        )
+        return _action_failure(check, action.kind, f"could not run: {detail}")
 
     if completed.returncode == 0:
         return Finding(
@@ -235,11 +259,18 @@ def _run_action(
         part for part in (completed.stdout or "", completed.stderr or "") if part
     )
     detail = _safe_detail(output, root)
+    return _action_failure(
+        check,
+        action.kind,
+        f"failed with exit code {completed.returncode}: {detail}",
+    )
+
+
+def _action_failure(check: str, kind: ActionKind, detail: str) -> Finding:
     return Finding(
         check,
         FindingStatus.FAIL,
-        f"Staged {action.kind.value} action failed with exit code "
-        f"{completed.returncode}: {detail}",
+        f"Staged {kind.value} action {detail}.",
         adapter="transaction-actions",
     )
 
@@ -312,6 +343,10 @@ def _run_dependency_action(
             "--no-fund",
         )
         try:
+            trigger_test_failpoint("dependency_install")
+        except IntegrationError as exc:
+            return _dependency_failure(check, str(exc))
+        try:
             completed = run_bounded(
                 command,
                 cwd=manifest.parent,
@@ -353,6 +388,203 @@ def _run_dependency_action(
     )
 
 
+def _run_build_action(
+    root: Path,
+    action: ActionSpec,
+    environment: Mapping[str, str],
+) -> Finding:
+    """Execute actual, fixed build commands for declared build manifests."""
+
+    check = f"transaction-action:{action.kind.value}"
+    try:
+        commands = _build_commands(root, action, environment)
+    except IntegrationError as exc:
+        return _action_failure(check, action.kind, f"was refused: {exc}")
+    if not commands:
+        return _action_failure(
+            check,
+            action.kind,
+            "was refused: no supported build manifest trigger path was declared",
+        )
+
+    for build in commands:
+        try:
+            completed = run_bounded(
+                build.command,
+                cwd=build.cwd,
+                env=dict(environment),
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=action.timeout_seconds,
+                shell=False,
+                stdin=subprocess.DEVNULL,
+            )
+        except subprocess.TimeoutExpired:
+            return _action_failure(
+                check,
+                action.kind,
+                f"timed out after {action.timeout_seconds} seconds for {build.target}",
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return _action_failure(
+                check,
+                action.kind,
+                f"could not run for {build.target}: {_safe_detail(exc, root)}",
+            )
+        if completed.returncode != 0:
+            output = "\n".join(
+                part
+                for part in (completed.stdout or "", completed.stderr or "")
+                if part
+            )
+            return _action_failure(
+                check,
+                action.kind,
+                "failed with exit code "
+                f"{completed.returncode} for {build.target}: "
+                f"{_safe_detail(output, root)}",
+            )
+
+    return Finding(
+        check,
+        FindingStatus.PASS,
+        f"Staged build action passed for {len(commands)} declared target(s).",
+        adapter="transaction-actions",
+    )
+
+
+def _build_commands(
+    root: Path,
+    action: ActionSpec,
+    environment: Mapping[str, str],
+) -> tuple[_BuildCommand, ...]:
+    """Derive only fixed build commands from an allowlisted manifest name."""
+
+    if not action.paths:
+        return ()
+    commands: list[_BuildCommand] = []
+    cargo_roots: set[Path] = set()
+    for relative in action.paths:
+        manifest, payload = _regular_action_file(root, relative, "Build manifest")
+        name = manifest.name
+        if name == "package.json":
+            commands.append(_npm_build_command(manifest, payload, environment))
+        elif name == "pyproject.toml":
+            commands.append(_python_build_command(manifest, payload, environment))
+        elif name == "Cargo.toml":
+            _validate_toml_manifest(manifest, payload)
+            command = _cargo_build_command(manifest, environment)
+            if command.cwd not in cargo_roots:
+                cargo_roots.add(command.cwd)
+                commands.append(command)
+        elif name == "tauri.conf.json":
+            _validate_json_manifest(manifest, payload)
+            cargo_relative = (Path(relative).parent / "Cargo.toml").as_posix()
+            cargo_manifest, cargo_payload = _regular_action_file(
+                root,
+                cargo_relative,
+                "Tauri Cargo manifest",
+            )
+            _validate_toml_manifest(cargo_manifest, cargo_payload)
+            command = _cargo_build_command(cargo_manifest, environment)
+            if command.cwd not in cargo_roots:
+                cargo_roots.add(command.cwd)
+                commands.append(command)
+        else:
+            raise IntegrationError(f"no fixed build command is defined for {relative}")
+    return tuple(commands)
+
+
+def _regular_action_file(
+    root: Path,
+    relative: str,
+    label: str,
+) -> tuple[Path, bytes]:
+    try:
+        target = safe_join(root, relative, require_exists=True)
+        if target.is_symlink():
+            raise FilesystemSafetyError(f"{label} must not be a symbolic link")
+        payload = read_regular_bytes(target, root=root, label=f"{label} {relative}")
+    except (FilesystemSafetyError, OSError) as exc:
+        raise IntegrationError(f"{label} is missing or unsafe at {relative}") from exc
+    return target, payload
+
+
+def _npm_build_command(
+    manifest: Path,
+    payload: bytes,
+    environment: Mapping[str, str],
+) -> _BuildCommand:
+    document = _validate_json_manifest(manifest, payload)
+    scripts = document.get("scripts")
+    if not isinstance(scripts, dict) or not isinstance(scripts.get("build"), str):
+        raise IntegrationError(
+            f"package.json has no declared build script at {manifest.name}"
+        )
+    if not scripts["build"].strip():
+        raise IntegrationError(
+            f"package.json has an empty build script at {manifest.name}"
+        )
+    npm = shutil.which("npm", path=environment.get("PATH"))
+    if npm is None:
+        raise IntegrationError("npm is unavailable")
+    return _BuildCommand((npm, "run", "build"), manifest.parent, "package.json")
+
+
+def _python_build_command(
+    manifest: Path,
+    payload: bytes,
+    _environment: Mapping[str, str],
+) -> _BuildCommand:
+    _validate_toml_manifest(manifest, payload)
+    return _BuildCommand(
+        (
+            sys.executable,
+            "-I",
+            "-B",
+            "-c",
+            _PYTHON_COMPILE_LAUNCHER,
+            str(manifest.parent),
+        ),
+        manifest.parent,
+        "pyproject.toml",
+    )
+
+
+def _cargo_build_command(
+    manifest: Path,
+    environment: Mapping[str, str],
+) -> _BuildCommand:
+    cargo = shutil.which("cargo", path=environment.get("PATH"))
+    if cargo is None:
+        raise IntegrationError("cargo is unavailable")
+    return _BuildCommand(
+        (cargo, "check", "--locked"),
+        manifest.parent,
+        "Cargo.toml",
+    )
+
+
+def _validate_json_manifest(manifest: Path, payload: bytes) -> dict[str, object]:
+    try:
+        document = json.loads(payload.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise IntegrationError(f"invalid JSON build manifest: {manifest.name}") from exc
+    if not isinstance(document, dict):
+        raise IntegrationError(
+            f"JSON build manifest must be an object: {manifest.name}"
+        )
+    return document
+
+
+def _validate_toml_manifest(manifest: Path, payload: bytes) -> None:
+    try:
+        tomllib.loads(payload.decode("utf-8"))
+    except (UnicodeError, tomllib.TOMLDecodeError) as exc:
+        raise IntegrationError(f"invalid TOML build manifest: {manifest.name}") from exc
+
+
 def _dependency_failure(check: str, detail: str) -> Finding:
     return Finding(
         check,
@@ -382,6 +614,7 @@ def _action_environment(temporary: Path, root: Path) -> dict[str, str]:
         directory.mkdir(mode=0o700)
 
     environment = safe_platform_environment(os.environ)
+    environment.update(_rustup_runtime_environment())
     environment.update(
         {
             "PATH": _sanitized_search_path(os.environ.get("PATH"), root),
@@ -408,6 +641,7 @@ def _action_environment(temporary: Path, root: Path) -> dict[str, str]:
             "npm_config_offline": "true",
             "CARGO_HOME": str(cache / "cargo"),
             "CARGO_NET_OFFLINE": "true",
+            "CARGO_TARGET_DIR": str(cache / "cargo-target"),
             "UV_NO_CONFIG": "1",
             "UV_OFFLINE": "1",
             "GIT_CONFIG_GLOBAL": os.devnull,
@@ -422,6 +656,33 @@ def _action_environment(temporary: Path, root: Path) -> dict[str, str]:
         }
     )
     return environment
+
+
+def _rustup_runtime_environment() -> dict[str, str]:
+    """Expose only the installed Rust runtime, never its Cargo cache.
+
+    ``cargo`` is commonly a Rustup proxy.  The staging environment deliberately
+    replaces ``HOME`` and ``CARGO_HOME`` so target-project builds cannot write
+    into the caller's account, but the proxy still needs its pre-installed,
+    read-only toolchain directory.  Hosted CI supplies ``RUSTUP_TOOLCHAIN``
+    explicitly; local runs may safely use the caller's already-installed
+    default toolchain.
+    """
+
+    try:
+        default_home = Path.home() / ".rustup"
+    except RuntimeError:  # pragma: no cover - platform home resolution failure
+        return {}
+    configured_home = os.environ.get("RUSTUP_HOME")
+    rustup_home = Path(configured_home) if configured_home else default_home
+    if not rustup_home.is_absolute() or not rustup_home.is_dir():
+        return {}
+
+    runtime = {"RUSTUP_HOME": str(rustup_home.resolve())}
+    toolchain = os.environ.get("RUSTUP_TOOLCHAIN", "")
+    if _RUSTUP_TOOLCHAIN.fullmatch(toolchain):
+        runtime["RUSTUP_TOOLCHAIN"] = toolchain
+    return runtime
 
 
 def _sanitized_search_path(value: str | None, root: Path) -> str:

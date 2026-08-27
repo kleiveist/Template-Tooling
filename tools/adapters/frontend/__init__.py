@@ -3,6 +3,7 @@
 from tools.adapters.base import (
     AdapterActionResult,
     AdapterCapability,
+    AdapterDesiredState,
     AdapterDetection,
     BaseAdapter,
     PathRequirement,
@@ -138,13 +139,14 @@ class FrontendAdapter(BaseAdapter):
     def desired_structured_changes(
         self,
         context: ProjectContext,
+        desired_state: AdapterDesiredState,
         requirement: PathRequirement,
         observed: ObservedResource,
         detection: AdapterDetection,
     ) -> tuple[StructuredChange, ...]:
         """Add only absent scripts backed by technology already in the project."""
 
-        del context
+        del context, desired_state, detection
         if not requirement.structured_changes:
             return ()
         document = observed.structured_values

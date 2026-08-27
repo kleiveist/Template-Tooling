@@ -272,7 +272,7 @@ def test_full_fix_fails_closed_when_staged_tooling_actions_fail(
     assert not (tools / "generated_runtime.py").exists()
 
 
-def test_frontend_script_patch_plans_only_quality_and_tests(
+def test_frontend_script_patch_plans_quality_tests_and_real_build(
     tmp_path: Path,
 ) -> None:
     root, tools = _portable_project(tmp_path)
@@ -281,7 +281,7 @@ def test_frontend_script_patch_plans_only_quality_and_tests(
     assessment = workflow.assess_project(root, tools_root=tools)
     requirements = dict(workflow._plan_action_requirements(assessment))
 
-    assert requirements["frontend/package.json"] == ("quality", "tests")
+    assert requirements["frontend/package.json"] == ("quality", "tests", "build")
     assert "dependencies" not in requirements["frontend/package.json"]
     assert assessment.structured_key_allowlist == {
         "frontend/package.json": frozenset(
@@ -324,7 +324,7 @@ def test_dependency_key_patch_plans_all_transactional_action_kinds(
     )
 
     assert requirements == {
-        "frontend/package.json": ("dependencies", "quality", "tests")
+        "frontend/package.json": ("dependencies", "quality", "tests", "build")
     }
 
 

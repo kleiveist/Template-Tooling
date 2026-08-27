@@ -1,0 +1,134 @@
+name: Portable acceptance
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: Fixed runner label from the central support matrix.
+        required: true
+        type: string
+      python-version:
+        description: Supported Python version from the central support matrix.
+        required: true
+        type: string
+      node-version:
+        description: Pinned Node.js version from the central support matrix.
+        required: true
+        type: string
+      rust-version:
+        description: Pinned Rust toolchain from the central support matrix.
+        required: true
+        type: string
+      fixture-selection:
+        description: Optional pytest -k selection for a reduced but real matrix.
+        required: false
+        default: ""
+        type: string
+      profile-selection:
+        description: Optional profile-only pytest -k selection for the dedicated profile matrix.
+        required: false
+        default: ""
+        type: string
+      include-historical-upgrade:
+        description: Run the full-history old-to-current payload migration proof.
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  portable-acceptance:
+    name: portable-${{ inputs.runner }}
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 55
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONHASHSEED: "0"
+      PYTHONNOUSERSITE: "1"
+      FIXTURE_SELECTION: ${{ inputs.fixture-selection }}
+      PROFILE_SELECTION: ${{ inputs.profile-selection }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: ${{ inputs.include-historical-upgrade && 0 || 1 }}
+      - name: Set up isolated tooling environment
+        uses: ./.github/actions/setup-tooling-environment
+        with:
+          python-version: ${{ inputs.python-version }}
+          node-version: ${{ inputs.node-version }}
+          rust-version: ${{ inputs.rust-version }}
+      - name: Run independent copy and replacement acceptance
+        shell: pwsh
+        run: |
+          $junit = Join-Path $env:RUNNER_TEMP "portable-acceptance.junit.xml"
+          $pytestArgs = @("-q", "-p", "no:cacheprovider", "--junitxml=$junit")
+          if ($env:FIXTURE_SELECTION) {
+            $pytestArgs += @("-k", $env:FIXTURE_SELECTION)
+          }
+          $pytestArgs += @(
+            "tools/tests/acceptance/test_copy_matrix.py",
+            "tools/tests/acceptance/test_tooling_replacement.py"
+          )
+          & $env:TOOLING_PYTHON -m pytest @pytestArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run independent structured profile integration acceptance
+        shell: pwsh
+        run: |
+          $junit = Join-Path $env:RUNNER_TEMP "portable-profile-integration.junit.xml"
+          $pytestArgs = @("-q", "-p", "no:cacheprovider", "--junitxml=$junit")
+          if ($env:PROFILE_SELECTION) {
+            $pytestArgs += @("-k", $env:PROFILE_SELECTION)
+          }
+          $pytestArgs += "tools/tests/acceptance/test_profile_integration.py"
+          & $env:TOOLING_PYTHON -m pytest @pytestArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Exercise real historical old-to-current migrations
+        if: inputs.include-historical-upgrade
+        shell: pwsh
+        run: |
+          & $env:TOOLING_PYTHON -m pytest -q -p no:cacheprovider tests/source/test_historical_tooling_migration.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Export twice and compare payload manifests
+        shell: pwsh
+        run: |
+          $firstParent = Join-Path $env:RUNNER_TEMP "portable-export-first"
+          $secondParent = Join-Path $env:RUNNER_TEMP "portable-export-second"
+          New-Item -ItemType Directory -Path $firstParent, $secondParent | Out-Null
+          & $env:TOOLING_PYTHON tools/control.py tooling export --output $firstParent
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $env:TOOLING_PYTHON tools/control.py tooling export --output $secondParent
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $version = (Get-Content tools/VERSION -Raw).Trim()
+          $first = Join-Path $firstParent "Template-Tooling-$version"
+          $second = Join-Path $secondParent "Template-Tooling-$version"
+          $firstManifest = Get-Content (Join-Path $first "tools/PORTABLE-PAYLOAD.json") -Raw | ConvertFrom-Json
+          $secondManifest = Get-Content (Join-Path $second "tools/PORTABLE-PAYLOAD.json") -Raw | ConvertFrom-Json
+          if ($firstManifest.digest -ne $secondManifest.digest) {
+            throw "two fresh exports have different payload manifests"
+          }
+          "EXPORT_ROOT=$first" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Run the exported customer proof
+        shell: pwsh
+        run: |
+          $work = Join-Path $env:RUNNER_TEMP "portable-customer-proof"
+          & $env:TOOLING_PYTHON tests/source/portable_customer_smoke.py --export-root $env:EXPORT_ROOT --work-root $work
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Confirm source checkout stayed clean
+        shell: pwsh
+        run: |
+          $status = git status --porcelain=v1 --untracked-files=all
+          if ($status) { throw "source checkout changed: $status" }
+      - name: Upload acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: portable-acceptance-${{ inputs.runner }}
+          path: |
+            ${{ runner.temp }}/portable-acceptance.junit.xml
+            ${{ runner.temp }}/portable-profile-integration.junit.xml
+            ${{ runner.temp }}/portable-export-first
+          if-no-files-found: warn
+          retention-days: 14

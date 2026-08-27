@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import stat
+import sys
 import tempfile
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -130,6 +131,7 @@ _STAGING_IGNORED_DIRECTORIES = {
     "target",
     "test-results",
 }
+_TEST_FAILPOINT_ENV = "TOOLING_TEST_FAILPOINT"
 
 Verifier = Callable[[Path], VerificationResult]
 ReportFinalizer = Callable[[VerificationResult, str], None]
@@ -188,6 +190,28 @@ class _ConcurrentCreationError(IntegrationError):
     def __init__(self, path: str) -> None:
         super().__init__(f"Integration creation target appeared during commit: {path}.")
         self.path = path
+
+
+def trigger_test_failpoint(name: str) -> None:
+    """Raise a deterministic failure only while an in-process pytest test runs.
+
+    The failpoint switch deliberately has no effect for normal CLI invocations.
+    It exists solely so rollback tests can exercise otherwise hard-to-reproduce
+    commit and verification failures without adding production-only branches.
+    """
+
+    if not _test_failpoints_enabled():
+        return
+    selected = os.environ.get(_TEST_FAILPOINT_ENV, "").strip()
+    if selected != name:
+        return
+    raise IntegrationError(f"Deterministic test failpoint triggered: {name}.")
+
+
+def _test_failpoints_enabled() -> bool:
+    """Return whether pytest, rather than a normal process, enabled injection."""
+
+    return bool(os.environ.get("PYTEST_CURRENT_TEST")) and "pytest" in sys.modules
 
 
 def apply_transaction(request: TransactionRequest) -> IntegrationResult:
@@ -273,6 +297,7 @@ def apply_transaction(request: TransactionRequest) -> IntegrationResult:
                 )
                 raise IntegrationError("Post-apply action verification failed.")
             result = _run_verifier(request.verifier, root)
+            trigger_test_failpoint("post_verify")
             result = _combine_verification_results(
                 staged_action_result,
                 post_apply_result,
@@ -720,25 +745,30 @@ def _apply_from_staging(
     prepared: tuple[_PreparedOperation, ...],
     frozen_outputs: Mapping[str, _FrozenOutput],
 ) -> None:
-    for item in _ordered_operations(prepared):
+    state_commit_pending = True
+    for index, item in enumerate(_ordered_operations(prepared), start=1):
+        trigger_test_failpoint(f"before_operation_{index}")
+        if state_commit_pending and _is_state_path(item.path):
+            trigger_test_failpoint("state_commit")
+            state_commit_pending = False
         operation = item.operation
         if operation.kind is OperationKind.ENSURE_DIRECTORY:
             _create_directory(_safe_target(root, item.path), root)
-            continue
-        if operation.kind is OperationKind.MOVE:
+        elif operation.kind is OperationKind.MOVE:
             assert item.source_path is not None
             _delete_file(_safe_target(root, item.source_path), root)
-        if operation.kind is OperationKind.DELETE:
+            _replace_from_frozen(root, item.path, frozen_outputs[item.path])
+        elif operation.kind is OperationKind.DELETE:
             _delete_file(_safe_target(root, item.path), root)
-            continue
-        if (
+        elif (
             operation.kind is OperationKind.ADD
             and operation.ownership is Ownership.STRUCTURED
             and item.path == _PROJECT_CONFIG_RELATIVE
         ):
             _create_from_frozen(root, item.path, frozen_outputs[item.path])
-            continue
-        _replace_from_frozen(root, item.path, frozen_outputs[item.path])
+        else:
+            _replace_from_frozen(root, item.path, frozen_outputs[item.path])
+        trigger_test_failpoint(f"after_operation_{index}")
 
 
 def _ordered_operations(
@@ -1002,31 +1032,48 @@ def _patch_toml_text(
     changes: tuple[StructuredChange, ...],
     relative: str,
 ) -> str:
-    """Replace only existing one-line TOML values, preserving every other byte."""
+    """Patch allowlisted TOML scalars while preserving unrelated source bytes.
+
+    Existing assignments are rewritten in place. A missing, allowlisted scalar
+    is appended to its existing table, or a new bare-key table is appended at
+    EOF. Implicit and inline tables are refused because changing them would
+    require reserializing customer-owned TOML.
+    """
 
     if '"""' in text or "'''" in text:
         raise IntegrationError(
             f"TOML PATCH does not rewrite files with multiline strings: {relative}."
         )
     change_by_path: dict[tuple[str, ...], StructuredChange] = {}
+    additions: dict[tuple[str, ...], list[StructuredChange]] = {}
+    seen_paths: set[tuple[str, ...]] = set()
     for change in changes:
         path = tuple(change.key.split("."))
-        if path in change_by_path:
+        if path in seen_paths:
             raise IntegrationError(
                 f"Structured key is patched more than once: {change.key}."
             )
+        seen_paths.add(path)
         found, current = _mapping_value(document, path)
-        if not found:
-            raise IntegrationError(
-                f"TOML PATCH cannot safely add a missing key in {relative}: {change.key}."
-            )
-        if change.expected is not UNSET and current != change.expected:
+        if found:
+            if change.expected is not UNSET and current != change.expected:
+                raise IntegrationError(
+                    f"Structured value changed after planning in {relative}: {change.key}."
+                )
+            change_by_path[path] = change
+            continue
+        if change.expected is not UNSET:
             raise IntegrationError(
                 f"Structured value changed after planning in {relative}: {change.key}."
             )
-        change_by_path[path] = change
+        if _toml_bare_path(".".join(path)) is None:
+            raise IntegrationError(
+                f"TOML PATCH cannot safely add a non-bare key in {relative}: {change.key}."
+            )
+        additions.setdefault(path[:-1], []).append(change)
 
     lines = text.splitlines(keepends=True)
+    table_ranges = _toml_table_ranges(lines)
     current_table: tuple[str, ...] | None = ()
     replacements: dict[int, str] = {}
     matched: set[tuple[str, ...]] = set()
@@ -1080,7 +1127,166 @@ def _patch_toml_text(
         raise IntegrationError(
             f"TOML PATCH could not locate a safe scalar assignment in {relative}: {missing[0]}."
         )
-    return "".join(replacements.get(index, line) for index, line in enumerate(lines))
+
+    insertions: dict[int, list[str]] = {}
+    newline = _toml_preferred_newline(lines)
+    for table, table_changes in sorted(additions.items()):
+        _validate_toml_addition_table(document, table, table_ranges, relative)
+        rendered = _toml_assignment_block(table_changes, newline)
+        table_range = table_ranges.get(table)
+        if table_range is None:
+            continue
+        start, end = table_range
+        insertion_index = _toml_table_insert_index(lines, start, end)
+        if (
+            insertion_index == len(lines)
+            and lines
+            and not lines[-1].endswith(("\n", "\r"))
+        ):
+            rendered = newline + rendered
+        insertions.setdefault(insertion_index, []).append(rendered)
+
+    new_tables = tuple(
+        sorted(table for table in additions if table not in table_ranges)
+    )
+    if new_tables:
+        appended = _toml_new_table_block(text, new_tables, additions, newline)
+        insertions.setdefault(len(lines), []).append(appended)
+
+    rendered = "".join(
+        "".join(insertions.get(index, ())) + replacements.get(index, line)
+        for index, line in enumerate(lines)
+    ) + "".join(insertions.get(len(lines), ()))
+    _validate_rendered_toml_changes(rendered, changes, relative)
+    return rendered
+
+
+def _toml_table_ranges(
+    lines: list[str],
+) -> dict[tuple[str, ...], tuple[int, int]]:
+    """Map safely parseable TOML tables to their body line ranges."""
+
+    headers: list[tuple[tuple[str, ...], int]] = []
+    for index, line in enumerate(lines):
+        body, _newline = _split_newline(line)
+        code = _toml_code_before_comment(body).strip()
+        if code.startswith("[[") and code.endswith("]]"):
+            headers.append(((), index))
+            continue
+        if not (code.startswith("[") and code.endswith("]")):
+            continue
+        path = _toml_bare_path(code[1:-1])
+        if path is not None:
+            headers.append((path, index))
+        else:
+            # Quoted tables are valid TOML, but this byte-preserving editor
+            # cannot safely target them or treat them as an insertion table.
+            headers.append(((), index))
+
+    first_header = headers[0][1] if headers else len(lines)
+    ranges: dict[tuple[str, ...], tuple[int, int]] = {(): (0, first_header)}
+    for offset, (path, header_index) in enumerate(headers):
+        if not path:
+            continue
+        next_header = (
+            headers[offset + 1][1] if offset + 1 < len(headers) else len(lines)
+        )
+        ranges[path] = (header_index + 1, next_header)
+    return ranges
+
+
+def _validate_toml_addition_table(
+    document: Mapping[str, Any],
+    table: tuple[str, ...],
+    table_ranges: Mapping[tuple[str, ...], tuple[int, int]],
+    relative: str,
+) -> None:
+    """Ensure a missing scalar can be added without rewriting a foreign shape."""
+
+    if table in table_ranges:
+        return
+    current: Any = document
+    for part in table:
+        if not isinstance(current, Mapping):
+            raise IntegrationError(
+                f"TOML PATCH cannot add below a scalar value in {relative}: {'.'.join(table)}."
+            )
+        if part not in current:
+            return
+        current = current[part]
+    if isinstance(current, Mapping):
+        raise IntegrationError(
+            "TOML PATCH cannot safely add to an implicit or inline table in "
+            f"{relative}: {'.'.join(table)}."
+        )
+    raise IntegrationError(
+        f"TOML PATCH cannot add below a scalar value in {relative}: {'.'.join(table)}."
+    )
+
+
+def _toml_preferred_newline(lines: list[str]) -> str:
+    return "\r\n" if any(line.endswith("\r\n") for line in lines) else "\n"
+
+
+def _toml_table_insert_index(lines: list[str], start: int, end: int) -> int:
+    """Insert before a table's trailing blank lines and next table header."""
+
+    insertion_index = end
+    while insertion_index > start:
+        body, _newline = _split_newline(lines[insertion_index - 1])
+        if body.strip():
+            break
+        insertion_index -= 1
+    return insertion_index
+
+
+def _toml_assignment_block(changes: list[StructuredChange], newline: str) -> str:
+    return "".join(
+        f"{change.key.rsplit('.', 1)[-1]} = {_toml_value(change.value)}{newline}"
+        for change in sorted(changes, key=lambda item: item.key)
+    )
+
+
+def _toml_new_table_block(
+    text: str,
+    tables: tuple[tuple[str, ...], ...],
+    additions: Mapping[tuple[str, ...], list[StructuredChange]],
+    newline: str,
+) -> str:
+    """Render deterministic new TOML tables after preserving the original text."""
+
+    prefix = ""
+    if text:
+        if not text.endswith(("\n", "\r")):
+            prefix += newline
+        if not (text + prefix).endswith(newline * 2):
+            prefix += newline
+    blocks = [prefix]
+    for index, table in enumerate(tables):
+        if index:
+            blocks.append(newline)
+        blocks.append(f"[{'.'.join(table)}]{newline}")
+        blocks.append(_toml_assignment_block(additions[table], newline))
+    return "".join(blocks)
+
+
+def _validate_rendered_toml_changes(
+    rendered: str,
+    changes: tuple[StructuredChange, ...],
+    relative: str,
+) -> None:
+    try:
+        document = tomllib.loads(rendered)
+    except tomllib.TOMLDecodeError as exc:  # pragma: no cover - defensive invariant
+        raise IntegrationError(
+            f"TOML PATCH produced invalid TOML in {relative}."
+        ) from exc
+    for change in changes:
+        found, value = _mapping_value(document, tuple(change.key.split(".")))
+        if not found or value != change.value:
+            raise IntegrationError(
+                f"TOML PATCH could not validate rendered value in {relative}: {change.key}."
+            )
 
 
 def _patch_yaml_text(

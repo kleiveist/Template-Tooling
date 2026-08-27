@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from tools.integration import transaction as transaction_module
+from tools.integration.actions import ActionKind, ActionRunner, ActionSpec
 from tools.integration.model import (
     Conflict,
     Finding,
@@ -576,6 +577,90 @@ def test_post_verification_failure_rolls_back_every_affected_path(
     assert (root / ".tooling-state/reports/journal.json").is_file()
 
 
+@pytest.mark.parametrize(
+    "failpoint",
+    ("before_operation_1", "after_operation_2", "state_commit", "post_verify"),
+)
+def test_deterministic_failpoints_roll_back_every_committed_operation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failpoint: str,
+) -> None:
+    root = _project(tmp_path)
+    (root / "tools").mkdir()
+    managed = root / "tools/managed.txt"
+    before = b"before\n"
+    managed.write_bytes(before)
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.UPDATE,
+                "tools/managed.txt",
+                Ownership.TOOLING,
+                b"after\n",
+                _digest(before),
+            ),
+            Operation(
+                OperationKind.ADD,
+                "tools/added.txt",
+                Ownership.TOOLING,
+                b"added\n",
+            ),
+            Operation(
+                OperationKind.ADD,
+                ".tooling-state/state.json",
+                Ownership.TOOLING,
+                b"state\n",
+            ),
+        )
+    )
+    monkeypatch.setenv("TOOLING_TEST_FAILPOINT", failpoint)
+
+    with pytest.raises(
+        IntegrationError,
+        match=f"Deterministic test failpoint triggered: {failpoint}",
+    ):
+        _apply(root, plan)
+
+    assert managed.read_bytes() == before
+    assert not (root / "tools/added.txt").exists()
+    assert not (root / ".tooling-state/state.json").exists()
+    assert (root / ".tooling-state/reports/journal.json").is_file()
+
+
+def test_failed_staged_action_failpoint_never_commits_live_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _project(tmp_path)
+    (root / "tools").mkdir()
+    managed = root / "tools/managed.txt"
+    before = b"before\n"
+    managed.write_bytes(before)
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.UPDATE,
+                "tools/managed.txt",
+                Ownership.TOOLING,
+                b"after\n",
+                _digest(before),
+            ),
+        )
+    )
+    monkeypatch.setenv("TOOLING_TEST_FAILPOINT", "quality_check")
+
+    with pytest.raises(IntegrationError, match="Staged action verification failed"):
+        _apply(
+            root,
+            plan,
+            staged_action=ActionRunner((ActionSpec(ActionKind.QUALITY),)),
+        )
+
+    assert managed.read_bytes() == before
+    assert not (root / ".tooling-state").exists()
+
+
 def test_report_failure_and_base_exception_are_both_inside_rollback_boundary(
     tmp_path: Path,
 ) -> None:
@@ -690,6 +775,102 @@ def test_structured_toml_patch_preserves_unknown_tables(tmp_path: Path) -> None:
     payload = tomllib.loads(pyproject.read_text(encoding="utf-8"))
     assert payload["project"] == {"name": "fixture", "custom": "keep"}
     assert payload["tool"]["demo"] == {"enabled": True, "limit": 7}
+
+
+def test_structured_toml_patch_adds_missing_leaf_without_rewriting_foreign_bytes(
+    tmp_path: Path,
+) -> None:
+    import tomllib
+
+    root = _project(tmp_path)
+    pyproject = root / "pyproject.toml"
+    before = (
+        b"# customer header\n"
+        b"[tool.template_tooling]\n"
+        b'foreign = "preserve"  # retain comment\n'
+        b"\n"
+        b"[customer]\n"
+        b'opaque = "unchanged"\n'
+    )
+    pyproject.write_bytes(before)
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.PATCH,
+                "pyproject.toml",
+                Ownership.STRUCTURED,
+                expected_sha256=_digest(before),
+                structured_changes=(
+                    StructuredChange("tool.template_tooling.profile", "web-cloud"),
+                ),
+            ),
+        )
+    )
+
+    _apply(
+        root,
+        plan,
+        structured_key_allowlist={
+            "pyproject.toml": frozenset({"tool.template_tooling.profile"})
+        },
+    )
+
+    expected = before.replace(
+        b"\n\n[customer]",
+        b'\nprofile = "web-cloud"\n\n[customer]',
+        1,
+    )
+    assert pyproject.read_bytes() == expected
+    parsed = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    assert parsed["tool"]["template_tooling"] == {
+        "foreign": "preserve",
+        "profile": "web-cloud",
+    }
+    assert parsed["customer"] == {"opaque": "unchanged"}
+
+
+def test_structured_toml_patch_creates_missing_bare_table_deterministically(
+    tmp_path: Path,
+) -> None:
+    import tomllib
+
+    root = _project(tmp_path)
+    cargo = root / "Cargo.toml"
+    before = b'[package]\nname = "fixture"\nversion = "0.1.0"\n'
+    cargo.write_bytes(before)
+    plan = IntegrationPlan(
+        operations=(
+            Operation(
+                OperationKind.PATCH,
+                "Cargo.toml",
+                Ownership.STRUCTURED,
+                expected_sha256=_digest(before),
+                structured_changes=(
+                    StructuredChange(
+                        "package.metadata.template_tooling.profile",
+                        "desktop-local",
+                    ),
+                ),
+            ),
+        )
+    )
+
+    _apply(
+        root,
+        plan,
+        structured_key_allowlist={
+            "Cargo.toml": frozenset({"package.metadata.template_tooling.profile"})
+        },
+    )
+
+    expected = before + (
+        b'\n[package.metadata.template_tooling]\nprofile = "desktop-local"\n'
+    )
+    assert cargo.read_bytes() == expected
+    parsed = tomllib.loads(cargo.read_text(encoding="utf-8"))
+    assert parsed["package"]["metadata"]["template_tooling"] == {
+        "profile": "desktop-local"
+    }
 
 
 def test_structured_toml_patch_preserves_indented_assignment(tmp_path: Path) -> None:
