@@ -207,7 +207,7 @@ def test_productive_payload_reconciliation_updates_only_config_and_state(
     source_version: str,
 ) -> None:
     root, tools = _portable_project(tmp_path)
-    (tools / "VERSION").write_text(f"{source_version}\n", encoding="utf-8")
+    (tools / "VERSION").write_bytes(f"{source_version}\n".encode())
     if source_version == "0.1.0":
         (tools / "PORTABLE-PAYLOAD.json").unlink()
     else:
@@ -215,7 +215,7 @@ def test_productive_payload_reconciliation_updates_only_config_and_state(
     workflow.run_full_fix(root, tools_root=tools)
     config = root / "project-tooling.toml"
     config_before = config.read_text(encoding="utf-8")
-    (tools / "VERSION").write_text("0.4.0\n", encoding="utf-8")
+    (tools / "VERSION").write_bytes(b"0.4.0\n")
     _seal_payload(root, tools)
     reconciliation_id = PAYLOAD_RECONCILIATION_IDS[source_version]
 

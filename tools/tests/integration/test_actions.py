@@ -48,9 +48,11 @@ def test_runner_uses_only_fixed_commands_in_canonical_order_and_sanitized_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = _staging_root(tmp_path)
+    safe_bin = tmp_path / "safe-bin"
+    safe_bin.mkdir()
     calls: list[tuple[tuple[str, ...], dict[str, object]]] = []
     monkeypatch.setenv("PROJECT_API_TOKEN", "must-not-leak")
-    monkeypatch.setenv("PATH", f".{os.pathsep}{root}{os.pathsep}/usr/bin")
+    monkeypatch.setenv("PATH", f".{os.pathsep}{root}{os.pathsep}{safe_bin}")
 
     def fake_run(
         command: tuple[str, ...], **kwargs: object
@@ -118,7 +120,7 @@ def test_runner_uses_only_fixed_commands_in_canonical_order_and_sanitized_env(
     assert environment["npm_config_ignore_scripts"] == "true"
     assert environment["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] == "1"
     assert environment["TEMPLATE_TOOLING_NESTED_TEST"] == "1"
-    assert environment["PATH"] == "/usr/bin"
+    assert environment["PATH"] == str(safe_bin.resolve())
     assert tuple(finding.status for finding in result.findings) == (
         FindingStatus.PASS,
         FindingStatus.PASS,

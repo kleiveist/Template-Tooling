@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from tools.core.filesystem import FilesystemSafetyError, safe_relative_path
 from tools.core.portable_payload import PAYLOAD_MANIFEST_NAME, validate_portable_payload
 from tools.integration import export as export_module
 from tools.integration import service
@@ -259,15 +260,21 @@ def test_export_fails_closed_for_nonportable_objects(
     message: str,
 ) -> None:
     _project, tools = _source(tmp_path)
+    output = tmp_path / "output"
+    output.mkdir()
+    if os.name == "nt" and relative == "tools/bad?.py":
+        # NTFS refuses '?' before export can enumerate the object. Exercise the
+        # exact canonical path guard used by export without weakening coverage.
+        with pytest.raises(FilesystemSafetyError, match=message):
+            safe_relative_path(relative)
+        assert not tuple(output.iterdir())
+        return
     path = tmp_path / "source" / relative
     if is_directory:
         path.mkdir(parents=True)
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("not portable\n", encoding="utf-8")
-    output = tmp_path / "output"
-    output.mkdir()
-
     with pytest.raises(ExportError, match=message):
         export_portable_tooling(output_parent=output, tools_root=tools)
 

@@ -42,7 +42,7 @@ def test_doctor_requires_dedicated_tools_virtualenv(
     result = doctor._check_tooling_runtime()
 
     assert result.status == "WARN"
-    assert ".tooling-state/venv" in result.message
+    assert str(tmp_path / ".tooling-state" / "venv") in result.message
 
 
 def test_doctor_checks_complete_tooling_dependency_contract(

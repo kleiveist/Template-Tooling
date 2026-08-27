@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from tools import logger
 from tools.core.filesystem import (
@@ -127,10 +127,23 @@ def _tauri_config_paths(output: str) -> set[str]:
     for line in output.splitlines():
         if not line.startswith(_RERUN_IF_CHANGED_PREFIX):
             continue
-        candidate = Path(line.removeprefix(_RERUN_IF_CHANGED_PREFIX))
-        if candidate.is_absolute() and candidate.name == "tauri.conf.json":
-            paths_in_output.add(str(candidate.resolve()))
+        candidate = line.removeprefix(_RERUN_IF_CHANGED_PREFIX)
+        reference = _absolute_tauri_config_reference(candidate)
+        if reference is not None:
+            paths_in_output.add(reference)
     return paths_in_output
+
+
+def _absolute_tauri_config_reference(value: str) -> str | None:
+    native = Path(value)
+    if native.is_absolute() and native.name.casefold() == "tauri.conf.json":
+        return str(native.resolve())
+
+    for path_type in (PurePosixPath, PureWindowsPath):
+        foreign = path_type(value)
+        if foreign.is_absolute() and foreign.name.casefold() == "tauri.conf.json":
+            return str(foreign)
+    return None
 
 
 def _origin_path(target_dir: Path) -> Path:

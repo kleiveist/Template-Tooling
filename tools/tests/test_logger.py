@@ -7,7 +7,13 @@ from tools import logger
 
 def test_status_uses_ascii_fallback_for_strict_cp1252_stream() -> None:
     buffer = io.BytesIO()
-    stream = io.TextIOWrapper(buffer, encoding="cp1252", errors="strict", write_through=True)
+    stream = io.TextIOWrapper(
+        buffer,
+        encoding="cp1252",
+        errors="strict",
+        newline="",
+        write_through=True,
+    )
 
     logger.info("Creating shared tooling virtualenv", stream=stream)
     logger.fail("Analyzer snowman: ☃", stream=stream)

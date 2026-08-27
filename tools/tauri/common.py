@@ -91,7 +91,8 @@ def print_build_artifacts() -> None:
 
     logger.info("📁 Build artifacts:")
     for artifact in artifacts:
-        logger.info(f"{_artifact_icon(artifact)} {artifact.relative_to(paths.ROOT)} ({_format_size(artifact)})")
+        relative = artifact.relative_to(paths.ROOT).as_posix()
+        logger.info(f"{_artifact_icon(artifact)} {relative} ({_format_size(artifact)})")
 
 
 def run_command(
