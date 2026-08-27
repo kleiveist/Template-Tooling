@@ -1,3 +1,4 @@
+.archive
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -15,6 +16,20 @@ target/
 *.egg-info/
 .DS_Store
 docs/toolingdocs/case-study/.build/
+.tooling-state/docs/case-study/
+*.aux
+*.bcf
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.out
+*.pdf
+*.run.xml
+*.synctex.gz
+*.toc
 tools/.runtime/
 tools/quality/rust_analyzer/target/
 .tooling-state/

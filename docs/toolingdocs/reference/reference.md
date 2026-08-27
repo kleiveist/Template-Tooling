@@ -13,9 +13,16 @@ command available in a copied project.
 
 <!-- AUTO-GENERATED:docs-index START -->
 - [Adapter capabilities](adapter-capabilities.md)
+- [Adapter contract](adapter-contract.md)
 - [CLI](cli.md)
+- [Exit codes](exit-codes.md)
+- [Feature schema](feature-schema.md)
+- [Profile schema](profile-schema.md)
 - [Profiles and features](profiles-and-features.md)
 - [Project configuration](project-configuration.md)
+- [Project-tooling schema](project-tooling-schema.md)
+- [Report schema](report-schema.md)
 - [Reports](reports.md)
+- [State schema](state-schema.md)
 - [Tooling state](tooling-state.md)
 <!-- AUTO-GENERATED:docs-index END -->

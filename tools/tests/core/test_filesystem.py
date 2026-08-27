@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from tools.core import filesystem as filesystem_module
 from tools.core.filesystem import (
     FilesystemSafetyError,
     atomic_write,
@@ -125,18 +126,31 @@ def test_atomic_write_creates_parents_replaces_content_and_fsyncs(
     root.mkdir()
     path = root / ".tooling-state" / "state.toml"
     fsync_calls: list[int] = []
+    directory_fsync_calls: list[Path] = []
     real_fsync = os.fsync
+    real_fsync_directory = filesystem_module._fsync_directory
 
     def recording_fsync(descriptor: int) -> None:
         fsync_calls.append(descriptor)
         real_fsync(descriptor)
 
+    def recording_directory_fsync(directory: Path) -> None:
+        directory_fsync_calls.append(directory)
+        real_fsync_directory(directory)
+
     monkeypatch.setattr(os, "fsync", recording_fsync)
+    monkeypatch.setattr(
+        filesystem_module,
+        "_fsync_directory",
+        recording_directory_fsync,
+    )
     atomic_write_text(path, "first\n", root=root)
     atomic_write(path, b"second\n", root=root)
 
     assert path.read_bytes() == b"second\n"
-    assert len(fsync_calls) >= 4
+    assert len(fsync_calls) >= 2
+    assert root in directory_fsync_calls
+    assert directory_fsync_calls.count(path.parent) == 2
     assert not tuple(path.parent.glob(f".{path.name}.*"))
 
 

@@ -155,7 +155,10 @@ def _generated_block(
 def _resolve_markdown_target(
     path: Path, target: str, project_root: Path
 ) -> Path | None:
-    clean_target = unquote(target.split("#", maxsplit=1)[0].split("?", maxsplit=1)[0])
+    encoded_target = target.split("#", maxsplit=1)[0].split("?", maxsplit=1)[0]
+    clean_target = unquote(encoded_target, errors="strict")
+    if any(ord(character) < 32 for character in clean_target):
+        raise ValueError("decoded Markdown target contains a control character")
     if (
         not clean_target
         or "://" in clean_target
@@ -346,7 +349,14 @@ def _documentation_files(docs_root: Path) -> list[Path]:
                 f"Tooling documentation contains a symbolic link: "
                 f"{path.relative_to(docs_root).as_posix()}."
             )
-        if path.is_file() and path.suffix.casefold() == ".md":
+        # README files document assets or local conventions.  They are deliberately
+        # link-checked elsewhere, but they are not navigation pages and therefore
+        # do not need generated backlink/index markers.
+        if (
+            path.is_file()
+            and path.suffix.casefold() == ".md"
+            and path.name != "README.md"
+        ):
             files.append(path)
     return sorted(files)
 

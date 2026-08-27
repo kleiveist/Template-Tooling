@@ -44,10 +44,16 @@ _ALLOWED_DIST_FILE = f"{_ALLOWED_DIST_DIRECTORY}/rust_quality_analyzer.wasm"
 _LOGICAL_EXECUTABLE_FILES = frozenset({"tools/control.py", "tools/inst/run.py"})
 _BUILD_SUFFIXES = {
     ".aux",
+    ".bbl",
+    ".bcf",
+    ".blg",
     ".fdb_latexmk",
     ".fls",
+    ".lof",
     ".log",
+    ".lot",
     ".pdf",
+    ".run.xml",
     ".synctex.gz",
     ".toc",
 }

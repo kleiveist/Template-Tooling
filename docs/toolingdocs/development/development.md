@@ -10,9 +10,14 @@ structured fields. New technology-specific behavior belongs behind an adapter se
 active profile.
 
 <!-- AUTO-GENERATED:docs-index START -->
+- [Adapter development](adapter-development.md)
 - [Contribution guide](contribution.md)
-- [Security boundaries](security-boundaries.md)
+- [Documentation development](documentation-development.md)
+- [Fixture development](fixture-development.md)
+- [Migration development](migration-development.md)
 - [Refactor inventory](refactor-inventory.md)
+- [Release process](release-process.md)
+- [Security boundaries](security-boundaries.md)
 <!-- AUTO-GENERATED:docs-index END -->
 
 Start with the [contribution guide](contribution.md) for the change workflow. Review the

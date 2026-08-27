@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -7,6 +8,8 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 ARTIFACT = Path("tools/quality/rust_analyzer/dist/rust_quality_analyzer.wasm")
+WORKFLOW_ROOT = REPOSITORY_ROOT / ".github" / "workflows"
+PAYLOAD_MANIFEST = REPOSITORY_ROOT / "tools" / "PORTABLE-PAYLOAD.json"
 
 
 def _git_check_ignore(root: Path, relative: Path) -> subprocess.CompletedProcess[str]:
@@ -76,23 +79,28 @@ def test_only_checked_in_rust_analyzer_wasm_is_not_gitignored(
     assert not artifact_result.stderr
 
 
-def test_repository_has_no_hosted_github_actions_workflows() -> None:
-    workflow_root = REPOSITORY_ROOT / ".github" / "workflows"
-    workflows = (
-        sorted(
-            path.relative_to(REPOSITORY_ROOT).as_posix()
-            for pattern in ("*.yml", "*.yaml")
-            for path in workflow_root.glob(pattern)
-        )
-        if workflow_root.is_dir()
-        else []
+def test_hosted_workflows_are_source_only_and_excluded_from_the_payload() -> None:
+    workflows = sorted(
+        path.relative_to(REPOSITORY_ROOT).as_posix()
+        for pattern in ("*.yml", "*.yaml")
+        for path in WORKFLOW_ROOT.glob(pattern)
     )
 
-    assert workflows == []
+    assert "ci-documentation.yml" in {Path(path).name for path in workflows}
+    assert all(path.startswith(".github/workflows/") for path in workflows)
+
+    payload = json.loads(PAYLOAD_MANIFEST.read_text(encoding="utf-8"))
+    payload_paths = [entry["path"] for entry in payload["files"]]
+    assert payload_paths
+    assert all(
+        path.startswith(("tools/", "docs/toolingdocs/")) for path in payload_paths
+    )
+    assert not any(path.startswith(".github/") for path in payload_paths)
 
 
-def test_repository_only_tests_stay_outside_portable_tools_tests() -> None:
+def test_source_only_tests_stay_physically_outside_portable_tools_tests() -> None:
     portable_root = REPOSITORY_ROOT / "tools" / "tests"
+    source_root = REPOSITORY_ROOT / "tests" / "source"
     portable_sources = tuple(portable_root.rglob("*.py"))
     marker_references = [
         path.relative_to(REPOSITORY_ROOT).as_posix()
@@ -104,11 +112,18 @@ def test_repository_only_tests_stay_outside_portable_tools_tests() -> None:
     assert "skipif" not in (REPOSITORY_ROOT / marker_references[0]).read_text(
         encoding="utf-8"
     )
+    assert source_root.is_dir()
+    assert {path.name for path in source_root.glob("test_*.py")} >= {
+        "test_historical_tooling_migration.py",
+        "test_real_quality_integrations.py",
+        "test_repository_documentation.py",
+        "test_repository_packaging_policy.py",
+        "test_repository_product_policy.py",
+        "test_typescript_ast.py",
+    }
+    assert (source_root / "portable_customer_smoke.py").is_file()
+    assert not (portable_root / "source_repository").exists()
     assert not (portable_root / "quality" / "test_typescript_ast.py").exists()
-    assert (
-        REPOSITORY_ROOT / "tests" / "source" / "test_historical_tooling_migration.py"
-    ).is_file()
-    assert (REPOSITORY_ROOT / "tests" / "source" / "test_typescript_ast.py").is_file()
-    assert (
-        REPOSITORY_ROOT / "tests" / "source" / "test_repository_documentation.py"
-    ).is_file()
+    assert (source_root / "test_historical_tooling_migration.py").is_file()
+    assert (source_root / "test_typescript_ast.py").is_file()
+    assert (source_root / "test_repository_documentation.py").is_file()

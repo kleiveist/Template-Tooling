@@ -22,6 +22,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+import tomllib
+
 from tools.core.context import ProjectContext
 from tools.core.filesystem import (
     FilesystemSafetyError,
@@ -207,8 +209,9 @@ class PathRequirement:
     ``content`` is permitted only for tooling-owned files.  Omitting content
     makes an existing path a presence requirement, not permission to invent or
     replace its payload.  ``create_if_missing`` must be explicit even when
-    content is present.  Structured JSON files may declare only exact dotted
-    keys and object-shape guards; they are observed before any PATCH is planned.
+    content is present.  Structured JSON and TOML files may declare only exact
+    dotted keys. JSON files may additionally declare object-shape guards; every
+    structured file is observed before any PATCH is planned.
     """
 
     path: str
@@ -309,10 +312,12 @@ class PathRequirement:
                 f"Adapter JSON marker selectors must be non-empty text: {self.path}."
             )
         if (marker_json_keys or marker_script_commands) and (
-            not self.marker or self.kind != "file"
+            not self.marker
+            or self.kind != "file"
+            or not self.path.casefold().endswith(".json")
         ):
             raise AdapterContractError(
-                f"JSON marker selectors require a marked file: {self.path}."
+                f"JSON marker selectors require a marked JSON file: {self.path}."
             )
         duplicate_change = _duplicate(change.key for change in structured_changes)
         if duplicate_change is not None:
@@ -355,21 +360,29 @@ class PathRequirement:
                 "Structured string-map selectors must also be declared as object "
                 f"selectors: {self.path}."
             )
+        if (
+            structured_object_keys or structured_string_map_keys
+        ) and not self.path.casefold().endswith(".json"):
+            raise AdapterContractError(
+                "Structured object selectors are supported only for JSON files: "
+                f"{self.path}."
+            )
         if self.ownership is Ownership.STRUCTURED and (
             self.kind != "file"
-            or not self.path.casefold().endswith(".json")
+            or not self.path.casefold().endswith((".json", ".toml"))
             or content is not None
             or self.create_if_missing
         ):
             raise AdapterContractError(
-                "Structured JSON requirements must target an existing, "
-                f"structured-owned JSON file: {self.path}."
+                "Structured configuration requirements must target an existing, "
+                f"structured-owned JSON or TOML file: {self.path}."
             )
         if (
             structured_changes or structured_object_keys or structured_string_map_keys
         ) and (self.ownership is not Ownership.STRUCTURED):
             raise AdapterContractError(
-                f"Structured JSON policy requires structured ownership: {self.path}."
+                "Structured configuration policy requires structured ownership: "
+                f"{self.path}."
             )
         object.__setattr__(self, "path", path)
         object.__setattr__(self, "content", content)
@@ -480,13 +493,14 @@ class BaseAdapter:
     def desired_structured_changes(
         self,
         context: ProjectContext,
+        desired_state: AdapterDesiredState,
         requirement: PathRequirement,
         observed: ObservedResource,
         detection: AdapterDetection,
     ) -> tuple[StructuredChange, ...]:
-        """Select declared known-key changes for one observed JSON document."""
+        """Select declared known-key changes for one observed configuration."""
 
-        del context, observed, detection
+        del context, desired_state, observed, detection
         return requirement.structured_changes
 
     def structured_key_allowlist(
@@ -611,6 +625,7 @@ class BaseAdapter:
                 "path-kind",
                 "path-safety",
                 "structured-json",
+                "structured-toml",
                 "structured-shape",
             }
         }
@@ -650,6 +665,7 @@ class BaseAdapter:
                     actual,
                     structured_changes=self.desired_structured_changes(
                         context,
+                        desired,
                         requirement,
                         actual,
                         detection,
@@ -680,6 +696,7 @@ class BaseAdapter:
                     "path-safety": "adapter-path-safety",
                     "path-kind": "adapter-path-kind",
                     "structured-json": "adapter-structured-json",
+                    "structured-toml": "adapter-structured-toml",
                     "structured-shape": "adapter-structured-shape",
                 }.get(finding.check, "adapter-configuration"),
             )
@@ -691,6 +708,7 @@ class BaseAdapter:
                 "path-kind",
                 "path-safety",
                 "structured-json",
+                "structured-toml",
                 "structured-shape",
             }
         )
@@ -747,7 +765,7 @@ class BaseAdapter:
             item.path
             for item in findings
             if item.status is FindingStatus.FAIL
-            and item.check in {"structured-json", "structured-shape"}
+            and item.check in {"structured-json", "structured-toml", "structured-shape"}
         }
         for actual in detection.resources:
             requirement = requirements[actual.path]
@@ -1131,17 +1149,32 @@ def _observe(
         )
         digest = hashlib.sha256(payload).hexdigest()
         if requirement.ownership is Ownership.STRUCTURED:
+            is_json = requirement.path.casefold().endswith(".json")
             try:
-                document = json.loads(
-                    payload.decode("utf-8"),
-                    object_pairs_hook=_unique_json_object,
-                    parse_constant=_reject_json_constant,
+                text = payload.decode("utf-8")
+                document = (
+                    json.loads(
+                        text,
+                        object_pairs_hook=_unique_json_object,
+                        parse_constant=_reject_json_constant,
+                    )
+                    if is_json
+                    else tomllib.loads(text)
                 )
-            except (UnicodeError, json.JSONDecodeError, ValueError):
+            except (
+                UnicodeError,
+                json.JSONDecodeError,
+                tomllib.TOMLDecodeError,
+                ValueError,
+            ):
                 issues.append(
                     (
-                        "structured-json",
-                        "structured JSON must be strict, duplicate-free UTF-8 JSON",
+                        "structured-json" if is_json else "structured-toml",
+                        (
+                            "structured JSON must be strict, duplicate-free UTF-8 JSON"
+                            if is_json
+                            else "structured TOML must be valid UTF-8 TOML"
+                        ),
                     )
                 )
             else:
@@ -1149,13 +1182,17 @@ def _observe(
                     issues.append(
                         (
                             "structured-shape",
-                            "structured JSON must contain an object",
+                            (
+                                "structured JSON must contain an object"
+                                if is_json
+                                else "structured TOML must contain a table"
+                            ),
                         )
                     )
                 else:
                     structured_values = document
                     for key in requirement.structured_object_keys:
-                        found, value = _json_value(document, key)
+                        found, value = structured_value(document, key)
                         if found and not isinstance(value, dict):
                             issues.append(
                                 (
@@ -1164,7 +1201,7 @@ def _observe(
                                 )
                             )
                     for key in requirement.structured_string_map_keys:
-                        found, value = _json_value(document, key)
+                        found, value = structured_value(document, key)
                         if (
                             found
                             and isinstance(value, dict)
@@ -1267,14 +1304,18 @@ def _matches_detection_marker(
 
 
 def _json_has_path(payload: dict[str, object], dotted: str) -> bool:
-    found, _value = _json_value(payload, dotted)
+    found, _value = structured_value(payload, dotted)
     return found
 
 
-def _json_value(payload: dict[str, object], dotted: str) -> tuple[bool, object]:
+def structured_value(payload: Mapping[str, object], dotted: str) -> tuple[bool, object]:
+    """Read one exact dotted key from a parsed structured configuration."""
+
+    if dotted in payload:
+        return True, payload[dotted]
     current: object = payload
     for part in dotted.split("."):
-        if not isinstance(current, dict) or part not in current:
+        if not isinstance(current, Mapping) or part not in current:
             return False, None
         current = current[part]
     return True, current

@@ -167,6 +167,8 @@ def test_portable_artifact_filter_covers_case_and_python_builds() -> None:
         Path("tools/.PYTEST_CACHE"),
         Path("docs/toolingdocs/BUILD"),
         Path("tools/generated/DIST"),
+        Path("docs/toolingdocs/case-study/OUTPUT"),
+        Path("docs/toolingdocs/case-study/generated"),
         Path("tools/quality/rust_analyzer/DIST"),
         Path("tools/tauri/BUILD"),
     )
@@ -209,6 +211,7 @@ def test_copied_tooling_matrix_is_read_only_integrated_and_idempotent(
     )
 
     assert _snapshot_tree(root) == before_check
+    assert first_check.get("status") == "FIX_REQUIRED", first_check
     assert first_check["plan"]["conflicts"] == []
     assert first_check["plan"]["required_changes"] > 0
     assert first_check["profile"]["id"] == case.expected_profile
@@ -223,12 +226,17 @@ def test_copied_tooling_matrix_is_read_only_integrated_and_idempotent(
         "--full-fix",
         "--json",
         expected_returncode=0,
+        timeout=240,
     )
 
     assert first_fix["status"] == "INTEGRATED"
     assert first_fix["report_path"] is not None
     assert first_fix["actions"] == (
-        ["Staged quality action passed.", "Staged tests action passed."]
+        [
+            "Staged quality action passed.",
+            "Staged tests action passed.",
+            "Staged build action passed for 1 declared target(s).",
+        ]
         if package_before
         else []
     )
@@ -354,8 +362,9 @@ def _seed_product(root: Path, name: str) -> tuple[str, ...]:
     def vite(frontend: str = "frontend") -> None:
         write(
             f"{frontend}/package.json",
-            '{"scripts":{"dev":"vite","test":"node -e \\"process.exit(0)\\""},'
-            '"devDependencies":{"vite":"^7.0.0"}}\n',
+            '{"scripts":{"build":"node -e \\"process.exit(0)\\"",'
+            '"dev":"vite","test":"node -e \\"process.exit(0)\\""},'
+            '"devDependencies":{"typescript":"^5.0.0","vite":"^7.0.0"}}\n',
         )
         write(f"{frontend}/src/main.ts", "export const productOwned = true;\n")
 
@@ -503,6 +512,7 @@ def _is_portable_artifact(relative: Path) -> bool:
             and original_relative != PurePosixPath("tools/quality/rust_analyzer/dist")
         )
         or (name == "build" and original_relative != PurePosixPath("tools/tauri/build"))
+        or name in {"generated", "output"}
         or name in _IGNORED_FILE_NAMES
         or relative.suffix.casefold() in _IGNORED_SUFFIXES
         or name.startswith(".coverage.")
@@ -598,7 +608,7 @@ def _initialize_clean_git(root: Path, case: CopyCase) -> bool:
             check=False,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=120,
             env=environment,
         )
         assert completed.returncode == 0, (
@@ -611,7 +621,7 @@ def _initialize_clean_git(root: Path, case: CopyCase) -> bool:
         check=False,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=120,
         env=environment,
     )
     assert status.returncode == 0 and status.stdout == ""
@@ -622,11 +632,13 @@ def _run_json(
     root: Path,
     *arguments: str,
     expected_returncode: int,
+    timeout: int = 60,
 ) -> dict[str, Any]:
     completed = _run_command(
         root,
         *arguments,
         expected_returncode=expected_returncode,
+        timeout=timeout,
     )
     try:
         payload = json.loads(completed.stdout)

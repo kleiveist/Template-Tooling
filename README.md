@@ -44,9 +44,10 @@ python tools/control.py tooling verify
 publishes the complete transaction or rolls it back. The built-in adapters are conservative:
 they do not scaffold missing product trees and currently do not add dependency declarations.
 
-Dependency installation and product test/build execution are explicit live actions. They can
-execute target-project code and are outside the integration transaction's rollback boundary.
-Read the relevant guide before running them.
+For a Full-Fix, planned dependency validation, quality checks, tooling tests, and declared build
+commands run in the isolated staging tree before publication; a failed action leaves the live
+target unchanged. Direct lifecycle commands can still execute product code and should be used
+only with the relevant guide and project-owner approval.
 
 ## Documentation
 
@@ -78,9 +79,24 @@ and the workflow handoff are deliberately absent from the package. The manifest 
 self-consistency; obtain the export from a trusted revision because it is not a publisher
 signature.
 
-This repository intentionally defines no GitHub Actions workflow for pushes or pull requests.
-Copy, migration, export, and customer-smoke acceptance are run locally when needed. Existing
-workflows in a customer project remain customer-owned and are not replaced by the tooling.
+## Hosted CI
+
+The source repository has a portable GitHub Actions CI under `.github/workflows/`. Its support
+matrix is centrally defined in `tools/resources/config/support-matrix.toml`; jobs create their
+virtual environments under the runner temporary directory, never under `tools/`. The CI keeps
+source-repository policy checks separate from portable payload checks, then proves copied
+check/fix/verify/idempotence, export reproducibility, historical migration, system behavior, and
+the bilingual documentation build on the appropriate runners.
+
+Acceptance, nightly, and release workflows begin with Gate 0: concrete adapter, transactional
+action, and rollback tests plus `python -m tools.ci_gate --require-ready`. A missing runtime
+capability therefore blocks downstream acceptance instead of producing a synthetic success.
+The quality workflow also audits every pytest skip site for a visible technical reason and blocks
+unreviewed growth beyond the recorded baseline.
+
+Existing workflows in a customer project remain customer-owned and are not replaced by the
+tooling. Source-only tests under `tests/source/` are CI evidence for this repository, not a
+customer-facing proof bundled with an export.
 
 For repository work, follow the [contribution guide](docs/toolingdocs/development/contribution.md)
 and keep changes small, tested, and ownership-aware.

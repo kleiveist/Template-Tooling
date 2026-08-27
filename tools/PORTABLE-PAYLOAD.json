@@ -3,9 +3,16 @@
   "tooling_version": "0.4.0",
   "files": [
     {
+      "path": "docs/toolingdocs/README.md",
+      "sha256": "sha256:d17cb5f113b9db1f55913a1d34e26b624f4d3ea7161dc354cfcb30344c890628",
+      "size": 782,
+      "kind": "file",
+      "executable": false
+    },
+    {
       "path": "docs/toolingdocs/acceptance/acceptance.md",
-      "sha256": "sha256:62ee5dfde6f94297d8c4e219110dbe8f0d471466ac8fc782db88961f23a1f81c",
-      "size": 1135,
+      "sha256": "sha256:8214eafc3fd244940e303c81c83537e5e50c0200e97ae387bdf6d1214dc94dbf",
+      "size": 1357,
       "kind": "file",
       "executable": false
     },
@@ -18,15 +25,92 @@
     },
     {
       "path": "docs/toolingdocs/acceptance/definition-of-done.md",
-      "sha256": "sha256:c7fa68cdd8c9424d72f20157879a7162892d82754c91fc0889a6b2ce9816f398",
-      "size": 6498,
+      "sha256": "sha256:0defff1341cc9a114afbf41043218f914afca2aeb3a65251d2a77534b092a027",
+      "size": 6648,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/acceptance/evidence-index.md",
+      "sha256": "sha256:862a949f6aab54bc41f7e8e71b1de5112e33a061935229a8d744ec7d5a96843c",
+      "size": 1194,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/acceptance/profile-matrix.md",
+      "sha256": "sha256:39aba71a24f22b8f16c269c44f64662da8cc9fea2b01b659ca177072db34dcfb",
+      "size": 1227,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/acceptance/release-gates.md",
+      "sha256": "sha256:e0d8a2c373ab4f23eb8c94f567efc7768f45837aee399c51662fc6caf62a8f8b",
+      "size": 1304,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/acceptance/rollback-matrix.md",
+      "sha256": "sha256:9f89c8027aa30cd21b07f612f3ac9859247e8f593aa752e18b7f934c3a0035d8",
+      "size": 1081,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/acceptance/test-matrix.md",
+      "sha256": "sha256:ef3b08f45e0e229c4a90729efb5916bf12cccfce65f23dd83b089ffe514eb284",
+      "size": 1197,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/acceptance/upgrade-matrix.md",
+      "sha256": "sha256:0b2252e4cc2daa9ffa98ae36043fd61fb991647d6e084dab4f539703f6f84123",
+      "size": 1154,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/architecture/architecture.md",
-      "sha256": "sha256:d94786ee6afb6bda3425b7393346aa652fb5a30b52a0f5be5be14a4a74bee2a2",
-      "size": 1871,
+      "sha256": "sha256:8bd804f03df64fd7e9763cc67062acbdef63e11858085e6c25e7d15df099966d",
+      "size": 2187,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/architecture/ci-and-acceptance.md",
+      "sha256": "sha256:6f93a232dc8f6ce96e09094931662e56616d1c0866fc0411c8bcceff809f492c",
+      "size": 1462,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/architecture/diagrams/README.md",
+      "sha256": "sha256:3a73a2eda726dd26c498750c6a04f99832ac5e4bb05854853affb4bb31120c3e",
+      "size": 368,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/architecture/export-and-release.md",
+      "sha256": "sha256:775992148ed8767b226cb5ef1c7c116210396042199083197f6923fff74341fc",
+      "size": 1156,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/architecture/integration-pipeline.md",
+      "sha256": "sha256:0481d4d383b690ed89a3b9137908fc7534de892e72ac2e7e98138edc45c3636b",
+      "size": 1178,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/architecture/migration-and-upgrades.md",
+      "sha256": "sha256:1decea7ac8b2bb15c09be81e809ff9d78a9b6546aa87db6ca599b63f97e5f5d7",
+      "size": 1143,
       "kind": "file",
       "executable": false
     },
@@ -34,6 +118,13 @@
       "path": "docs/toolingdocs/architecture/ownership-and-state.md",
       "sha256": "sha256:5581ac4945a7726eac3be95ae9b573b8bd62c86edf4d6b8942271debef2e03e4",
       "size": 3022,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/architecture/ownership-state-and-transactions.md",
+      "sha256": "sha256:48624946e1c8e4e73be68a08d645cc24a36cf7ebff259c3373d075de1963d84d",
+      "size": 1293,
       "kind": "file",
       "executable": false
     },
@@ -52,51 +143,639 @@
       "executable": false
     },
     {
-      "path": "docs/toolingdocs/case-study/assets/architecture-pipeline.tex",
-      "sha256": "sha256:709e88f32e9d24150f720688cae975ea2becec5fd7e55ed2756bdac7bc69a70e",
-      "size": 809,
+      "path": "docs/toolingdocs/architecture/system-context.md",
+      "sha256": "sha256:a2fe00bd2ab68b92252c546eb5127bf810787ea631f499289d4c6f763dcfc1ff",
+      "size": 1289,
       "kind": "file",
       "executable": false
     },
     {
-      "path": "docs/toolingdocs/case-study/assets/ownership-boundary.tex",
-      "sha256": "sha256:7b01288399829e9e3953628cbc6badccd397360c3dc2ff32a51fc7852558a517",
-      "size": 852,
+      "path": "docs/toolingdocs/case-study/CASE-STUDY-GUIDELINES.md",
+      "sha256": "sha256:a85ab48b5cb2ca5f3c8dea9325a555b771d6ec064d997804aa0d9905611709ad",
+      "size": 2588,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/README.md",
+      "sha256": "sha256:583ec2525ac33408c6be499a5c77eeaf0cb2d8481d63292a150539139e20895a",
+      "size": 537,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/TEMPLATE-COMPATIBILITY.md",
+      "sha256": "sha256:7d41cfe79945bb39cf8c5bf429d903f1f7b9a574f04588023b686ce1204abcf8",
+      "size": 5935,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/diagrams/README.md",
+      "sha256": "sha256:0eea68fb93a6866bd0ed9be88c2f59c2c62f3fce1fde0bd20cdda0cd365fb813",
+      "size": 310,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/diagrams/source/adapter-orchestration.tex",
+      "sha256": "sha256:86d1fe5168a28d6404030e991be2dec2b90f664bf6b2a081d3fbfb9b48e56ac1",
+      "size": 458,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/diagrams/source/backup-rollback.tex",
+      "sha256": "sha256:9d1c95a61e339cb96eedab491ed1af2b149e45de0b277ce9c9e03b1169d0cd23",
+      "size": 461,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/diagrams/source/check-sequence.tex",
+      "sha256": "sha256:2ebed6f05f3043bcbf6b21395559b269c2dc451cd941d235cff4886891b951a7",
+      "size": 418,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/diagrams/source/ci-test-pyramid.tex",
+      "sha256": "sha256:d85514a9be5de62ab88c232adf09954b50991abb5ef9a5e3f5c3fba47c640242",
+      "size": 462,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/diagrams/source/export-boundary.tex",
+      "sha256": "sha256:400bf7ca8afe076f10cd9f1f90731b9748adf37ac5144d1b3e49551d0905e819",
+      "size": 428,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/diagrams/source/full-fix-transaction.tex",
+      "sha256": "sha256:f82d8e7102c569bf22fa2097399e3024356b221ee3556f110dd3ff397d075356",
+      "size": 376,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/diagrams/source/os-fixture-matrix.tex",
+      "sha256": "sha256:fe89f9243050edf0f52e6a8d4a2275b1474b50d1287b9fc40fcf098184852d29",
+      "size": 446,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/diagrams/source/ownership-boundaries.tex",
+      "sha256": "sha256:7f6577edc556e2a94a22b5fd13d9df5cb8e3aa6b0ec5e698b0992be3bdab291b",
+      "size": 498,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/diagrams/source/profile-feature-resolution.tex",
+      "sha256": "sha256:8f263817fadcca35f58b763a0753a2c1ccc11727a782b575d7e61bc70fdf28f3",
+      "size": 458,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/diagrams/source/project-context-paths.tex",
+      "sha256": "sha256:133d04e7af89a21a5aabd673fbbd699a54e271d5c3e05d923d17c30b2bf66405",
+      "size": 508,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/diagrams/source/system-context.tex",
+      "sha256": "sha256:89b243291152a40ddc2bd8c5fb95eb8a3caa9d0dae023e999fee8943904f9fca",
+      "size": 470,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/diagrams/source/tooling-migration.tex",
+      "sha256": "sha256:517bafa596a4179df47d6185ab6092031031346ecb5f83b46d6454b23e93c76e",
+      "size": 414,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/assets/images/README.md",
+      "sha256": "sha256:40e51ae6e2ef8ae07696e402f7078754f049d085aed480a650ab06d1e749f713",
+      "size": 292,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/build-config.toml",
+      "sha256": "sha256:ba1dfe36ed206067c38bfb017353e119bff4e83e4a75e988162238f67f0f1642",
+      "size": 1122,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/build.py",
-      "sha256": "sha256:5a617146cea5a94099b1e12eef5860b9122a28892e4517c01c7963b64aada0b3",
-      "size": 10482,
+      "sha256": "sha256:8f322991e14e405991425737b2f40a0d7b4189d6d1391fb85442065d6dd9e2ee",
+      "size": 308,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/case-study.md",
-      "sha256": "sha256:c21122ea726feb14b50f05b14b9530e21985ee65166736e7f44cb9d884eaa9ad",
-      "size": 3210,
+      "sha256": "sha256:0d86d1dfa9f1cafafb179c3d39dcc43319734c200ef568bcff30649912acd65b",
+      "size": 3876,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/evidence/claims.toml",
+      "sha256": "sha256:2ec5b3d34b43cc6b06ad6e701416393a97c1b17b7167ee0bbb380dda5155d6fc",
+      "size": 4816,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/evidence/metrics-schema.json",
+      "sha256": "sha256:37da8b90654558abda487254f70dfb410c58a9d72182760995daf8edb43bf12f",
+      "size": 978,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/evidence/releases/README.md",
+      "sha256": "sha256:74caa2b2efe4466dd021ea4320c5d4a2db89bdc1a59676825d6b61057928bbe9",
+      "size": 766,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/scripts/__init__.py",
+      "sha256": "sha256:678143b6c9a2d0731f1e3528df53254668e7bad1a3980d4c8500d644c730dd43",
+      "size": 69,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/scripts/_shared.py",
+      "sha256": "sha256:854db6522800bea6123e73aed88c1b001e178b0264165eefdb4dfe391825543d",
+      "size": 7561,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/scripts/build.py",
+      "sha256": "sha256:abd4943b37a7164092c3a2d9abd7ded7879d3ea435df1a49c445414aca4eb852",
+      "size": 12052,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/scripts/clean.py",
+      "sha256": "sha256:8c7b99c14be1673b2043ac2443d9b8b50ca0189d744e4d667e432b241055df53",
+      "size": 1732,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/scripts/render_check.py",
+      "sha256": "sha256:c28af984399c4319c80ebfcaf2d5f621e0d3f8c7475c1529acaa7877c5c4ac60",
+      "size": 8849,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/scripts/verify.py",
+      "sha256": "sha256:57543636758b6b63039158af209077cb0e51a268e2a399b1b3d419d9d4b5a639",
+      "size": 22100,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/common/bibliography/references.bib",
+      "sha256": "sha256:b7f9932467f304438b6ac335b404538fc0667259f66f387e48fc4296b804efae",
+      "size": 727,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/common/macros/evidence.tex",
+      "sha256": "sha256:cbab847ff10c5d9ffc9e35328f214f1f6a11b17b01783ffc5221cef8802a2b60",
+      "size": 99,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/common/macros/formatting.tex",
+      "sha256": "sha256:fc1ab674faf710f5c7fad3a3a764cea1289830c74517c690c906d8fc026a1c61",
+      "size": 289,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/common/macros/terminology.tex",
+      "sha256": "sha256:71e5df251a63c3df30f419d6d77d11b98f6c69577ea674fa113d0dfff5fa9c16",
+      "size": 521,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/common/preamble/packages.tex",
+      "sha256": "sha256:9b62eb6d6113ce3e44058b6124718f40d16c18bc1a1f4ebc8e252e33be22c956",
+      "size": 1072,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/common/preamble/pdf-metadata.tex",
+      "sha256": "sha256:705ea591d9d0580b68be91b236e8fd916043afa2bc55f2606af479af1f1cdb55",
+      "size": 547,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/common/preamble/typography.tex",
+      "sha256": "sha256:d77fdd13aa6bfa2059a5921ba0226994a7c479c7e32f1ad34831b10b1511949c",
+      "size": 936,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/common/shared/acronyms.tex",
+      "sha256": "sha256:2fb90b82dbbc6e3e8aa3cc95275c403baf92ddb4e6181bc281761396b5656104",
+      "size": 366,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/common/shared/glossary.tex",
+      "sha256": "sha256:da01335feb530cc939c488c1190e46502f24aa17e0946e7d504304bdf84d4135",
+      "size": 520,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/common/template/NOTICE.txt",
+      "sha256": "sha256:f23dfb35f44649fa3388bdb8e3069fadadb21904f995708e846add4dae4ed55a",
+      "size": 431,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/appendices/a-cli-reference.tex",
+      "sha256": "sha256:8124be903890b524ccb40b2d5588a11dfaf62498566b96d9bbbd45bc39c883c2",
+      "size": 428,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/appendices/b-profile-matrix.tex",
+      "sha256": "sha256:eb0625b58ee122dd26ce6903f91b459cebf21f6862d0e876b864d140bdb7f3fd",
+      "size": 335,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/appendices/c-test-matrix.tex",
+      "sha256": "sha256:19b5c930f7452b43656cf3a2663a61a6bc5e0b279ea0e145200b508bb1229d82",
+      "size": 438,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/appendices/d-migration-evidence.tex",
+      "sha256": "sha256:a06de86a858c5eb108420f938f46f4aee523b1c6ae6fcca488c826c684b0dc1b",
+      "size": 415,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/appendices/e-reproducibility.tex",
+      "sha256": "sha256:d16220f5226408aeb4b8fcaf2d75d8221be49660a8bf90bd5f54d01c6b197367",
+      "size": 436,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/chapters/00-abstract.tex",
+      "sha256": "sha256:6f02c92857de7ccd391846e21be44cc2dad834b29ad5c45f2c858ebe22ab2fa9",
+      "size": 690,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/chapters/01-introduction.tex",
+      "sha256": "sha256:15a5b3dce15d27e96245488ae0f685500e150edb3021b6941ddb880df72806e2",
+      "size": 822,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/chapters/02-problem-and-initial-state.tex",
+      "sha256": "sha256:d7364d389b79f66ab23278ec440df73d48f4cf193e50c1ae6b7162e486cab936",
+      "size": 866,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/chapters/03-requirements-and-quality-goals.tex",
+      "sha256": "sha256:b32aee58f0835dc075bc4492d3a0997272759ba60c24e9ef0f3d2c1cabcdb583",
+      "size": 1133,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/chapters/04-architecture.tex",
+      "sha256": "sha256:633ca701c97eecb186dcd84d47afb31611af778f6a4755f7b7fe2e7716f3a9fb",
+      "size": 913,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/chapters/05-profile-and-adapter-model.tex",
+      "sha256": "sha256:93e465e0c1b98e71f8727c0f65f0a8bea94c33267080862a78b9302a8853ac80",
+      "size": 1133,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/chapters/06-integration-and-transactions.tex",
+      "sha256": "sha256:4a40cd7727a93e3de2c87e32bf1c50a3d0feb47f62eabbe2c0d11738396b60b5",
+      "size": 928,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/chapters/07-ownership-state-and-security.tex",
+      "sha256": "sha256:d17a60ef3684999460f701c3aabddbb19d906ff72bb16530bf7843ee89dcbb9b",
+      "size": 987,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/chapters/08-ci-and-system-testing.tex",
+      "sha256": "sha256:1c8e91cf0767574acf177db85d4a5dc5c07f5d9d53fbaba272a885b462537f0b",
+      "size": 1202,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/chapters/09-versioned-migration-case.tex",
+      "sha256": "sha256:32b4024b904ae8d3fa82657936481865c8f2490f601fd53d514421ba3e2c049d",
+      "size": 1006,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/chapters/10-evaluation.tex",
+      "sha256": "sha256:60d71ea9fae872d474d7919e49356d92f241f40965e0ec84d19f58e2ee964125",
+      "size": 1268,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/chapters/11-limitations-and-validity.tex",
+      "sha256": "sha256:be73941ac8c92fe595e863d9f001465a438f29820b9e2e492cfca18d51578b4d",
+      "size": 675,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/chapters/12-conclusion-and-outlook.tex",
+      "sha256": "sha256:16bcbe72501eaca47d57a81d35aa2043465b10b6358a1f616f5a6b3a80191893",
+      "size": 698,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/main.tex",
-      "sha256": "sha256:03023576e0bd3c6c6802ca4f8df6284e1130a589e971a2224b33cb1680cd159b",
-      "size": 15596,
+      "sha256": "sha256:e9ff9be40e168f956a98e22291005ab2484f7b5a8cb17ee36df75601422c76a5",
+      "size": 1927,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/de/metadata.tex",
+      "sha256": "sha256:cb8aec9fd3aa68c20bd360399833b69ed7bde231dbbf68322b0eb2551e5c9868",
+      "size": 640,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/appendices/a-cli-reference.tex",
+      "sha256": "sha256:724b020f73945be24c6a55a8896ade68834d21027071c9cf67992fa472be3daa",
+      "size": 413,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/appendices/b-profile-matrix.tex",
+      "sha256": "sha256:9cbfa07ce61eaaa38da6b2e84a3f2560db5c6c7a545c1309558ed20abac30969",
+      "size": 341,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/appendices/c-test-matrix.tex",
+      "sha256": "sha256:e80777da1f2ed2b368ea2ee527dfe567b1b93384774ea48cc58648a0785adb24",
+      "size": 424,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/appendices/d-migration-evidence.tex",
+      "sha256": "sha256:fabb0cdc620168d8d8b9f102c577904151feae8bafa99242794bf2c9055dc790",
+      "size": 385,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/appendices/e-reproducibility.tex",
+      "sha256": "sha256:b35336011137c28d555112b61da3da3a3f335cf9d078e3f0db4ecac6e12e9943",
+      "size": 391,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/chapters/00-abstract.tex",
+      "sha256": "sha256:39175a78fcfcbf3f89d88a277bbfeefded27e1c3fd798ddd94a43b8d1ca5897c",
+      "size": 683,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/chapters/01-introduction.tex",
+      "sha256": "sha256:14597ddb9a32b958b6f017347e75ad88c610415ee34d39e5df763d141757fa37",
+      "size": 725,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/chapters/02-problem-and-initial-state.tex",
+      "sha256": "sha256:04dd499030c9232959102717b1597cb641c2d3b556ce7168951848e4227bcea2",
+      "size": 824,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/chapters/03-requirements-and-quality-goals.tex",
+      "sha256": "sha256:da63c16f7d51a06f227d2e7760bea0b872252746e9780002ae689ac2db4be49c",
+      "size": 1049,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/chapters/04-architecture.tex",
+      "sha256": "sha256:c808a5a2a693959658d129153b5d85fd770c83ce3e1f28ad6e112f240735b97d",
+      "size": 876,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/chapters/05-profile-and-adapter-model.tex",
+      "sha256": "sha256:dd3c2ba8238f89e6822e3f48be0cc0615c8c5a65e9bdcefca643e5f879f2b324",
+      "size": 1100,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/chapters/06-integration-and-transactions.tex",
+      "sha256": "sha256:9c71dc30d617ff4c19bb280c3c6be1241a7212e101b18f6c6a64f86fea3e057e",
+      "size": 845,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/chapters/07-ownership-state-and-security.tex",
+      "sha256": "sha256:83863b2bc9f7bb6745726baba41b29bd689cdcbb0222a6e4ae874a284ba94126",
+      "size": 900,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/chapters/08-ci-and-system-testing.tex",
+      "sha256": "sha256:c8621bdc73bf9f46fb0ac2fe7260dd152f0a4e48ac1fe5d4edbdccc16476c919",
+      "size": 1217,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/chapters/09-versioned-migration-case.tex",
+      "sha256": "sha256:7d523a1d1f8e125224dbd4a090ab521a0e1fec492a2066cb90a499ef423ab854",
+      "size": 917,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/chapters/10-evaluation.tex",
+      "sha256": "sha256:71ae3b9b83bea72b161d978e05d1c91115691f003739a53bc4f00c4295a1523d",
+      "size": 1190,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/chapters/11-limitations-and-validity.tex",
+      "sha256": "sha256:5d5bd6a6a1aaea244fe7594c0700f28e40a7c3b374b11debd8946fc1b2c041c3",
+      "size": 620,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/chapters/12-conclusion-and-outlook.tex",
+      "sha256": "sha256:870e8a2d4d026247988271eaf028177337e158cd71667c836a263d96f47afc85",
+      "size": 676,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/main.tex",
-      "sha256": "sha256:4017504385ec3cd216df8838427cd5469875ce377435895e81d0f43f4f47b969",
-      "size": 14315,
+      "sha256": "sha256:7c582a751e3ebf2f1cb38a7b2c2901b6e360a2d5f8d1ea369a510ea4686148e7",
+      "size": 1911,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/source/en/metadata.tex",
+      "sha256": "sha256:d9024a0cbee73706bbb3925fac1b963ffbbbc0e4cae3d75926fafc6073a2b00e",
+      "size": 613,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/tests/conftest.py",
+      "sha256": "sha256:fad522b2e806c65a9087f832caaae000a5290767960e189bb9f43f47b9d362b9",
+      "size": 225,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/tests/test_cross_references.py",
+      "sha256": "sha256:682853b65a4c3631ca8e01d03fc281007c4476ed331c8ccfc934adfeccb0167e",
+      "size": 187,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/tests/test_evidence_links.py",
+      "sha256": "sha256:9d68a3093003938d2fad7add4d915ea335a7b0f0c84727c8511cc4395e9fbcbd",
+      "size": 179,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/tests/test_language_parity.py",
+      "sha256": "sha256:6c1032eb68aa0169369c647d6c86527dc4be9209be09e6c94c61ecc7b1e3c48a",
+      "size": 1181,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/tests/test_markdown_links.py",
+      "sha256": "sha256:2ffa4c6b08c9ee3950b2ec2a535680495bfd433cdcc0ea8e13cae51ecee4d956",
+      "size": 230,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/tests/test_no_generated_artifacts.py",
+      "sha256": "sha256:b903f5a086dc0d3f1da6fc9cde966b4b7522ba80697e6e1a44ccd6dc7f49bc6d",
+      "size": 216,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/tests/test_pdf_integrity.py",
+      "sha256": "sha256:c0b4a97fa12292dd543cfc20e1350f3df9087289a104fd5c69ae67492f3c583b",
+      "size": 1555,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/tests/test_reproducible_build.py",
-      "sha256": "sha256:9291f03e590269eba24237ae3fcc05c383de675b56c1419c77f6a3a11a0a49f3",
-      "size": 8314,
+      "sha256": "sha256:9ecec505b63b91ea3644e3fc869bafbd7129fcc4bb9dd23f0d2c317c1dc15ac9",
+      "size": 2222,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/tests/test_source_structure.py",
+      "sha256": "sha256:687cf55fa798a4e1ad8913dbfb6fccd7620bcab81913df630b5d842a6f12e717",
+      "size": 945,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/tests/test_template_compliance.py",
+      "sha256": "sha256:e618ff46ab21e2faa864b9ccdef443e03687873773122542b92d10110f0b1c87",
+      "size": 1403,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/development/adapter-development.md",
+      "sha256": "sha256:b9ab13ba1e876adfe0c99fec544587a568c575e4791acec5f0cc0435cdc44e8d",
+      "size": 1028,
       "kind": "file",
       "executable": false
     },
@@ -109,8 +788,29 @@
     },
     {
       "path": "docs/toolingdocs/development/development.md",
-      "sha256": "sha256:1b45aa596ea8cf6a92bbb05a2bb29171f7255df19adeacb0024568f2eabea5cf",
-      "size": 1206,
+      "sha256": "sha256:c74402d285e45fb112e11d554cf716c4c52b07a38cf6343c4cddacbb77af0c1c",
+      "size": 1454,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/development/documentation-development.md",
+      "sha256": "sha256:bfd9d94dc40801ac80dda56fecefb45c0d8336c24af79bf566bbc65dd53c0f53",
+      "size": 1063,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/development/fixture-development.md",
+      "sha256": "sha256:9cbd784b34cde2a4cee5b6c52d524043370d16bf4548d5f4884e18780c1c1426",
+      "size": 960,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/development/migration-development.md",
+      "sha256": "sha256:32db4bad5b6e495cb9c4c1d3908ce4a55fa40108139ca3cc88bf77218f5d7829",
+      "size": 1055,
       "kind": "file",
       "executable": false
     },
@@ -122,9 +822,23 @@
       "executable": false
     },
     {
+      "path": "docs/toolingdocs/development/release-process.md",
+      "sha256": "sha256:7cd5de2737e76f8cb06c5aacb253b6dcc9ada5829ffbdebce58bc5d301b3a0ce",
+      "size": 1045,
+      "kind": "file",
+      "executable": false
+    },
+    {
       "path": "docs/toolingdocs/development/security-boundaries.md",
-      "sha256": "sha256:b0251b34843e637698c5ad667bcb830cebd9ee23ac37d3d7e7f1602be4a6a13f",
-      "size": 5974,
+      "sha256": "sha256:b3b335796769816400a7ba760806d2762a95d2ce41bfb956f22903eb988d62ad",
+      "size": 6265,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/guides/building-and-testing.md",
+      "sha256": "sha256:41d5ed950b852d9523cdd2972d37bbd42ca884d1a721dfe3b5e29cb0d42c76a6",
+      "size": 985,
       "kind": "file",
       "executable": false
     },
@@ -132,6 +846,20 @@
       "path": "docs/toolingdocs/guides/builds.md",
       "sha256": "sha256:c98d8aadb40465709cf82fbb3f8ed9b33d6a402e6b451f230a0668ab020ed059",
       "size": 2530,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/guides/custom-project-paths.md",
+      "sha256": "sha256:bba7eedaee9c94089132443d5f0e0ce5f16500f148630e003111abb194beb6e5",
+      "size": 1016,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/guides/first-integration.md",
+      "sha256": "sha256:fd401a8938b8621cdeac8b59c2cb76c69861ffe8e20e7cc478d4e0575ace85d5",
+      "size": 962,
       "kind": "file",
       "executable": false
     },
@@ -144,8 +872,8 @@
     },
     {
       "path": "docs/toolingdocs/guides/guides.md",
-      "sha256": "sha256:44e0593fcbfd33b9fc3b140b72cafbd5366d0f89347d46c5ff2b399f21c4f30d",
-      "size": 837,
+      "sha256": "sha256:70fd6244c18648c39a9b3637a407ea871a8f03f346a372df429c9156a02e4347",
+      "size": 1113,
       "kind": "file",
       "executable": false
     },
@@ -164,6 +892,13 @@
       "executable": false
     },
     {
+      "path": "docs/toolingdocs/guides/selecting-a-profile.md",
+      "sha256": "sha256:5d6509391230da8895b6a6f94fdcd4a9029d0ed6d7fb3b375bbe5a2cbcacb230",
+      "size": 1064,
+      "kind": "file",
+      "executable": false
+    },
+    {
       "path": "docs/toolingdocs/guides/tests.md",
       "sha256": "sha256:d78004ed70c327199174c814c4440f7edc3e19ea2d9e1cac3d00fda17d3eb5be",
       "size": 3264,
@@ -171,9 +906,23 @@
       "executable": false
     },
     {
+      "path": "docs/toolingdocs/guides/troubleshooting.md",
+      "sha256": "sha256:486e9d45d8bbf09d1fa0d3ffd7197a96e92ac9b4d77cf01639b875ab21040cd5",
+      "size": 1257,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/guides/upgrading-tooling.md",
+      "sha256": "sha256:e7cff9c50dd668f9d63bb73fad04a484e9419b02c56a734457c4882343c3694e",
+      "size": 1060,
+      "kind": "file",
+      "executable": false
+    },
+    {
       "path": "docs/toolingdocs/index.md",
-      "sha256": "sha256:08d4760496926b2ae3a4fda9ee2db7664bd29f2f966538ac76ac7d720439b6ba",
-      "size": 2786,
+      "sha256": "sha256:28af4256d7001c1ff8e27d9ded45c4c256fbb28702c88f23945d14474e0eb332",
+      "size": 4814,
       "kind": "file",
       "executable": false
     },
@@ -186,15 +935,22 @@
     },
     {
       "path": "docs/toolingdocs/integration/full-fix-and-actions.md",
-      "sha256": "sha256:fa36236fc4cf38199bc47324bdf3c3b0ee26bf9bc00a2b1c27644a0ffe0c2f9b",
-      "size": 4148,
+      "sha256": "sha256:08723a5104c417fce63f21044b60d68c3df15d7a8a1fcd1297f33738974dcf53",
+      "size": 4516,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/integration/full-fix.md",
+      "sha256": "sha256:210f865fe796592990ef7d5685e754e1d05a6d68dbd98cbc6bf8edb2f8e4c575",
+      "size": 1067,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/integration/integration.md",
-      "sha256": "sha256:0fdf0652c2eebc7c2223c167d9fb17effe99b52a7af76ad5ce7c7a2e5bd01517",
-      "size": 1567,
+      "sha256": "sha256:3ede6dd4b2749911a78ee49e2b02308c02b0d3a1d17a171b624ed842be1d8c3c",
+      "size": 1757,
       "kind": "file",
       "executable": false
     },
@@ -206,6 +962,34 @@
       "executable": false
     },
     {
+      "path": "docs/toolingdocs/integration/migrations.md",
+      "sha256": "sha256:48e81726fb310b83d3b18b7b5a7d926e3272367eff9801551e2d06aa0082671b",
+      "size": 1084,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/integration/rollback-and-recovery.md",
+      "sha256": "sha256:e34153d09b8cdffe4234d0ce93f7a1e390cf82610fd82219f017bf77a2182e21",
+      "size": 1157,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/integration/tooling-replacement.md",
+      "sha256": "sha256:f3674c4905418635a02fb8fceaee024ee9a1d3968e8183acc1cd35503ea912d0",
+      "size": 1035,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/integration/verification.md",
+      "sha256": "sha256:e1ec35abc8afac79a1f4a0d9a1b9f07a87ae2abc2e14f8f86782ca8ccd4647c4",
+      "size": 901,
+      "kind": "file",
+      "executable": false
+    },
+    {
       "path": "docs/toolingdocs/reference/adapter-capabilities.md",
       "sha256": "sha256:68541aaa453d1d2aa23b1da3d9d9d48179f3f111f8c56ca6cd65c3c10cd816a1",
       "size": 2504,
@@ -213,9 +997,37 @@
       "executable": false
     },
     {
+      "path": "docs/toolingdocs/reference/adapter-contract.md",
+      "sha256": "sha256:a6c733d815e26d5e720e3ab94bad462222d75768da86c8a5b5d0dd46f5fee1e1",
+      "size": 1163,
+      "kind": "file",
+      "executable": false
+    },
+    {
       "path": "docs/toolingdocs/reference/cli.md",
       "sha256": "sha256:1fe0d8e29d3d8501a86267ec51a61a70730347459ead65451f7fe5385cadbefc",
       "size": 2514,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/reference/exit-codes.md",
+      "sha256": "sha256:51d0c6694f2ac7990d13ca83727bee7bf8466fb16892d12ac524a6acd545c9aa",
+      "size": 892,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/reference/feature-schema.md",
+      "sha256": "sha256:bee8218bf74020310de77c444af2707ad0a8335356786eb5b09f734b60543059",
+      "size": 1021,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/reference/profile-schema.md",
+      "sha256": "sha256:728217f4a1f51b5dac58063948bdc5423b9f6ba99fba355f85e26bc8a2e19251",
+      "size": 810,
       "kind": "file",
       "executable": false
     },
@@ -234,9 +1046,23 @@
       "executable": false
     },
     {
+      "path": "docs/toolingdocs/reference/project-tooling-schema.md",
+      "sha256": "sha256:c05d5e64bad7625b31e8e0de590ffd817f724ce80caa49d31e864782992a4a5b",
+      "size": 1121,
+      "kind": "file",
+      "executable": false
+    },
+    {
       "path": "docs/toolingdocs/reference/reference.md",
-      "sha256": "sha256:86fc0efcaae62f186b4d4f33b35136c06f9598e89da77b16a4fbdae2626816ba",
-      "size": 763,
+      "sha256": "sha256:36b48febbd75b263ee52cb4b6f0cd9ba9b8e06e0d87ae36e202d32f2c144cb1b",
+      "size": 1035,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/reference/report-schema.md",
+      "sha256": "sha256:aa275d241e8eba7c3f34cdb5377a673ca998d705a120df8731e70b3ee882fcc3",
+      "size": 1074,
       "kind": "file",
       "executable": false
     },
@@ -244,6 +1070,13 @@
       "path": "docs/toolingdocs/reference/reports.md",
       "sha256": "sha256:9af1a5e88b2cba866c2eb0e6c73a56dd293cb8de5bd577fdd8f82b41db9e6ab5",
       "size": 1683,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/reference/state-schema.md",
+      "sha256": "sha256:225b2b1fe268239e5f94dae362caa36bbe4dd8f9301462cfea74701662eb93dd",
+      "size": 956,
       "kind": "file",
       "executable": false
     },
@@ -284,15 +1117,15 @@
     },
     {
       "path": "tools/adapters/backend/__init__.py",
-      "sha256": "sha256:c93dfc4f7019b63b422798ab51fdc3e2c9929c58f31ca34d447d2def9d0417db",
-      "size": 4884,
+      "sha256": "sha256:132340ddccc0a81f1e4cbc7987375b84d55fd26ea2e0bea79b75630c05713900",
+      "size": 6683,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/adapters/base.py",
-      "sha256": "sha256:98dc6f4608789388756989744bbb2793760824c07a13693cfd05f48530ffed15",
-      "size": 50146,
+      "sha256": "sha256:9f1010e498f4ff8233e90088b4fc0c9c00201f22c2a4c40e73533e1b17c1187f",
+      "size": 51792,
       "kind": "file",
       "executable": false
     },
@@ -326,8 +1159,8 @@
     },
     {
       "path": "tools/adapters/frontend/__init__.py",
-      "sha256": "sha256:a84f83e1217a9d50fe08a41dc5cfc58a3dff9d4913be890cadd2962bc2aff2ca",
-      "size": 7105,
+      "sha256": "sha256:32639f026553ab364eab0d4451faac2d4ebeafda870a199ae3cf0320b94507ac",
+      "size": 7200,
       "kind": "file",
       "executable": false
     },
@@ -354,8 +1187,8 @@
     },
     {
       "path": "tools/adapters/tauri/__init__.py",
-      "sha256": "sha256:0ec08cf5d66697cbeb4304a49bcf00d7fb70c813853964b1bc9682e5253e5f90",
-      "size": 2430,
+      "sha256": "sha256:7c7cee06a88d44780d72eb119b3546fe004cfa1b58fbed601ee6511e0164b35b",
+      "size": 5608,
       "kind": "file",
       "executable": false
     },
@@ -363,6 +1196,20 @@
       "path": "tools/adapters/testing/__init__.py",
       "sha256": "sha256:d89310e53ca4315d700ebdcbe1a7684e31d1e56df254f2c5dfee29c048099511",
       "size": 947,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "tools/ci_gate.py",
+      "sha256": "sha256:c22ebec3e5ea1e9f5b9981fb07e8f60c1d1aacbed50a01f82110443397dd43fc",
+      "size": 6647,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "tools/ci_support.py",
+      "sha256": "sha256:9f8da467d109caa4151d01e4e18d0494d54fb350a3d5e1ec4e6bd337aa154dc3",
+      "size": 7781,
       "kind": "file",
       "executable": false
     },
@@ -438,15 +1285,15 @@
     },
     {
       "path": "tools/core/manifest.py",
-      "sha256": "sha256:af81a0338db76dbf5209f906547bf7be678d2cdf65c6043f08a6f8088111bc9d",
-      "size": 20250,
+      "sha256": "sha256:58f8d0945c3285feff66dea0f13bcecbc977d5d921662b97b44ff9b5d3fb05ab",
+      "size": 20712,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/core/portable_payload.py",
-      "sha256": "sha256:9bbb02fbc7df8fee99f89a05a8f04b741179c4d93921d142c032bdefe57c6ef8",
-      "size": 19361,
+      "sha256": "sha256:582ec642ccf0138cce20ee3158c2deade8e9bac1e9ee6eb5bf21f56a2161e085",
+      "size": 19437,
       "kind": "file",
       "executable": false
     },
@@ -508,8 +1355,8 @@
     },
     {
       "path": "tools/inst/docs_index.py",
-      "sha256": "sha256:ebb572f1e7c60b8157ac4e7037dc524c91857e9b72b0559f8a47418046a77992",
-      "size": 14533,
+      "sha256": "sha256:e62b3b768d2a21951e723f24c242eec6a17fe8af525bf948f1d1c1e37afd1597",
+      "size": 15029,
       "kind": "file",
       "executable": false
     },
@@ -606,8 +1453,8 @@
     },
     {
       "path": "tools/integration/actions.py",
-      "sha256": "sha256:92c13b4cb758ff7bff55354abeba739c12008f8ec236f89a62799143813ca539",
-      "size": 14751,
+      "sha256": "sha256:940dd8dbb43cacdef43b4bb922c99ceeba25282ac9f2b965bdbe208f3e252264",
+      "size": 23867,
       "kind": "file",
       "executable": false
     },
@@ -627,8 +1474,8 @@
     },
     {
       "path": "tools/integration/discovery.py",
-      "sha256": "sha256:767e327c60219b09de3b887e9178620b81aff07e0d7b111c5b675938afda5152",
-      "size": 23845,
+      "sha256": "sha256:7674a3255519dcbae82763460a09e97c0d4c0412fb21bb4862fbbf880c2df73e",
+      "size": 24573,
       "kind": "file",
       "executable": false
     },
@@ -683,8 +1530,8 @@
     },
     {
       "path": "tools/integration/transaction.py",
-      "sha256": "sha256:c4d2d63718dc560cc34f1f522d80827e49a7a6869cf58c0a7aee7a26bf139121",
-      "size": 70851,
+      "sha256": "sha256:4a05b1c595b439c194c4203940abd8fa568015aef00f953f4e198a716bae94f8",
+      "size": 79268,
       "kind": "file",
       "executable": false
     },
@@ -697,8 +1544,8 @@
     },
     {
       "path": "tools/integration/workflow.py",
-      "sha256": "sha256:9d8ed7edcaa9a691bd8d2a5b9f543823a84f254df1c54201ec9ad63b996016f0",
-      "size": 59602,
+      "sha256": "sha256:cb5f5ea9f3d776f861b98a21526e96cd3f9220b5a398c9d1daf04860a082814d",
+      "size": 59833,
       "kind": "file",
       "executable": false
     },
@@ -914,8 +1761,8 @@
     },
     {
       "path": "tools/quality/rust_ast.py",
-      "sha256": "sha256:7b437ea632d4214a829b4595cf6515d37cd6a7de79ec74f5d55c8600db63c60d",
-      "size": 13213,
+      "sha256": "sha256:f4043bbe3d424d3ee1e1357b8425cad36a193d688fa831de5fee3b5d354b115b",
+      "size": 14112,
       "kind": "file",
       "executable": false
     },
@@ -958,6 +1805,13 @@
       "path": "tools/resources/config/environment.toml",
       "sha256": "sha256:0cb3d7a1c92bf9cf7012e1971fc7efa6a8e3caab52b8c15aaf451d748bbf1f1c",
       "size": 2366,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "tools/resources/config/support-matrix.toml",
+      "sha256": "sha256:01e7c27b7a7fffac6d12e8f7e5eb072c2e62a7524dc5df595b0c58dc9a5f7c10",
+      "size": 661,
       "kind": "file",
       "executable": false
     },
@@ -1089,15 +1943,15 @@
     },
     {
       "path": "tools/tauri/cache.py",
-      "sha256": "sha256:818cab8b77eced866749784333ae1e69e261b3f244870ee10ec9ce430dcd3ae8",
-      "size": 6308,
+      "sha256": "sha256:29f27a893aab4203b70d2c8eb3f4f3ec77a6d5c035c2aeefb1afbf6dcde03551",
+      "size": 6768,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tauri/common.py",
-      "sha256": "sha256:5f1e81a53dbfbd25d9f2f35acb41d5d5941ebde7007227d0dd2663af5a64700f",
-      "size": 7425,
+      "sha256": "sha256:72fdfa0cd9bf92376b62b7cf46723c4e2bdefe922e6591203b57678850956857",
+      "size": 7464,
       "kind": "file",
       "executable": false
     },
@@ -1208,8 +2062,15 @@
     },
     {
       "path": "tools/tests/acceptance/test_copy_matrix.py",
-      "sha256": "sha256:d44df889094ba5aad46a913f93227b9fc4f710bd79fd3ec43ee9f368c16b7f9c",
-      "size": 24919,
+      "sha256": "sha256:3bd21303d8d990736d4991c610371024c208f025b1097f30206ee1dac9014488",
+      "size": 25388,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "tools/tests/acceptance/test_profile_integration.py",
+      "sha256": "sha256:42d3e991f02101e135e7b532706717dc1f42bb312540592ef64908ed361261f2",
+      "size": 18811,
       "kind": "file",
       "executable": false
     },
@@ -1256,9 +2117,23 @@
       "executable": false
     },
     {
+      "path": "tools/tests/adapters/test_profile_structured_mutations.py",
+      "sha256": "sha256:ce5a4e3cfd02b5fb7fa57dfd94a4b7370198c519b119ca9565a4454945cb21d5",
+      "size": 12202,
+      "kind": "file",
+      "executable": false
+    },
+    {
       "path": "tools/tests/adapters/test_registry.py",
       "sha256": "sha256:f21f55c7db7de647e03fdf64dfe196c61668cfc5ee4d64a5a8c5785ecb8a063e",
       "size": 13062,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "tools/tests/conftest.py",
+      "sha256": "sha256:f4a15b61d0e0e3722488c1be19610de694496b15884e84c647ea06bcd1db1702",
+      "size": 569,
       "kind": "file",
       "executable": false
     },
@@ -1278,22 +2153,22 @@
     },
     {
       "path": "tools/tests/core/test_filesystem.py",
-      "sha256": "sha256:af5d28dd45de5effc6e379c398cb3c58f7f523f66343af3643362b0b5f59a460",
-      "size": 4988,
+      "sha256": "sha256:0a114f85376db93115ae4c66ff22c805c02ede2f06995fc80c8c13d337257a8e",
+      "size": 5516,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tests/core/test_manifest.py",
-      "sha256": "sha256:b40be019e6fa02fc7ab1d68f1c443e9d56b1f4e2bb036a8d9c6389af4466a37e",
-      "size": 10899,
+      "sha256": "sha256:6e152d68d1ddfb9ccf7580614904ddee577f667ab7979170ff64471f35a7499b",
+      "size": 11048,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tests/core/test_portable_payload.py",
-      "sha256": "sha256:f81aa47066a62aaa23b2dbca46cf4b3ac43790b3a9c65b67d3f3eca68a3c284c",
-      "size": 6992,
+      "sha256": "sha256:d11327ee8867f5806fefcfc2d37e2ec53713df18b2d62ba703f64825263cae47",
+      "size": 8157,
       "kind": "file",
       "executable": false
     },
@@ -1301,6 +2176,13 @@
       "path": "tools/tests/core/test_state.py",
       "sha256": "sha256:5db18560e42563ee4f059b58f5b1937d36d151636a30eea2ab4dd9dd5d9a085f",
       "size": 5182,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "tools/tests/core/test_support_matrix.py",
+      "sha256": "sha256:5bdbed2328d37de194e135e54cd3aad029c349b5806171bd5a8a558faa789f94",
+      "size": 2306,
       "kind": "file",
       "executable": false
     },
@@ -1320,15 +2202,15 @@
     },
     {
       "path": "tools/tests/integration/test_actions.py",
-      "sha256": "sha256:b8af331162d9566e68e10fa061770aec8039acf1e7e9df88b02b8d9547bbf02a",
-      "size": 11304,
+      "sha256": "sha256:a4756f466394fda004949f999655af6ea15641155d591a472aca200ff1e3e6b7",
+      "size": 18757,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tests/integration/test_assets.py",
-      "sha256": "sha256:53e27b8c0050778f3587df7e2f09d89b5b4bdbf5c96388e77e98a18f61813acf",
-      "size": 4183,
+      "sha256": "sha256:176c544de058d0c8461be6eecc9aa01ecf3b03db5773ba9ec8c320ac92a5df9f",
+      "size": 4256,
       "kind": "file",
       "executable": false
     },
@@ -1341,22 +2223,22 @@
     },
     {
       "path": "tools/tests/integration/test_discovery.py",
-      "sha256": "sha256:5fd82c4d92cd6df8b0596c18cee0fb227d9030f7772642005587a2a17f0d1d4d",
-      "size": 8667,
+      "sha256": "sha256:3e4f16f8195299d518c61d31c600a5094e0e3e4d719d8245453ac7aedcc5503c",
+      "size": 9468,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tests/integration/test_export.py",
-      "sha256": "sha256:e149321c02f976c5a9d4e941648b58a13d2e15f99ad5334bc544a4a8e0db60b9",
-      "size": 12366,
+      "sha256": "sha256:e75584baa520e0b7ccaf65e26c5c4c5a8f4097110b10107a2efaedac7a269a3a",
+      "size": 13470,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tests/integration/test_migration_workflow.py",
-      "sha256": "sha256:25f20cdc94e890fc385c3edfd2fbd0d139832ee624ad5a49855e85276fd07f88",
-      "size": 12246,
+      "sha256": "sha256:46e0457645734543f1cd043c27b6226aaf2bffa0bc4fa9d3ef843a2ae7844b69",
+      "size": 12222,
       "kind": "file",
       "executable": false
     },
@@ -1390,8 +2272,8 @@
     },
     {
       "path": "tools/tests/integration/test_transaction.py",
-      "sha256": "sha256:03d41a3bc5e37bf6b3f52fd42a9f637c2cd69fedeffd03f480fcebc0ce6805bc",
-      "size": 31927,
+      "sha256": "sha256:c5f688774ce29d243d89981df214b15177b5aa7a557753f378359048b23b3fba",
+      "size": 37311,
       "kind": "file",
       "executable": false
     },
@@ -1411,8 +2293,8 @@
     },
     {
       "path": "tools/tests/integration/test_workflow.py",
-      "sha256": "sha256:4e3263962a7c9dafd2d3753f2490c4fd927069e8712f633ca8c87656cea7ad2d",
-      "size": 24944,
+      "sha256": "sha256:b4f15d509e87654a6874f695972368e20d9d8b08c28bac2a89b52db8fd43ad5a",
+      "size": 25149,
       "kind": "file",
       "executable": false
     },
@@ -1488,8 +2370,8 @@
     },
     {
       "path": "tools/tests/quality/test_rust_wasi_host.py",
-      "sha256": "sha256:1ae0209a28fd6aa90a39e861dda655fb2f7f62899947eef4bd6c8630e60a71c0",
-      "size": 17162,
+      "sha256": "sha256:9337fbba5815e1c25c72fca473ad48a7b42f7cb5f579ed26ac66d2b1b9dafd71",
+      "size": 18226,
       "kind": "file",
       "executable": false
     },
@@ -1511,6 +2393,62 @@
       "path": "tools/tests/quality/test_tooling.py",
       "sha256": "sha256:20e858f55e4837634d5d60a4376bfeb3e29aa30ce88c7227a8eae3daa9442b1f",
       "size": 19440,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "tools/tests/system/__init__.py",
+      "sha256": "sha256:bcf9741be4a790093276450f6aa2b5c3537f63946867a1092d1c707f6e297b63",
+      "size": 52,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "tools/tests/system/conftest.py",
+      "sha256": "sha256:100cc799535866159d2fba167a35e73e457d172319424c77a42af9d328a72777",
+      "size": 3717,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "tools/tests/system/test_cli_processes.py",
+      "sha256": "sha256:9d71e294e5400f3985ad3c1c706fcd3892599a6ac42171d8bed6e52cf03e3426",
+      "size": 1434,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "tools/tests/system/test_filesystem_semantics.py",
+      "sha256": "sha256:56436e63e6b90a9550400bcd0c0bde2bd15a735bc391bf0a449feb78242b5036",
+      "size": 1526,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "tools/tests/system/test_git_environment.py",
+      "sha256": "sha256:43f4fa67d932902b9e19b3079222b19588e7cc86dd3dc62be6ddaf8205f27c8a",
+      "size": 837,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "tools/tests/system/test_path_portability.py",
+      "sha256": "sha256:9fe06af201e631682d01bebbe7d2f7b37eca65636684988ff4a550761b40ba1d",
+      "size": 1464,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "tools/tests/system/test_process_lifecycle.py",
+      "sha256": "sha256:e61eb4f032690ca3e0a0e363dce5c1cbd54d37cda00464cbf9a32bd3916a81a2",
+      "size": 1304,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "tools/tests/system/test_runtime_isolation.py",
+      "sha256": "sha256:e9530354946421eb4485d16613eebea9efe6ed765a83f845912bc2a16d3bab63",
+      "size": 733,
       "kind": "file",
       "executable": false
     },
@@ -1565,29 +2503,29 @@
     },
     {
       "path": "tools/tests/test_docs_index.py",
-      "sha256": "sha256:b06b44549f17ebc6e6b8414f6cd3d3dbbfc69ad291bacd10c3cc1e8a139fa807",
-      "size": 17238,
+      "sha256": "sha256:2cc75faacd12738599216abe9b338e7da306f2855e00d64eac58ee91149d21d3",
+      "size": 17809,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tests/test_install.py",
-      "sha256": "sha256:1a215d294c7527f0def6a21689acbaa0529dc9ef3d7cfe740084a5000b091d2c",
-      "size": 10059,
+      "sha256": "sha256:0217796aec543afc74c373eee96bceb9fa4a9c0009ecb66a5cb8b52c4250c59c",
+      "size": 10079,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tests/test_logger.py",
-      "sha256": "sha256:f286667add0cccddd64e987beb4ccc5ad02ebe59dcec1665f3dcaadc71a9925d",
-      "size": 717,
+      "sha256": "sha256:cbf75fc86812aaf60e7d623c7c5c12c458c5cbcc99b5cb33cfbab2a773e195ad",
+      "size": 776,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tests/test_portable_documentation.py",
-      "sha256": "sha256:2edff81ed34cc17abd606d2efbed609843b579157db0e7be4abc102e1d5b86d3",
-      "size": 5975,
+      "sha256": "sha256:1445bd590b2d7e2522cee2dd6a32494c55ed7e4ed057e6d35d26ee4736e735a2",
+      "size": 6051,
       "kind": "file",
       "executable": false
     },
@@ -1621,36 +2559,36 @@
     },
     {
       "path": "tools/tests/test_stop_safety.py",
-      "sha256": "sha256:1bf9710ff955382b0ae852a54c41d024824a0c49f63ebed9b853247b7ef13a30",
-      "size": 10639,
+      "sha256": "sha256:53fad95f696caae67b62c32d963be8fdc0acd304c718fde579cfe934c2bdc3f6",
+      "size": 10670,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tests/test_tauri_appimage.py",
-      "sha256": "sha256:5bb88af1897f040858e7aab0cc3aee7c44bb7e0d92d6cbe2e7e7fc4a646745d1",
-      "size": 23793,
+      "sha256": "sha256:8e44bce2c4a2d984e139b204ae9eb52172c89fc6c54c1486085a5f36e4bac93c",
+      "size": 23831,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tests/test_tauri_cache_recovery.py",
-      "sha256": "sha256:f09792aa5f809dec37cd7fbf084fe161b357272c2fe146fd8005de81a447f4c8",
-      "size": 8312,
+      "sha256": "sha256:3871ca69d2fdf329c52bc6137f1f2ddc837c57b457b2e63d343a3ec9dd430b60",
+      "size": 8599,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tests/test_tauri_control.py",
-      "sha256": "sha256:b18ae1f4a8497819b8d7c2c0b2a317756b15ed07c9aa9bdc5bc2c9f0af1892b5",
-      "size": 21179,
+      "sha256": "sha256:a8aec1f3b86f53f630e1820c199113bfd0a8ccfef872c388d8e41e6b9b48f10a",
+      "size": 21215,
       "kind": "file",
       "executable": false
     },
     {
       "path": "tools/tests/test_tauri_detached_safety.py",
-      "sha256": "sha256:1605111e45b9e3f948ada40b98d16dc8b69f42092865455a542d2124732c47ca",
-      "size": 8436,
+      "sha256": "sha256:6e5f9f228e736dd30dd76abf686b8ab493b4d3b4130b6b780829293dea6666d4",
+      "size": 8556,
       "kind": "file",
       "executable": false
     },
@@ -1676,5 +2614,5 @@
       "executable": false
     }
   ],
-  "digest": "sha256:b818817d30d9df17d43f98d1f6d078e570d56ff07708724f0571471658398b49"
+  "digest": "sha256:8a481f6e379fd3fbbf2e6cd12256bab5dafc2a7204cd08c2585f6d61c6ee4a98"
 }

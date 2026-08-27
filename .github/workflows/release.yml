@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    tags: ["tooling-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  support-matrix:
+    name: Read release support matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      python_primary: ${{ steps.matrix.outputs.python_primary }}
+      node_primary: ${{ steps.matrix.outputs.node_primary }}
+      rust_channel: ${{ steps.matrix.outputs.rust_channel }}
+      linux: ${{ steps.matrix.outputs.linux_runner }}
+    steps:
+      - name: Check out complete source history
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - id: matrix
+        name: Read central support contract
+        run: python tools/ci_support.py --github-output
+
+  gate-zero:
+    name: gate-zero
+    needs: support-matrix
+    runs-on: ${{ needs.support-matrix.outputs.linux }}
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up isolated tooling environment
+        uses: ./.github/actions/setup-tooling-environment
+        with:
+          python-version: ${{ needs.support-matrix.outputs.python_primary }}
+          node-version: ${{ needs.support-matrix.outputs.node_primary }}
+          rust-version: ${{ needs.support-matrix.outputs.rust_channel }}
+      - name: Run concrete Gate 0 capability tests
+        shell: pwsh
+        run: |
+          $junit = Join-Path $env:RUNNER_TEMP "gate-zero.junit.xml"
+          & $env:TOOLING_PYTHON -m pytest -q -p no:cacheprovider --junitxml=$junit tools/tests/adapters/test_builtin_adapters.py tools/tests/adapters/test_profile_structured_mutations.py tools/tests/integration/test_actions.py tools/tests/integration/test_transaction.py tools/tests/integration/test_transaction_project_config.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Refuse synthetic release acceptance for missing implementation
+        shell: pwsh
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP "gate-zero.json"
+          $output = & $env:TOOLING_PYTHON -m tools.ci_gate --require-ready
+          $exitCode = $LASTEXITCODE
+          $output | Set-Content -Path $report -Encoding utf8
+          $output
+          if ($exitCode -ne 0) { exit $exitCode }
+      - name: Upload Gate 0 status
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-gate-zero-status
+          path: |
+            ${{ runner.temp }}/gate-zero.json
+            ${{ runner.temp }}/gate-zero.junit.xml
+          if-no-files-found: warn
+          retention-days: 90
+
+  real-version-upgrade:
+    name: real-version-upgrade
+    uses: ./.github/workflows/ci-upgrade.yml
+
+  documentation-release:
+    name: documentation-release
+    uses: ./.github/workflows/ci-documentation.yml
+
+  release-acceptance:
+    name: release-acceptance
+    needs: [support-matrix, gate-zero]
+    uses: ./.github/workflows/_portable-acceptance.yml
+    with:
+      runner: ${{ needs.support-matrix.outputs.linux }}
+      python-version: ${{ needs.support-matrix.outputs.python_primary }}
+      node-version: ${{ needs.support-matrix.outputs.node_primary }}
+      rust-version: ${{ needs.support-matrix.outputs.rust_channel }}
+      fixture-selection: ""
+      profile-selection: ""
+      include-historical-upgrade: true
+
+  release-contract:
+    name: release-contract
+    needs: [support-matrix, gate-zero]
+    runs-on: ${{ needs.support-matrix.outputs.linux }}
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONHASHSEED: "0"
+      PYTHONNOUSERSITE: "1"
+    steps:
+      - name: Check out complete source history
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up isolated tooling environment
+        uses: ./.github/actions/setup-tooling-environment
+        with:
+          python-version: ${{ needs.support-matrix.outputs.python_primary }}
+      - name: Validate release contract and create portable export
+        shell: pwsh
+        run: |
+          & $env:TOOLING_PYTHON -m pytest -q -p no:cacheprovider tests/source/test_workflow_contracts.py tools/tests/integration/test_export.py tools/tests/core/test_portable_payload.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $parent = Join-Path $env:RUNNER_TEMP "release-export"
+          New-Item -ItemType Directory -Path $parent | Out-Null
+          & $env:TOOLING_PYTHON tools/control.py tooling export --output $parent
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload portable release export
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: portable-release-export
+          path: ${{ runner.temp }}/release-export
+          if-no-files-found: error
+          retention-days: 90
+
+  release-final:
+    name: release-final
+    needs:
+      - real-version-upgrade
+      - documentation-release
+      - release-acceptance
+      - release-contract
+      - gate-zero
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every release prerequisite to succeed
+        shell: pwsh
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          $failed = @()
+          ($env:NEEDS_JSON | ConvertFrom-Json).psobject.Properties | ForEach-Object {
+            if ($_.Value.result -ne "success") { $failed += "$($_.Name)=$($_.Value.result)" }
+          }
+          if ($failed.Count -gt 0) { throw "Release prerequisite failed: $($failed -join ', ')" }

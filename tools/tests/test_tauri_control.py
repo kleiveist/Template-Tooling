@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-import signal
 import subprocess
 from pathlib import Path
 from typing import cast
@@ -279,7 +278,7 @@ def test_tauri_windows_portable_dry_run_uses_cargo_xwin_on_linux(monkeypatch) ->
     assert calls[2][1] is True
     assert "--runner" in calls[2][0]
     runner = calls[2][0][calls[2][0].index("--runner") + 1]
-    assert Path(runner).name == "cargo-xwin"
+    assert Path(runner).stem.casefold() == "cargo-xwin"
     assert calls[2][0][-1:] == ["--no-bundle"]
 
 
@@ -319,7 +318,7 @@ def test_tauri_raw_windows_portable_flags_map_to_portable_target(monkeypatch) ->
     assert calls[2][1] is True
     assert "--runner" in calls[2][0]
     runner = calls[2][0][calls[2][0].index("--runner") + 1]
-    assert Path(runner).name == "cargo-xwin"
+    assert Path(runner).stem.casefold() == "cargo-xwin"
     assert calls[2][0][-1:] == ["--no-bundle"]
 
 
@@ -437,7 +436,7 @@ def test_tauri_cli_fallback_uses_tauri_apps_cli_package(monkeypatch) -> None:
 
     command = common.tauri_cli_command("dev")
 
-    assert Path(command[0]).name == "npm"
+    assert Path(command[0]).stem.casefold() == "npm"
     assert command[1:5] == ["exec", "--yes", "--package", "@tauri-apps/cli@2.10.1"]
     assert command[-2:] == ["tauri", "dev"]
 
@@ -534,7 +533,7 @@ def test_tauri_run_foreground_uses_current_terminal(monkeypatch) -> None:
 def test_tauri_follow_ctrl_c_stops_process_group(monkeypatch, tmp_path) -> None:
     log_path = tmp_path / "tauri.log"
     log_path.write_text("ready\n", encoding="utf-8")
-    killed: list[tuple[int, int]] = []
+    stopped: list[int] = []
 
     class FakeProcess:
         pid = 4321
@@ -553,16 +552,17 @@ def test_tauri_follow_ctrl_c_stops_process_group(monkeypatch, tmp_path) -> None:
 
     fake_process = FakeProcess()
 
-    def fake_killpg(pid: int, sig: int) -> None:
-        killed.append((pid, sig))
+    def fake_terminate(process: FakeProcess) -> bool:
+        stopped.append(process.pid)
         fake_process.terminated = True
+        return True
 
-    monkeypatch.setattr(run.os, "killpg", fake_killpg)
+    monkeypatch.setattr(run, "_terminate_process_group", fake_terminate)
 
     code = run._follow_log(log_path, fake_process)  # type: ignore[arg-type]
 
     assert code == 0
-    assert killed == [(4321, signal.SIGTERM)]
+    assert stopped == [4321]
 
 
 @pytest.mark.parametrize(

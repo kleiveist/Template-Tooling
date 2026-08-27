@@ -1,0 +1,68 @@
+name: Set up Template Tooling environment
+description: Create an isolated Python environment outside the portable tools tree.
+
+inputs:
+  python-version:
+    description: Python version selected from tools/resources/config/support-matrix.toml.
+    required: true
+  node-version:
+    description: Optional Node.js version selected from tools/resources/config/support-matrix.toml.
+    required: false
+    default: ""
+  rust-version:
+    description: Optional Rust toolchain selected from tools/resources/config/support-matrix.toml.
+    required: false
+    default: ""
+
+outputs:
+  python:
+    description: Absolute path to the isolated tooling Python executable.
+    value: ${{ steps.environment.outputs.python }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Set up pinned Node.js
+      if: inputs.node-version != ''
+      uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+      with:
+        node-version: ${{ inputs.node-version }}
+        package-manager-cache: false
+
+    - name: Set up pinned Rust toolchain
+      if: inputs.rust-version != ''
+      shell: pwsh
+      env:
+        RUST_VERSION: ${{ inputs.rust-version }}
+      run: |
+        & rustup toolchain install $env:RUST_VERSION --profile minimal --no-self-update
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        "RUSTUP_TOOLCHAIN=$env:RUST_VERSION" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        & rustc --version
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - id: environment
+      name: Install isolated tooling dependencies
+      shell: pwsh
+      run: |
+        $name = "template-tooling-$env:GITHUB_RUN_ID-$env:GITHUB_JOB"
+        $venv = Join-Path $env:RUNNER_TEMP $name
+        python -m venv $venv
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if ($IsWindows) {
+          $python = Join-Path $venv "Scripts/python.exe"
+          $scripts = Join-Path $venv "Scripts"
+        } else {
+          $python = Join-Path $venv "bin/python"
+          $scripts = Join-Path $venv "bin"
+        }
+        & $python -m pip install --disable-pip-version-check --requirement tools/requirements.txt
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        "python=$python" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        "TOOLING_PYTHON=$python" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        $scripts | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append

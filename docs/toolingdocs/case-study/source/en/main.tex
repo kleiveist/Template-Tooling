@@ -1,281 +1,66 @@
+% !TeX program = pdflatex
+% Portable tooling case-study orchestration; the independently authored prose stays in chapters.
 \documentclass[11pt,a4paper]{article}
 
-\usepackage[T1]{fontenc}
-\usepackage[utf8]{inputenc}
-
-% Stabilize PDF metadata in addition to SOURCE_DATE_EPOCH from build.py.
-\ifdefined\pdfinfoomitdate\pdfinfoomitdate=1\fi
-\ifdefined\pdftrailerid\pdftrailerid{}\fi
-\ifdefined\pdfsuppressptexinfo\pdfsuppressptexinfo=-1\fi
-
-\setlength{\oddsidemargin}{0mm}
-\setlength{\evensidemargin}{0mm}
-\setlength{\textwidth}{159mm}
-\setlength{\topmargin}{-10mm}
-\setlength{\textheight}{235mm}
-\setlength{\parindent}{0pt}
-\setlength{\parskip}{0.7em}
-\raggedbottom
-\sloppy
-
-\newcommand{\code}[1]{\texttt{#1}}
-\newcommand{\PipelineObserve}{Observe\\project}
-\newcommand{\PipelinePlan}{Plan\\difference}
-\newcommand{\PipelineStage}{Stage in\\isolation}
-\newcommand{\PipelineVerify}{Verify\\candidate}
-\newcommand{\PipelineFinish}{Commit or\\roll back}
-\newcommand{\PipelineFailure}{Failure: return unchanged}
-\newcommand{\ProjectBoundaryTitle}{Project-owned}
-\newcommand{\ProjectBoundaryOne}{application sources}
-\newcommand{\ProjectBoundaryTwo}{domain configuration}
-\newcommand{\ProjectBoundaryThree}{unknown files}
-\newcommand{\ProjectBoundaryFour}{product repositories}
-\newcommand{\ToolingBoundaryTitle}{Tooling-owned}
-\newcommand{\ToolingBoundaryOne}{profiles and rules}
-\newcommand{\ToolingBoundaryTwo}{adapters and resources}
-\newcommand{\ToolingBoundaryThree}{migrations and state}
-\newcommand{\ToolingBoundaryFour}{tooling documentation}
-\newcommand{\BoundaryObserve}{evidence}
-\newcommand{\BoundaryProposal}{bounded patch}
-\newcommand{\BoundaryContract}{explicit ownership contract}
-
-\title{Portable Tooling Architecture\\A Bilingual Case Study of Controlled Integration}
-\author{Portable tooling case study}
-\date{Reproducible edition}
+\input{metadata}
+\input{../common/preamble/packages}
+\input{../common/preamble/pdf-metadata}
+\input{../common/macros/terminology}
+\input{../common/macros/evidence}
+\input{../common/macros/formatting}
+\CaseStudyPdfMetadata
+\selectlanguage{english}
+\renewcommand{\thesection}{\ifnum\value{section}<10 0\fi\arabic{section}}
 
 \begin{document}
-\maketitle
+\begin{titlepage}
+  \centering
+  {\Large Project case study\par}
+  \vspace{1.8cm}
+  {\bfseries\LARGE \CaseStudyTitle\par}
+  \vspace{0.6cm}
+  {\large \CaseStudySubtitle\par}
+  \vfill
+  \begin{tabularx}{0.82\textwidth}{@{}lX@{}}
+    \textbf{Document:} & \CaseStudyAuthor \\
+    \textbf{Edition:} & \CaseStudyDate \\
+    \textbf{Tooling version:} & 0.4.0 \\
+  \end{tabularx}
+\end{titlepage}
 
-\begin{abstract}
-This case study examines a tooling package that can be copied directly into different
-software projects. Unlike a product template, it owns neither the application nor its
-lifecycle. It observes existing technologies, selects a capability profile, plans bounded
-changes and applies them as a transaction. The evaluation focuses on portability, ownership
-protection, deterministic execution and the cost of a deliberately fail-closed design. The
-results suggest that the strongest guarantees come not from a large collection of generators,
-but from explicit boundaries, repeatable plans and demonstrable recovery.
-\end{abstract}
-
+\pagenumbering{Roman}
 \tableofcontents
-\newpage
+\clearpage
+\listoffigures
+\clearpage
+\listoftables
+\clearpage
+\input{../common/shared/acronyms}
+\clearpage
+\input{../common/shared/glossary}
+\clearpage
+\pagenumbering{arabic}
 
-\section{Context and research question}
+\input{chapters/00-abstract}
+\input{chapters/01-introduction}
+\input{chapters/02-problem-and-initial-state}
+\input{chapters/03-requirements-and-quality-goals}
+\input{chapters/04-architecture}
+\input{chapters/05-profile-and-adapter-model}
+\input{chapters/06-integration-and-transactions}
+\input{chapters/07-ownership-state-and-security}
+\input{chapters/08-ci-and-system-testing}
+\input{chapters/09-versioned-migration-case}
+\input{chapters/10-evaluation}
+\input{chapters/11-limitations-and-validity}
+\input{chapters/12-conclusion-and-outlook}
 
-Many internal tooling repositories begin as complete project templates. Over time they
-accumulate assumptions about the frontend, backend, database, desktop shell, CI and release
-process. This is convenient while every target follows the same layout. Once the tooling is
-copied into an existing or differently structured project, those assumptions become risks:
-fixed paths point at the wrong files, a generator overwrites product code, and an upgrade can
-no longer distinguish its own state from state owned by the application team.
+\appendix
+\input{appendices/a-cli-reference}
+\input{appendices/b-profile-matrix}
+\input{appendices/c-test-matrix}
+\input{appendices/d-migration-evidence}
+\input{appendices/e-reproducibility}
 
-The architecture studied here replaces that model with a portable tooling directory. Its
-central research question is:
-
-\begin{quote}
-How can copyable tooling support several project shapes without owning application sources,
-while making integration, migration and verification reproducible and reversible?
-\end{quote}
-
-The question is broader than packaging. Portability means that paths originate in a project
-context resolved at runtime, technology knowledge resides behind adapters, and every write is
-visible in advance as a structured plan. A copied directory is only truly portable if its
-behavior is independent of the location and layout of the repository in which it was
-developed.
-
-\section{Architecture of the portable core}
-
-\subsection{Context instead of a global root}
-
-The project context separates the project root, tooling root, documentation root, packaged
-resources and local state. Default roots are derived centrally from the installed tooling
-location, validated at the boundary and then passed explicitly. Consumers therefore do not
-each guess a separate global repository root. This distinction is small in code but fundamental
-in operation: the same copy may live inside a monorepo, next to a web application or in a
-desktop project without recompiling source paths.
-
-Project configuration describes paths and profile intent but remains project-owned. Profiles,
-adapter contracts and canonical resources belong to the tooling. Local integration state is
-kept outside the tooling directory in a bounded state area. As a result, the complete tooling
-directory can be replaced without mixing project history with an old implementation.
-
-\subsection{Profiles and adapters}
-
-A profile expresses desired capabilities rather than a complete directory tree. Examples
-include a web-only setup, a cloud-enabled variant and a desktop combination. Adapters map
-those capabilities to technology-specific observations and controlled actions. A frontend
-adapter may recognize an existing package manifest, while a database adapter activates only
-when strong markers are present. With insufficient evidence an adapter remains inactive;
-speculation never grants write access.
-
-This separation keeps the core narrow. It understands states, findings, plans, transactions
-and migrations. It does not treat particular npm scripts or database paths as universal
-truths. A new technology extends the adapter registry without forcing the core into a new
-product model.
-
-\section{Ownership as a safety boundary}
-
-Figure~\ref{fig:ownership} shows the architecture's most important boundary. The project owns
-its application, domain configuration and every unknown file. The tooling owns only its
-packaged rules, resources, migrations and documentation. An adapter may observe project files
-and propose bounded changes; observation does not imply blanket ownership of the target tree.
-
-\begin{figure}[htbp]
-  \centering
-  \input{../../assets/ownership-boundary.tex}
-  \caption{Evidence flows to the tooling; only bounded proposals flow back.}
-  \label{fig:ownership}
-\end{figure}
-
-The ownership contract operates at three levels:
-
-\begin{enumerate}
-  \item \textbf{Path boundaries:} relative paths are normalized, must remain below the
-  project root and may not exploit symbolic indirection.
-  \item \textbf{Change boundaries:} structured operations distinguish creation,
-  replacement and removal. Preconditions stop a changed file from being silently
-  overwritten between observation and commit.
-  \item \textbf{Knowledge boundaries:} adapters declare their markers and target paths.
-  Unknown files are not errors and are not treated as debris to be cleaned up.
-\end{enumerate}
-
-These rules are stricter than a conventional generator. They reduce the scope of automatic
-repair while increasing traceability. For a tool that runs in repositories it does not own,
-that asymmetry is desirable: a skipped convenience step can be corrected, whereas lost
-product work may not be recoverable.
-
-\section{Transactional integration}
-
-The pipeline in Figure~\ref{fig:pipeline} separates observation from publication. Current
-state, profile intent and adapter findings first produce a deterministic plan. The planned
-operations are then applied to an isolated staging copy. When the plan requires them, fixed
-tooling quality, test and locked-dependency checks execute against that candidate. Only a
-completely successful candidate may be published to the project.
-
-\begin{figure}[htbp]
-  \centering
-  \input{../../assets/architecture-pipeline.tex}
-  \caption{Integration publishes only a fully verified candidate.}
-  \label{fig:pipeline}
-\end{figure}
-
-The commit is controlled as well. Preconditions observed during planning are checked again
-before writes begin. Backups and a transaction journal support rollback if a later operation
-fails. Persisted state does not store a blanket snapshot of the project; it stores only the
-evidence needed for ownership and drift decisions. A file edited by a maintainer therefore
-remains visible instead of being replaced as if it were an outdated template copy.
-
-Two modes follow from the same planning model. A read-only check produces findings and a plan
-without changing a byte. A full repair may execute only operations authorized by that plan.
-After a successful run, another check must report no drift, and a second repair must be a
-no-op. This idempotence requirement is stronger evidence than the one-time exit code of a
-generator.
-
-\section{Executing external toolchains}
-
-Some verification requires real toolchains. A staged candidate can require trusted tooling
-quality and test checks or locked-dependency validation through offline
-\code{npm ci --ignore-scripts}. Separately, a user can explicitly dispatch a fixed live
-adapter capability for an existing product. The tooling cannot replace the semantics of
-those programs, but it can bound their invocation; arbitrary user-configured shell fragments
-are outside the contract.
-
-Both action paths run without a shell, with bounded output, a timeout and disposable home,
-cache and configuration directories. Staged validation additionally forces supported
-toolchains offline and disables lifecycle scripts; an explicit live action may intentionally
-contact registries and create project artifacts. Process groups or Job Objects terminate
-descendants when an action ends. These controls are not an operating-system sandbox: executed
-code still has the local user's file permissions. They make the remaining trust assumption
-explicit, while only staged validation belongs to the integration rollback boundary.
-
-\section{Evaluation}
-
-\subsection{Experimental design}
-
-The architecture is evaluated with five profiles in independent temporary target projects.
-Each profile follows the same sequence: copy the tooling, detect project state, check, perform
-the complete integration, check again, execute applicable tests and run integration a second
-time. A complementary experiment integrates the pinned historical 0.1.0 payload and then
-replaces both managed directories with the current release to exercise a registered migration
-and the separation between implementation and project state.
-
-The measures are deliberately binary and byte-oriented:
-
-\begin{itemize}
-  \item Hashes of all unknown and product-owned files remain unchanged.
-  \item A read-only check changes neither files nor directory structure.
-  \item After successful integration, the second integration plans zero operations.
-  \item An intentionally failing verification restores the initial state.
-  \item The same portable payload retains its manifest identity after a direct copy.
-\end{itemize}
-
-\subsection{Results and interpretation}
-
-\begin{center}
-\begin{tabular}{|p{43mm}|p{48mm}|p{55mm}|}
-\hline
-\textbf{Criterion} & \textbf{Observable evidence} & \textbf{Interpretation} \\
-\hline
-Relocation & Context paths point only into the temporary target & No dependency on the source
-repository \\
-\hline
-Ownership & Product and unknown-file hashes remain stable & Adapter knowledge bounds rather
-than expands ownership \\
-\hline
-Idempotence & A second complete run plans no operations & State and desired configuration
-agree \\
-\hline
-Rollback & A failed candidate leaves no partial change & Verification precedes publication \\
-\hline
-Tooling replacement & Migration uses preserved project state & Implementation and state are
-separate \\
-\hline
-\end{tabular}
-\end{center}
-
-The evaluation does not prove that every conceivable adapter is correct. It demonstrates the
-properties that every adapter must preserve. The transaction core can roll back execution or
-verification failures, but it cannot prove that an otherwise valid allowlisted domain change
-is semantically desirable. Conversely, a domain-correct adapter can break portability by using
-fixed root paths. The test strategy therefore combines profile matrices with contract tests
-for paths, markers, ownership scopes and action declarations.
-
-\section{Trade-offs and limitations}
-
-\textbf{More preparation, smaller failure surface.} An adapter needs declared markers,
-operations and tests. This costs more than copying a prepared directory tree, but it avoids
-implicit ownership claims.
-
-\textbf{Fail-closed behavior may reduce availability.} If a lockfile, compiler or safe path
-resolution is missing, the tooling refuses the automatic change. Teams must resolve such
-findings deliberately. The benefit is that uncertainty is never interpreted as permission.
-
-\textbf{Reproducibility remains environment-sensitive.} Fixed time, locale, offline flags and
-clean caches remove many sources of drift. Different compiler or toolchain versions can still
-produce different artifacts. Full byte reproducibility also requires a versioned build
-environment.
-
-\textbf{Process containment is not a sandbox.} Timeouts and process trees stop common leaks,
-but they do not isolate filesystem permissions from malicious tests. Untrusted projects need
-an external virtual-machine or container boundary.
-
-\textbf{The manifest is a self-consistency boundary.} An exact payload inventory detects mixed
-or changed tooling copies only while the bundled manifest remains trusted. Coordinated changes
-to payload and manifest are not authenticated. It must be regenerated after every legitimate
-payload change; a stale manifest blocks portable integration and verification, while a release
-gate must invoke that validation explicitly.
-
-\section{Conclusion}
-
-Moving from a master template to portable tooling is primarily a change in ownership. Profiles
-describe capabilities, adapters provide bounded technology knowledge, and the core publishes
-only verified transactions. Explicit context creates portability; narrow paths and fail-closed
-decisions create safety; separating project state from the replaceable implementation creates
-maintainability.
-
-The case study also marks the limits of that claim. The system cannot make arbitrary external
-code trustworthy, nor can it equalize toolchain versions without a controlled build
-environment. It can make each assumption visible, prove the scope of every change and return
-to a known state after failure. For tooling intended to operate across many independently
-evolved projects, that controlled restraint is the central architectural achievement.
-
+\printbibliography[heading=bibintoc,title={References}]
 \end{document}

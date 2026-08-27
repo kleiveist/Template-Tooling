@@ -91,7 +91,7 @@ _DEPENDENCY_MANIFEST_NAMES = {
     "uv.lock",
     "yarn.lock",
 }
-_TRANSACTIONAL_ACTION_ORDER = ("dependencies", "quality", "tests")
+_TRANSACTIONAL_ACTION_ORDER = ("dependencies", "quality", "tests", "build")
 _RUST_ANALYZER_RUNTIME = PurePosixPath(
     "quality/rust_analyzer/dist/rust_quality_analyzer.wasm"
 )
@@ -660,9 +660,18 @@ def ensure_clean_git(project_root: Path) -> GitPreflight:
         if key.startswith("GIT_"):
             environment.pop(key)
     environment["GIT_OPTIONAL_LOCKS"] = "0"
+    git_command = [
+        "git",
+        "-c",
+        "maintenance.auto=false",
+        "-c",
+        "core.fsmonitor=false",
+        "-C",
+        str(project_root),
+    ]
     try:
         top = subprocess.run(
-            ["git", "-C", str(project_root), "rev-parse", "--show-toplevel"],
+            [*git_command, "rev-parse", "--show-toplevel"],
             check=False,
             capture_output=True,
             text=True,
@@ -679,9 +688,7 @@ def ensure_clean_git(project_root: Path) -> GitPreflight:
             raise IntegrationError("Git preflight resolved a different project root.")
         status = subprocess.run(
             [
-                "git",
-                "-C",
-                str(project_root),
+                *git_command,
                 "status",
                 "--porcelain=v1",
                 "--untracked-files=all",
@@ -1676,6 +1683,8 @@ def _plan_action_requirements(
                 if dependency_manifest and _structured_dependency_change(operation):
                     required.add("dependencies")
                 required.update(("quality", "tests"))
+                if candidate.name in _ACTION_RELEVANT_STRUCTURED_NAMES:
+                    required.add("build")
             if required:
                 by_path.setdefault(path, set()).update(required)
     return tuple(

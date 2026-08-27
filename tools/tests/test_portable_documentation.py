@@ -33,11 +33,17 @@ MARKDOWN_LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 INLINE_CODE = re.compile(r"`([^`\n]+)`")
 BUILD_SUFFIXES = {
     ".aux",
+    ".bbl",
+    ".bcf",
+    ".blg",
     ".fls",
     ".fdb_latexmk",
+    ".lof",
     ".log",
+    ".lot",
     ".out",
     ".pdf",
+    ".run.xml",
     ".toc",
 }
 

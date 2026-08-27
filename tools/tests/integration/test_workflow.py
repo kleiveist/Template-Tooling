@@ -164,9 +164,10 @@ def _snapshot(root: Path) -> dict[str, _TreeEntry]:
                 "file", mode, metadata.st_mtime_ns, path.read_bytes()
             )
         elif stat.S_ISDIR(metadata.st_mode):
-            entries[relative] = _TreeEntry(
-                "directory", mode, metadata.st_mtime_ns, None
-            )
+            # Git may update internal directory mtimes while performing a
+            # read-only status check. File content and membership still catch
+            # every persistent write that matters to this snapshot assertion.
+            entries[relative] = _TreeEntry("directory", mode, 0, None)
         else:
             entries[relative] = _TreeEntry("other", mode, metadata.st_mtime_ns, None)
 
@@ -272,7 +273,7 @@ def test_full_fix_fails_closed_when_staged_tooling_actions_fail(
     assert not (tools / "generated_runtime.py").exists()
 
 
-def test_frontend_script_patch_plans_only_quality_and_tests(
+def test_frontend_script_patch_plans_quality_tests_and_real_build(
     tmp_path: Path,
 ) -> None:
     root, tools = _portable_project(tmp_path)
@@ -281,7 +282,7 @@ def test_frontend_script_patch_plans_only_quality_and_tests(
     assessment = workflow.assess_project(root, tools_root=tools)
     requirements = dict(workflow._plan_action_requirements(assessment))
 
-    assert requirements["frontend/package.json"] == ("quality", "tests")
+    assert requirements["frontend/package.json"] == ("quality", "tests", "build")
     assert "dependencies" not in requirements["frontend/package.json"]
     assert assessment.structured_key_allowlist == {
         "frontend/package.json": frozenset(
@@ -324,7 +325,7 @@ def test_dependency_key_patch_plans_all_transactional_action_kinds(
     )
 
     assert requirements == {
-        "frontend/package.json": ("dependencies", "quality", "tests")
+        "frontend/package.json": ("dependencies", "quality", "tests", "build")
     }
 
 

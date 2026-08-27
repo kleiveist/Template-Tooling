@@ -89,6 +89,14 @@ def test_prepare_dev_cache_uses_legacy_cargo_metadata_once(
     assert commands
 
 
+def test_cargo_metadata_recognizes_foreign_absolute_config_paths() -> None:
+    output = "cargo:rerun-if-changed=C:\\previous\\location\\src-tauri\\tauri.conf.json\n"
+
+    assert cache._tauri_config_paths(output) == {
+        "C:\\previous\\location\\src-tauri\\tauri.conf.json"
+    }
+
+
 def test_prepare_dev_cache_keeps_cache_when_current_metadata_exists(
     monkeypatch, tmp_path
 ) -> None:

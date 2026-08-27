@@ -1,0 +1,129 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  support-matrix:
+    name: Read support matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      python_primary: ${{ steps.matrix.outputs.python_primary }}
+      node_primary: ${{ steps.matrix.outputs.node_primary }}
+      rust_channel: ${{ steps.matrix.outputs.rust_channel }}
+      linux: ${{ steps.matrix.outputs.linux_runner }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: matrix
+        name: Read central support contract
+        run: python tools/ci_support.py --github-output
+
+  gate-zero:
+    name: gate-zero
+    needs: support-matrix
+    runs-on: ${{ needs.support-matrix.outputs.linux }}
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up isolated tooling environment
+        uses: ./.github/actions/setup-tooling-environment
+        with:
+          python-version: ${{ needs.support-matrix.outputs.python_primary }}
+          node-version: ${{ needs.support-matrix.outputs.node_primary }}
+          rust-version: ${{ needs.support-matrix.outputs.rust_channel }}
+      - name: Run concrete Gate 0 capability tests
+        shell: pwsh
+        run: |
+          $junit = Join-Path $env:RUNNER_TEMP "gate-zero.junit.xml"
+          & $env:TOOLING_PYTHON -m pytest -q -p no:cacheprovider --junitxml=$junit tools/tests/adapters/test_builtin_adapters.py tools/tests/adapters/test_profile_structured_mutations.py tools/tests/integration/test_actions.py tools/tests/integration/test_transaction.py tools/tests/integration/test_transaction_project_config.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Refuse synthetic acceptance success for missing implementation
+        shell: pwsh
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP "gate-zero.json"
+          $output = & $env:TOOLING_PYTHON -m tools.ci_gate --require-ready
+          $exitCode = $LASTEXITCODE
+          $output | Set-Content -Path $report -Encoding utf8
+          $output
+          if ($exitCode -ne 0) { exit $exitCode }
+      - name: Upload Gate 0 status
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-gate-zero-status
+          path: |
+            ${{ runner.temp }}/gate-zero.json
+            ${{ runner.temp }}/gate-zero.junit.xml
+          if-no-files-found: warn
+          retention-days: 30
+
+  full-copy-matrix:
+    name: full-copy-matrix
+    needs: [support-matrix, gate-zero]
+    uses: ./.github/workflows/_portable-acceptance.yml
+    with:
+      runner: ${{ needs.support-matrix.outputs.linux }}
+      python-version: ${{ needs.support-matrix.outputs.python_primary }}
+      node-version: ${{ needs.support-matrix.outputs.node_primary }}
+      rust-version: ${{ needs.support-matrix.outputs.rust_channel }}
+      fixture-selection: ""
+      profile-selection: ""
+      include-historical-upgrade: true
+
+  network-capability-tests:
+    name: network-capability-tests
+    needs: support-matrix
+    runs-on: ${{ needs.support-matrix.outputs.linux }}
+    timeout-minutes: 60
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONHASHSEED: "0"
+      PYTHONNOUSERSITE: "1"
+      NODE_VERSION: ${{ needs.support-matrix.outputs.node_primary }}
+      RUST_CHANNEL: ${{ needs.support-matrix.outputs.rust_channel }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up isolated tooling environment
+        uses: ./.github/actions/setup-tooling-environment
+        with:
+          python-version: ${{ needs.support-matrix.outputs.python_primary }}
+          node-version: ${{ needs.support-matrix.outputs.node_primary }}
+          rust-version: ${{ needs.support-matrix.outputs.rust_channel }}
+      - name: Record real Node, npm, and Cargo capability versions
+        shell: pwsh
+        run: |
+          $nodeVersion = (node --version).Trim()
+          $npmVersion = (npm --version).Trim()
+          $cargoVersion = (cargo --version).Trim()
+          $nodeVersion
+          $npmVersion
+          $cargoVersion
+          "node=$nodeVersion" | Out-File -FilePath (Join-Path $env:RUNNER_TEMP "capability-versions.txt") -Encoding utf8
+          "npm=$npmVersion" | Out-File -FilePath (Join-Path $env:RUNNER_TEMP "capability-versions.txt") -Encoding utf8 -Append
+          "cargo=$cargoVersion" | Out-File -FilePath (Join-Path $env:RUNNER_TEMP "capability-versions.txt") -Encoding utf8 -Append
+      - name: Run real locked npm and staged action checks
+        shell: pwsh
+        run: |
+          & $env:TOOLING_PYTHON -m pytest -q -p no:cacheprovider tools/tests/integration/test_actions.py tools/tests/test_process.py tools/tests/system
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload capability evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-capability-evidence
+          path: ${{ runner.temp }}/capability-versions.txt
+          if-no-files-found: warn
+          retention-days: 30

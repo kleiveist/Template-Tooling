@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from tools.core.filesystem import FilesystemSafetyError, safe_relative_path
 from tools.core.portable_payload import PAYLOAD_MANIFEST_NAME, validate_portable_payload
 from tools.integration import export as export_module
 from tools.integration import service
@@ -242,6 +243,14 @@ def test_export_rejects_symlinks_without_publishing_a_partial_target(
         ("tools/generated.whl", False, "protected file"),
         ("docs/toolingdocs/coverage.xml", False, "protected file"),
         ("docs/toolingdocs/lcov.info", False, "protected file"),
+        ("docs/toolingdocs/case-study/main.bbl", False, "protected file"),
+        ("docs/toolingdocs/case-study/main.bcf", False, "protected file"),
+        ("docs/toolingdocs/case-study/main.blg", False, "protected file"),
+        ("docs/toolingdocs/case-study/main.lof", False, "protected file"),
+        ("docs/toolingdocs/case-study/main.lot", False, "protected file"),
+        ("docs/toolingdocs/case-study/main.run.xml", False, "protected file"),
+        ("docs/toolingdocs/case-study/output", True, "protected directory"),
+        ("docs/toolingdocs/case-study/generated", True, "protected directory"),
     ),
 )
 def test_export_fails_closed_for_nonportable_objects(
@@ -251,15 +260,21 @@ def test_export_fails_closed_for_nonportable_objects(
     message: str,
 ) -> None:
     _project, tools = _source(tmp_path)
+    output = tmp_path / "output"
+    output.mkdir()
+    if os.name == "nt" and relative == "tools/bad?.py":
+        # NTFS refuses '?' before export can enumerate the object. Exercise the
+        # exact canonical path guard used by export without weakening coverage.
+        with pytest.raises(FilesystemSafetyError, match=message):
+            safe_relative_path(relative)
+        assert not tuple(output.iterdir())
+        return
     path = tmp_path / "source" / relative
     if is_directory:
         path.mkdir(parents=True)
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("not portable\n", encoding="utf-8")
-    output = tmp_path / "output"
-    output.mkdir()
-
     with pytest.raises(ExportError, match=message):
         export_portable_tooling(output_parent=output, tools_root=tools)
 
@@ -268,6 +283,7 @@ def test_export_fails_closed_for_nonportable_objects(
 
 def test_export_rejects_file_and_empty_directory_case_collisions(
     tmp_path: Path,
+    case_sensitive_filesystem: None,
 ) -> None:
     _project, tools = _source(tmp_path)
     (tools / "Demo.py").write_text("A = 1\n", encoding="utf-8")
