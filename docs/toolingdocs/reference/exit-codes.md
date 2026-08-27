@@ -1,7 +1,7 @@
 # Exit codes
 
 <!-- AUTO-GENERATED:backlink START -->
-[Reference](reference.md)
+[← Back](reference.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 The control command follows these common conventions:

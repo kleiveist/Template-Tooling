@@ -1,7 +1,7 @@
 # Migration, verification and drift
 
 <!-- AUTO-GENERATED:backlink START -->
-[Integration overview](integration.md)
+[← Back](integration.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Tooling migrations are registry entries with an exact source/target version and state

@@ -1,7 +1,7 @@
 # Adapter contract
 
 <!-- AUTO-GENERATED:backlink START -->
-[Reference](reference.md)
+[← Back](reference.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 An adapter is selected by core policy or a profile feature. It may observe project

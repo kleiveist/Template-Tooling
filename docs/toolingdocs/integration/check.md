@@ -1,7 +1,7 @@
 # Check
 
 <!-- AUTO-GENERATED:backlink START -->
-[Integration overview](integration.md)
+[← Back](integration.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Run a read-only assessment with:

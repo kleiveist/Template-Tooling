@@ -1,7 +1,7 @@
 # Upgrade matrix
 
 <!-- AUTO-GENERATED:backlink START -->
-[Acceptance](acceptance.md)
+[← Back](acceptance.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Upgrade coverage uses real, individually pinned historical payloads rather than newly

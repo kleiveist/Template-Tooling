@@ -1,7 +1,7 @@
 # Selecting a profile
 
 <!-- AUTO-GENERATED:backlink START -->
-[Guides](guides.md)
+[← Back](guides.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 The built-in profiles are `web-only`, `web-cloud`, `desktop-local`, `desktop-cloud`

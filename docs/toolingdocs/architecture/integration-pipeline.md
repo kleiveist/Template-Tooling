@@ -1,7 +1,7 @@
 # Integration pipeline
 
 <!-- AUTO-GENERATED:backlink START -->
-[Architecture](architecture.md)
+[← Back](architecture.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Integration follows one deterministic pipeline:

@@ -1,7 +1,7 @@
 # Profiles, features and adapters
 
 <!-- AUTO-GENERATED:backlink START -->
-[Architecture overview](architecture.md)
+[← Back](architecture.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Profiles are versioned TOML resources under `tools/resources/profiles/`. A profile

@@ -1,5 +1,5 @@
 <!-- AUTO-GENERATED:backlink START -->
-[Case study](case-study.md)
+[← Back](case-study.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 # Template compatibility audit

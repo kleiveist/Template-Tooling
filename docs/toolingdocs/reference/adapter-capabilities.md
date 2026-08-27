@@ -1,7 +1,7 @@
 # Adapter capabilities reference
 
 <!-- AUTO-GENERATED:backlink START -->
-[Reference overview](reference.md)
+[← Back](reference.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Invoke one live, profile-selected capability with:

@@ -1,5 +1,5 @@
 <!-- AUTO-GENERATED:backlink START -->
-[Portable tooling documentation](../index.md)
+[← Back](../toolingdocs.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 # Portable tooling case study / Fallstudie zum portablen Tooling
@@ -68,6 +68,24 @@ state belongs in this source tree. / PDFs, Hilfsdateien, Biber-Ausgaben, SyncTeX
 gerenderte Diagramme und sonstiger TeX-Build-Zustand gehören nicht in diesen Quellbaum.
 
 <!-- AUTO-GENERATED:docs-index START -->
-- [Case-study guidelines](CASE-STUDY-GUIDELINES.md)
-- [Template compatibility audit](TEMPLATE-COMPATIBILITY.md)
+
+## 📄 Pages
+- 📝 [Case-study guidelines](CASE-STUDY-GUIDELINES.md)
+- 📝 [Template compatibility audit](TEMPLATE-COMPATIBILITY.md)
+
+## 📁 Assets
+- 🗂️ [Overview](assets/assets.md)
+
+## 📁 Evidence
+- 🗂️ [Overview](evidence/evidence.md)
+
+## 📁 Scripts
+- 🗂️ [Overview](scripts/scripts.md)
+
+## 📁 Source
+- 🗂️ [Overview](source/source.md)
+
+## 📁 Tests
+- 🗂️ [Overview](tests/tests.md)
+
 <!-- AUTO-GENERATED:docs-index END -->

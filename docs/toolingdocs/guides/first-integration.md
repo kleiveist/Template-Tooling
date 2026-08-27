@@ -1,7 +1,7 @@
 # First integration
 
 <!-- AUTO-GENERATED:backlink START -->
-[Guides](guides.md)
+[← Back](guides.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 From the root of a project that already contains the copied portable payload, start

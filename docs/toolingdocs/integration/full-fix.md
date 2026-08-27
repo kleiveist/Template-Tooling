@@ -1,7 +1,7 @@
 # Full-Fix
 
 <!-- AUTO-GENERATED:backlink START -->
-[Integration](integration.md)
+[← Back](integration.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Run the complete supported integration plan only after reviewing Check:

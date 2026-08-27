@@ -1,7 +1,7 @@
 # Full-Fix and actions
 
 <!-- AUTO-GENERATED:backlink START -->
-[Integration overview](integration.md)
+[← Back](integration.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Run the complete supported integration plan with:

@@ -1,7 +1,7 @@
 # Release gates
 
 <!-- AUTO-GENERATED:backlink START -->
-[Acceptance](acceptance.md)
+[← Back](acceptance.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 A release candidate needs evidence from the exact candidate revision, not an inference

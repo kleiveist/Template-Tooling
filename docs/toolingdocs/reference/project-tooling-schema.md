@@ -1,7 +1,7 @@
 # Project-tooling schema
 
 <!-- AUTO-GENERATED:backlink START -->
-[Reference](reference.md)
+[← Back](reference.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 `project-tooling.toml` is the project-owned, versioned decision record. Schema version

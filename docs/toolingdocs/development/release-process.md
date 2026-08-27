@@ -1,7 +1,7 @@
 # Release process
 
 <!-- AUTO-GENERATED:backlink START -->
-[Development](development.md)
+[← Back](development.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Prepare a release from a reviewed revision with a clean, understood worktree. Run the

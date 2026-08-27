@@ -1,7 +1,7 @@
 # CI and acceptance
 
 <!-- AUTO-GENERATED:backlink START -->
-[Architecture](architecture.md)
+[← Back](architecture.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Acceptance is evidence from independent copies, not a claim that every application

@@ -1,7 +1,7 @@
 # State schema
 
 <!-- AUTO-GENERATED:backlink START -->
-[Reference](reference.md)
+[← Back](reference.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 `.tooling-state/state.toml` is tooling-owned persistent integration state. Its schema

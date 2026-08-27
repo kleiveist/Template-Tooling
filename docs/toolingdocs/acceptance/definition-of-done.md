@@ -1,5 +1,5 @@
 <!-- AUTO-GENERATED:backlink START -->
-[← Acceptance](acceptance.md)
+[← Back](acceptance.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 # Definition of done

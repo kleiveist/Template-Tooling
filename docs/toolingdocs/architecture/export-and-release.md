@@ -1,7 +1,7 @@
 # Export and release boundary
 
 <!-- AUTO-GENERATED:backlink START -->
-[Architecture](architecture.md)
+[← Back](architecture.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 `tooling export` produces a portable directory containing only the reviewed `tools/`

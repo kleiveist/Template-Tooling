@@ -1,7 +1,7 @@
 # Verification
 
 <!-- AUTO-GENERATED:backlink START -->
-[Integration](integration.md)
+[← Back](integration.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Verify an integrated target without changing it:

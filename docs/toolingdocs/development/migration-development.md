@@ -1,7 +1,7 @@
 # Migration development
 
 <!-- AUTO-GENERATED:backlink START -->
-[Development](development.md)
+[← Back](development.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 A migration is an exact, registered reconciliation of tooling/state versions; it is

@@ -1,7 +1,7 @@
 # Evidence index
 
 <!-- AUTO-GENERATED:backlink START -->
-[Acceptance](acceptance.md)
+[← Back](acceptance.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Acceptance evidence should be traceable to an exact revision, command and environment.

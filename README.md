@@ -1,3 +1,15 @@
+<!-- AUTO-GENERATED:docs-index START -->
+
+## 📄 Files
+- 📝 [Portable Tooling – Workflow-Abschluss und Übergabe](WORKFLOW-HANDOFF.md)
+
+# DOCS
+- 📚 [Docs Home](docs/index.md)
+
+## 📁 Toolingdocs
+- 🗂️ [Overview](docs/toolingdocs/toolingdocs.md)
+
+<!-- AUTO-GENERATED:docs-index END -->
 # Template Tooling
 
 > **Repository-only documentation.** This README is not included in any portable export.

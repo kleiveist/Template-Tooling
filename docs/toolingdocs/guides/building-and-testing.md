@@ -1,7 +1,7 @@
 # Building and testing
 
 <!-- AUTO-GENERATED:backlink START -->
-[Guides](guides.md)
+[← Back](guides.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Integration validation and product work have different boundaries. First establish a

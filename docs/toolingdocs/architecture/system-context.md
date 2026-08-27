@@ -1,7 +1,7 @@
 # System context
 
 <!-- AUTO-GENERATED:backlink START -->
-[Architecture](architecture.md)
+[← Back](architecture.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Portable Tooling operates inside a project that the operator already owns. The copied

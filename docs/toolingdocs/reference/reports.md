@@ -1,7 +1,7 @@
 # Reports reference
 
 <!-- AUTO-GENERATED:backlink START -->
-[Reference overview](reference.md)
+[← Back](reference.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Read-only Check and Verify do not create reports. A mutating Full-Fix or migration can

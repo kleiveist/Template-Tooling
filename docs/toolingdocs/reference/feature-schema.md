@@ -1,7 +1,7 @@
 # Feature schema
 
 <!-- AUTO-GENERATED:backlink START -->
-[Reference](reference.md)
+[← Back](reference.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 `tools/resources/profiles/features.toml` starts with schema version 1 and a non-empty

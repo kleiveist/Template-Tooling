@@ -1,7 +1,7 @@
 # Profile schema
 
 <!-- AUTO-GENERATED:backlink START -->
-[Reference](reference.md)
+[← Back](reference.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Each profile resource is a TOML file below `tools/resources/profiles/` whose filename

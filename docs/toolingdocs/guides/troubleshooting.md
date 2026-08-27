@@ -1,7 +1,7 @@
 # Troubleshooting
 
 <!-- AUTO-GENERATED:backlink START -->
-[Guides](guides.md)
+[← Back](guides.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Start with the read-only commands and keep their output:

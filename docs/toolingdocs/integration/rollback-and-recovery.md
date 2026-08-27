@@ -1,7 +1,7 @@
 # Rollback and recovery
 
 <!-- AUTO-GENERATED:backlink START -->
-[Integration](integration.md)
+[← Back](integration.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Rollback is available only for the bounded transaction used by a non-empty Full-Fix or

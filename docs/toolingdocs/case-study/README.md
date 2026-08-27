@@ -1,3 +1,6 @@
+<!-- AUTO-GENERATED:backlink START -->
+[← Back](case-study.md)
+<!-- AUTO-GENERATED:backlink END -->
 # Case-study working area
 
 This directory is the sole source location for the portable-tooling case study.

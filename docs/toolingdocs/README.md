@@ -1,3 +1,6 @@
+<!-- AUTO-GENERATED:backlink START -->
+[← Back](toolingdocs.md)
+<!-- AUTO-GENERATED:backlink END -->
 # Portable tooling documentation
 
 This directory is the complete, portable documentation boundary for the tooling. Start with

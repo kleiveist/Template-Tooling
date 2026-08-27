@@ -1,7 +1,7 @@
 # Migrations
 
 <!-- AUTO-GENERATED:backlink START -->
-[Integration](integration.md)
+[← Back](integration.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Use the tooling migration registry after replacing a reviewed portable payload with a

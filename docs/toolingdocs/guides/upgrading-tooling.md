@@ -1,7 +1,7 @@
 # Upgrading tooling
 
 <!-- AUTO-GENERATED:backlink START -->
-[Guides](guides.md)
+[← Back](guides.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 An upgrade has two boundaries: replace the reviewed portable payload pair, then migrate

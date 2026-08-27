@@ -1,7 +1,7 @@
 # Project context and paths
 
 <!-- AUTO-GENERATED:backlink START -->
-[Architecture overview](architecture.md)
+[← Back](architecture.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 `ProjectContext` is the single source of truth for paths. By default, the copied

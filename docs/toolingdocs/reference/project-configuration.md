@@ -1,7 +1,7 @@
 # Project configuration reference
 
 <!-- AUTO-GENERATED:backlink START -->
-[Reference overview](reference.md)
+[← Back](reference.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 `project-tooling.toml` is the persistent, project-owned decision record that survives

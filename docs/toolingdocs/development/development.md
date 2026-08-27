@@ -1,5 +1,5 @@
 <!-- AUTO-GENERATED:backlink START -->
-[← Tooling documentation](../index.md)
+[← Back](../toolingdocs.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 # Development
@@ -10,14 +10,17 @@ structured fields. New technology-specific behavior belongs behind an adapter se
 active profile.
 
 <!-- AUTO-GENERATED:docs-index START -->
-- [Adapter development](adapter-development.md)
-- [Contribution guide](contribution.md)
-- [Documentation development](documentation-development.md)
-- [Fixture development](fixture-development.md)
-- [Migration development](migration-development.md)
-- [Refactor inventory](refactor-inventory.md)
-- [Release process](release-process.md)
-- [Security boundaries](security-boundaries.md)
+
+## 📄 Pages
+- 📝 [Adapter development](adapter-development.md)
+- 📝 [Contribution guide](contribution.md)
+- 📝 [Documentation development](documentation-development.md)
+- 📝 [Fixture development](fixture-development.md)
+- 📝 [Migration development](migration-development.md)
+- 📝 [Refactor inventory](refactor-inventory.md)
+- 📝 [Release process](release-process.md)
+- 📝 [Security boundaries](security-boundaries.md)
+
 <!-- AUTO-GENERATED:docs-index END -->
 
 Start with the [contribution guide](contribution.md) for the change workflow. Review the

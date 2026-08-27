@@ -1,7 +1,7 @@
 # Fixture development
 
 <!-- AUTO-GENERATED:backlink START -->
-[Development](development.md)
+[← Back](development.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Fixtures represent independent target projects, not hidden copies of this repository's

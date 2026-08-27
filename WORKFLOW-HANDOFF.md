@@ -1,3 +1,6 @@
+<!-- AUTO-GENERATED:backlink START -->
+[← Back](README.md)
+<!-- AUTO-GENERATED:backlink END -->
 # Portable Tooling – Workflow-Abschluss und Übergabe
 
 - Stand: 26. August 2026

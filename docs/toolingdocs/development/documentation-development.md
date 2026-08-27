@@ -1,7 +1,7 @@
 # Documentation development
 
 <!-- AUTO-GENERATED:backlink START -->
-[Development](development.md)
+[← Back](development.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Portable documentation lives only below `docs/toolingdocs/`. Describe implemented

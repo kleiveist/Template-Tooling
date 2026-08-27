@@ -1,7 +1,7 @@
 # Test matrix
 
 <!-- AUTO-GENERATED:backlink START -->
-[Acceptance](acceptance.md)
+[← Back](acceptance.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 The acceptance matrix tests the copied payload in fresh temporary target projects.

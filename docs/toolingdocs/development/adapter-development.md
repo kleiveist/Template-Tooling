@@ -1,7 +1,7 @@
 # Adapter development
 
 <!-- AUTO-GENERATED:backlink START -->
-[Development](development.md)
+[← Back](development.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Add a technology-specific adapter only behind the profile/feature catalog and the

@@ -1,5 +1,5 @@
 <!-- AUTO-GENERATED:backlink START -->
-[← Tooling documentation](../index.md)
+[← Back](../toolingdocs.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 # Acceptance
@@ -9,14 +9,17 @@ unit test is not sufficient: the copied runtime must detect, plan, integrate, ve
 repeat without gaining ownership of product content.
 
 <!-- AUTO-GENERATED:docs-index START -->
-- [Copy matrix](copy-matrix.md)
-- [Definition of done](definition-of-done.md)
-- [Evidence index](evidence-index.md)
-- [Profile matrix](profile-matrix.md)
-- [Release gates](release-gates.md)
-- [Rollback matrix](rollback-matrix.md)
-- [Test matrix](test-matrix.md)
-- [Upgrade matrix](upgrade-matrix.md)
+
+## 📄 Pages
+- 📝 [Copy matrix](copy-matrix.md)
+- 📝 [Definition of done](definition-of-done.md)
+- 📝 [Evidence index](evidence-index.md)
+- 📝 [Profile matrix](profile-matrix.md)
+- 📝 [Release gates](release-gates.md)
+- 📝 [Rollback matrix](rollback-matrix.md)
+- 📝 [Test matrix](test-matrix.md)
+- 📝 [Upgrade matrix](upgrade-matrix.md)
+
 <!-- AUTO-GENERATED:docs-index END -->
 
 The [copy matrix](copy-matrix.md) defines the fixture and historical-replacement evidence. The

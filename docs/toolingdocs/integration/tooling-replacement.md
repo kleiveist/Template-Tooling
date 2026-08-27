@@ -1,7 +1,7 @@
 # Tooling replacement
 
 <!-- AUTO-GENERATED:backlink START -->
-[Integration](integration.md)
+[← Back](integration.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Replace portable tooling as a pair: `tools/` and the configured

@@ -1,7 +1,7 @@
 # CLI reference
 
 <!-- AUTO-GENERATED:backlink START -->
-[Reference overview](reference.md)
+[← Back](reference.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 The portable entry point is `python tools/control.py`. Integration commands take the

@@ -1,7 +1,7 @@
 # Tooling state reference
 
 <!-- AUTO-GENERATED:backlink START -->
-[Reference overview](reference.md)
+[← Back](reference.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 The generated state file is `.tooling-state/state.toml`. Its current schema is 1 and its

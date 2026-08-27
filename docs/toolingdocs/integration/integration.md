@@ -1,7 +1,7 @@
 # Integration
 
 <!-- AUTO-GENERATED:backlink START -->
-[Portable tooling documentation](../index.md)
+[← Back](../toolingdocs.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Portable integration compares the target project with one persisted or detected
@@ -28,12 +28,15 @@ inside integration staging.
 ## Integration pages
 
 <!-- AUTO-GENERATED:docs-index START -->
-- [Check](check.md)
-- [Full-Fix](full-fix.md)
-- [Full-Fix and actions](full-fix-and-actions.md)
-- [Migration, verification and drift](migration-verification-and-drift.md)
-- [Migrations](migrations.md)
-- [Rollback and recovery](rollback-and-recovery.md)
-- [Tooling replacement](tooling-replacement.md)
-- [Verification](verification.md)
+
+## 📄 Pages
+- 📝 [Check](check.md)
+- 📝 [Full-Fix and actions](full-fix-and-actions.md)
+- 📝 [Full-Fix](full-fix.md)
+- 📝 [Migration, verification and drift](migration-verification-and-drift.md)
+- 📝 [Migrations](migrations.md)
+- 📝 [Rollback and recovery](rollback-and-recovery.md)
+- 📝 [Tooling replacement](tooling-replacement.md)
+- 📝 [Verification](verification.md)
+
 <!-- AUTO-GENERATED:docs-index END -->

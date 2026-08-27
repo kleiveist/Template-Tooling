@@ -1,5 +1,5 @@
 <!-- AUTO-GENERATED:backlink START -->
-[← Guides](guides.md)
+[← Back](guides.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 # Run tests

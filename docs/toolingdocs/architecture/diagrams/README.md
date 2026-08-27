@@ -1,3 +1,6 @@
+<!-- AUTO-GENERATED:backlink START -->
+[← Back](diagrams.md)
+<!-- AUTO-GENERATED:backlink END -->
 # Architecture diagram sources
 
 Architecture diagrams that are part of the portable tooling documentation are maintained as

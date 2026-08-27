@@ -1,7 +1,7 @@
 # Ownership and state
 
 <!-- AUTO-GENERATED:backlink START -->
-[Architecture overview](architecture.md)
+[← Back](architecture.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Every planned operation has one ownership class. The transaction validates that class

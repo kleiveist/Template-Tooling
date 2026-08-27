@@ -1,7 +1,7 @@
 # Rollback matrix
 
 <!-- AUTO-GENERATED:backlink START -->
-[Acceptance](acceptance.md)
+[← Back](acceptance.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Fault-injection cases prove the limits of the integration transaction rather than

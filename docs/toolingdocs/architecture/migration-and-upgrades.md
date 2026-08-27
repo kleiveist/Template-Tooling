@@ -1,7 +1,7 @@
 # Migration and upgrades
 
 <!-- AUTO-GENERATED:backlink START -->
-[Architecture](architecture.md)
+[← Back](architecture.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Replacing a portable tooling payload and migrating an integrated project are distinct

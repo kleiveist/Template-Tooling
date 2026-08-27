@@ -1,7 +1,7 @@
 # Architecture
 
 <!-- AUTO-GENERATED:backlink START -->
-[Portable tooling documentation](../index.md)
+[← Back](../toolingdocs.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Template-Tooling is copied into a target project and then resolves that project from
@@ -30,15 +30,21 @@ live operations outside Full-Fix.
 ## Architecture pages
 
 <!-- AUTO-GENERATED:docs-index START -->
-- [CI and acceptance](ci-and-acceptance.md)
-- [Export and release boundary](export-and-release.md)
-- [Integration pipeline](integration-pipeline.md)
-- [Migration and upgrades](migration-and-upgrades.md)
-- [Ownership and state](ownership-and-state.md)
-- [Ownership, state and transactions](ownership-state-and-transactions.md)
-- [Profiles, features and adapters](profiles-features-and-adapters.md)
-- [Project context and paths](project-context-and-paths.md)
-- [System context](system-context.md)
+
+## 📄 Pages
+- 📝 [CI and acceptance](ci-and-acceptance.md)
+- 📝 [Export and release boundary](export-and-release.md)
+- 📝 [Integration pipeline](integration-pipeline.md)
+- 📝 [Migration and upgrades](migration-and-upgrades.md)
+- 📝 [Ownership and state](ownership-and-state.md)
+- 📝 [Ownership, state and transactions](ownership-state-and-transactions.md)
+- 📝 [Profiles, features and adapters](profiles-features-and-adapters.md)
+- 📝 [Project context and paths](project-context-and-paths.md)
+- 📝 [System context](system-context.md)
+
+## 📁 Diagrams
+- 🗂️ [Overview](diagrams/diagrams.md)
+
 <!-- AUTO-GENERATED:docs-index END -->
 
 For operational behavior, continue with the [integration overview](../integration/integration.md).

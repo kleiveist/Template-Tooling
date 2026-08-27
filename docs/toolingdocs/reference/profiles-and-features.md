@@ -1,7 +1,7 @@
 # Profiles and features reference
 
 <!-- AUTO-GENERATED:backlink START -->
-[Reference overview](reference.md)
+[← Back](reference.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 The built-in catalog uses schema version 1.

@@ -1,7 +1,7 @@
 # Custom project paths
 
 <!-- AUTO-GENERATED:backlink START -->
-[Guides](guides.md)
+[← Back](guides.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 `project-tooling.toml` can describe non-default project layout through `paths.frontend`,

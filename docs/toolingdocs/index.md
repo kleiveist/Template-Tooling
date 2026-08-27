@@ -1,3 +1,6 @@
+<!-- AUTO-GENERATED:backlink START -->
+[← Back](toolingdocs.md)
+<!-- AUTO-GENERATED:backlink END -->
 # Portable tooling documentation
 
 This documentation travels with the `tools/` directory. It explains the observed

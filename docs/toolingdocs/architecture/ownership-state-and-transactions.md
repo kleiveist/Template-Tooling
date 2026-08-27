@@ -1,7 +1,7 @@
 # Ownership, state and transactions
 
 <!-- AUTO-GENERATED:backlink START -->
-[Architecture](architecture.md)
+[← Back](architecture.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Every integration operation is classified as `tooling`, `structured`, or `project`.

@@ -1,3 +1,6 @@
+<!-- AUTO-GENERATED:backlink START -->
+[← Back](releases.md)
+<!-- AUTO-GENERATED:backlink END -->
 # Release evidence boundary
 
 Release and CI evidence is generated into the CI artifact store, not committed to this

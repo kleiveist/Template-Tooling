@@ -1,5 +1,5 @@
 <!-- AUTO-GENERATED:backlink START -->
-[← Development](development.md)
+[← Back](development.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 # Refactor inventory

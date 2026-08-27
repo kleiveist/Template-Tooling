@@ -1,7 +1,7 @@
 # Report schema
 
 <!-- AUTO-GENERATED:backlink START -->
-[Reference](reference.md)
+[← Back](reference.md)
 <!-- AUTO-GENERATED:backlink END -->
 
 Mutating Full-Fix and migration runs can publish a timestamped directory below
