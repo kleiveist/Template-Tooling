@@ -448,10 +448,11 @@ def _validate_symlink(
 ) -> None:
     try:
         link_target = Path(os.readlink(path))
-        target_path = (
-            link_target if link_target.is_absolute() else path.parent / link_target
+        target = (
+            path.resolve(strict=True)
+            if link_target.is_absolute()
+            else (path.parent / link_target).resolve(strict=True)
         )
-        target = target_path.resolve(strict=True)
     except (OSError, RuntimeError) as exc:
         raise ManifestError(
             f"Managed path is a broken symbolic link: {relative}."

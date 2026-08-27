@@ -1285,8 +1285,8 @@
     },
     {
       "path": "tools/core/manifest.py",
-      "sha256": "sha256:f27449a205343781faee3fecf13a69756f0b8c5a7600e67b6a7f12c1fb314e1e",
-      "size": 20706,
+      "sha256": "sha256:58f8d0945c3285feff66dea0f13bcecbc977d5d921662b97b44ff9b5d3fb05ab",
+      "size": 20712,
       "kind": "file",
       "executable": false
     },
@@ -2614,5 +2614,5 @@
       "executable": false
     }
   ],
-  "digest": "sha256:1b6418b7d18b50e19a1df84a9652a1864c3c26f1e728e5bb5945f07f8b8058c8"
+  "digest": "sha256:7c64e3358fdcb61261bade32950ef58f3a9ee7172bdae0eb1c6c255bd0a394b8"
 }
