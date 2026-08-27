@@ -28,7 +28,7 @@ SKIP_CALLS = frozenset(
 )
 # Raise this only with a technical reason in the changed test and review of the
 # resulting CI evidence.  Decreases are harmless and need no policy update.
-MAXIMUM_SKIP_SITES = 57
+MAXIMUM_SKIP_SITES = 58
 
 
 @dataclass(frozen=True, slots=True)

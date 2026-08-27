@@ -161,7 +161,7 @@ def test_manifest_loader_rejects_duplicate_keys_and_version_mismatch(
         )
 
 
-def test_generator_rejects_symlinks_protected_artifacts_and_case_collisions(
+def test_generator_rejects_symlinks_and_protected_artifacts(
     tmp_path: Path,
 ) -> None:
     root, tools, docs = _payload(tmp_path)
@@ -179,6 +179,13 @@ def test_generator_rejects_symlinks_protected_artifacts_and_case_collisions(
     with pytest.raises(PortablePayloadError, match="protected directory"):
         _write(root, tools, docs)
     (tools / "__pycache__").rmdir()
+
+
+def test_generator_rejects_case_collisions(
+    tmp_path: Path,
+    case_sensitive_filesystem: None,
+) -> None:
+    root, tools, docs = _payload(tmp_path)
 
     (tools / "Demo.py").write_text("A = 1\n", encoding="utf-8")
     (tools / "demo.py").write_text("A = 2\n", encoding="utf-8")

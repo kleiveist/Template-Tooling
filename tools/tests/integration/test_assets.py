@@ -40,7 +40,9 @@ def test_packaged_asset_read_and_atomic_copy_are_bounded(tmp_path: Path) -> None
 
     assert copied == destination / "tools/resources/profiles/web-only.toml"
     assert copied.read_bytes() == content
-    assert copied.stat().st_mode & 0o777 == 0o644
+    assert not copied.stat().st_mode & 0o111
+    if os.name != "nt":
+        assert copied.stat().st_mode & 0o777 == 0o644
 
 
 @pytest.mark.parametrize(

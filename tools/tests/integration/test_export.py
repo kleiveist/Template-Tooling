@@ -276,6 +276,7 @@ def test_export_fails_closed_for_nonportable_objects(
 
 def test_export_rejects_file_and_empty_directory_case_collisions(
     tmp_path: Path,
+    case_sensitive_filesystem: None,
 ) -> None:
     _project, tools = _source(tmp_path)
     (tools / "Demo.py").write_text("A = 1\n", encoding="utf-8")

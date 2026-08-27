@@ -149,7 +149,10 @@ def test_stop_never_signals_reused_pid(monkeypatch, tmp_path: Path) -> None:
         ),
     )
     monkeypatch.setattr(
-        run.os, "killpg", lambda group, sig: signals.append((group, sig))
+        run.os,
+        "killpg",
+        lambda group, sig: signals.append((group, sig)),
+        raising=False,
     )
 
     assert run.stop() == 1
@@ -173,7 +176,10 @@ def test_stop_never_signals_process_with_different_argv(
         lambda _pid: ("python", "unrelated-service.py", "--config", "{}"),
     )
     monkeypatch.setattr(
-        run.os, "killpg", lambda group, sig: signals.append((group, sig))
+        run.os,
+        "killpg",
+        lambda group, sig: signals.append((group, sig)),
+        raising=False,
     )
 
     assert run.stop() == 1
@@ -190,7 +196,10 @@ def test_stop_refuses_symlink_state_without_signaling(
     (runtime_dir / "tauri_run_state.json").symlink_to(external)
     signals: list[tuple[int, int]] = []
     monkeypatch.setattr(
-        run.os, "killpg", lambda group, sig: signals.append((group, sig))
+        run.os,
+        "killpg",
+        lambda group, sig: signals.append((group, sig)),
+        raising=False,
     )
 
     assert run.stop() == 1

@@ -164,9 +164,10 @@ def _snapshot(root: Path) -> dict[str, _TreeEntry]:
                 "file", mode, metadata.st_mtime_ns, path.read_bytes()
             )
         elif stat.S_ISDIR(metadata.st_mode):
-            entries[relative] = _TreeEntry(
-                "directory", mode, metadata.st_mtime_ns, None
-            )
+            # Git may update internal directory mtimes while performing a
+            # read-only status check. File content and membership still catch
+            # every persistent write that matters to this snapshot assertion.
+            entries[relative] = _TreeEntry("directory", mode, 0, None)
         else:
             entries[relative] = _TreeEntry("other", mode, metadata.st_mtime_ns, None)
 

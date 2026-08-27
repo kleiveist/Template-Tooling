@@ -77,6 +77,7 @@ def test_transaction_stages_journals_and_commits_tooling_state_last(
     managed = root / "tools/managed.txt"
     managed.write_bytes(old)
     managed.chmod(0o755)
+    original_mode = managed.stat().st_mode & 0o777
     plan = IntegrationPlan(
         profile="web-only",
         desired_features=("quality",),
@@ -123,7 +124,7 @@ def test_transaction_stages_journals_and_commits_tooling_state_last(
     assert result.ok
     assert result.applied_operations == plan.operations
     assert (root / "tools/managed.txt").read_bytes() == b"new tooling\n"
-    assert (root / "tools/managed.txt").stat().st_mode & 0o777 == 0o755
+    assert (root / "tools/managed.txt").stat().st_mode & 0o777 == original_mode
     assert (root / "tools/nested/new.txt").read_bytes() == b"new file\n"
     assert (root / ".tooling-state/state.json").read_bytes() == b"{}\n"
     assert replacements[-1] == ".tooling-state/state.json"
@@ -541,6 +542,7 @@ def test_post_verification_failure_rolls_back_every_affected_path(
     original = root / "tools/managed.txt"
     original.write_bytes(old)
     original.chmod(0o751)
+    original_mode = original.stat().st_mode & 0o777
     plan = IntegrationPlan(
         operations=(
             Operation(
@@ -574,7 +576,7 @@ def test_post_verification_failure_rolls_back_every_affected_path(
         _apply(root, plan, verifier)
 
     assert original.read_bytes() == old
-    assert original.stat().st_mode & 0o777 == 0o751
+    assert original.stat().st_mode & 0o777 == original_mode
     assert not (root / "tools/added.txt").exists()
     assert not (root / ".tooling-state/state.json").exists()
     assert (root / ".tooling-state/reports/journal.json").is_file()

@@ -66,7 +66,8 @@ def test_explicit_path_manifest_never_claims_unselected_product_files(
     assert manifest.managed_paths == tuple(sorted(selected))
     assert tuple(manifest.by_path()) == tuple(sorted(selected))
     assert "frontend/src/product.ts" not in manifest.by_path()
-    assert manifest.by_path()["tools/run-tool"].executable
+    expected_executable = bool((first / "tools/run-tool").stat().st_mode & 0o111)
+    assert manifest.by_path()["tools/run-tool"].executable is expected_executable
     assert "alpha\n" not in render_manifest(manifest)
 
 
@@ -168,7 +169,10 @@ def test_empty_scopes_are_bound_into_the_manifest_digest(tmp_path: Path) -> None
     assert tools.digest != docs.digest
 
 
-def test_manifest_rejects_case_colliding_paths(tmp_path: Path) -> None:
+def test_manifest_rejects_case_colliding_paths(
+    tmp_path: Path,
+    case_sensitive_filesystem: None,
+) -> None:
     root = tmp_path / "project"
     (root / "tools").mkdir(parents=True)
     (root / "tools/A").write_text("one\n", encoding="utf-8")

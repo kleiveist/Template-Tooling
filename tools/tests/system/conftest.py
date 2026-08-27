@@ -95,7 +95,9 @@ def safe_environment(extra: Mapping[str, str] | None = None) -> dict[str, str]:
         {
             "PYTHONDONTWRITEBYTECODE": "1",
             "PYTHONHASHSEED": "0",
+            "PYTHONIOENCODING": "utf-8",
             "PYTHONNOUSERSITE": "1",
+            "PYTHONUTF8": "1",
         }
     )
     if extra:

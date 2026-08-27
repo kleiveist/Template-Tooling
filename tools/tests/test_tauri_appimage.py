@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import stat
 from pathlib import Path
 
@@ -575,7 +576,8 @@ def test_tauri_appimage_install_copies_artifact_icon_and_desktop_entry(monkeypat
     desktop_entry = home / ".local" / "share" / "applications" / f"{paths.APP_SLUG}.desktop"
     assert code == 0
     assert installed_appimage.read_bytes() == b"appimage"
-    assert installed_appimage.stat().st_mode & 0o111
+    if os.name != "nt":
+        assert installed_appimage.stat().st_mode & 0o111
     assert installed_icon.read_bytes() == b"png"
     assert f"Name={paths.APP_NAME}" in desktop_entry.read_text(encoding="utf-8")
 
