@@ -182,15 +182,24 @@ class _FakeInstance:
 
 
 class _FakeLinker:
-    def __init__(self, state: dict[str, object], instance: _FakeInstance, _engine: _FakeEngine) -> None:
+    def __init__(
+        self,
+        state: dict[str, object],
+        instance: _FakeInstance,
+        _engine: _FakeEngine,
+        instantiate_result: str,
+    ) -> None:
         self._state = state
         self._instance = instance
+        self._instantiate_result = instantiate_result
         state["linker"] = self
 
     def define_wasi(self) -> None:
         self._state["wasi_defined"] = True
 
     def instantiate(self, _store: _FakeStore, _module: object) -> _FakeInstance:
+        if self._instantiate_result == "trap":
+            raise _FakeTrap("all fuel consumed")
         return self._instance
 
 
@@ -207,6 +216,7 @@ def _fake_runtime(
     module_error: bool = False,
     start_parameters: int = 0,
     start_result: str = "success",
+    instantiate_result: str = "success",
 ) -> tuple[SimpleNamespace, dict[str, object]]:
     state: dict[str, object] = {"inherited_env": False, "preopened": False}
     start = _FakeStart(state, start_parameters, start_result)
@@ -216,7 +226,7 @@ def _fake_runtime(
         Engine=partial(_FakeEngine, state),
         Store=partial(_FakeStore, state),
         WasiConfig=partial(_FakeWasiConfig, state),
-        Linker=partial(_FakeLinker, state, instance),
+        Linker=partial(_FakeLinker, state, instance, instantiate_result=instantiate_result),
         Module=partial(_fake_module, state, module_error),
         WasmtimeError=_FakeWasmtimeError,
         Trap=_FakeTrap,
@@ -412,6 +422,16 @@ def test_resource_trap_is_controlled_without_exit_trap(
 ) -> None:
     runtime, _state = _fake_runtime(start_result="trap")
     del runtime.ExitTrap
+    monkeypatch.setattr(rust_ast, "_load_wasmtime", lambda: runtime)
+
+    with pytest.raises(rust_ast.RustSyntaxError, match="resource trap: all fuel consumed"):
+        rust_ast._execute(b"wasm", "")
+
+
+def test_resource_trap_during_instantiation_is_controlled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime, _state = _fake_runtime(instantiate_result="trap")
     monkeypatch.setattr(rust_ast, "_load_wasmtime", lambda: runtime)
 
     with pytest.raises(rust_ast.RustSyntaxError, match="resource trap: all fuel consumed"):

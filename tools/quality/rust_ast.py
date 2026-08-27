@@ -277,7 +277,15 @@ def _start_export(runtime: ModuleType, engine: Any, store: Any, linker: Any, art
         function_type = start.type(store)
         if function_type.params or function_type.results:
             raise TypeError("_start must not accept parameters or return values")
-    except (AttributeError, KeyError, TypeError, runtime.WasmtimeError) as exc:
+    except (
+        AttributeError,
+        KeyError,
+        TypeError,
+        runtime.WasmtimeError,
+        runtime.Trap,
+    ) as exc:
+        if isinstance(exc, runtime.Trap):
+            raise RustSyntaxError(f"Rust WASI analyzer resource trap: {exc}") from exc
         raise RustSyntaxError(f"Rust WASI analyzer ABI is incompatible: {exc}") from exc
     return start
 

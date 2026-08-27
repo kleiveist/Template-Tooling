@@ -660,9 +660,18 @@ def ensure_clean_git(project_root: Path) -> GitPreflight:
         if key.startswith("GIT_"):
             environment.pop(key)
     environment["GIT_OPTIONAL_LOCKS"] = "0"
+    git_command = [
+        "git",
+        "-c",
+        "maintenance.auto=false",
+        "-c",
+        "core.fsmonitor=false",
+        "-C",
+        str(project_root),
+    ]
     try:
         top = subprocess.run(
-            ["git", "-C", str(project_root), "rev-parse", "--show-toplevel"],
+            [*git_command, "rev-parse", "--show-toplevel"],
             check=False,
             capture_output=True,
             text=True,
@@ -679,9 +688,7 @@ def ensure_clean_git(project_root: Path) -> GitPreflight:
             raise IntegrationError("Git preflight resolved a different project root.")
         status = subprocess.run(
             [
-                "git",
-                "-C",
-                str(project_root),
+                *git_command,
                 "status",
                 "--porcelain=v1",
                 "--untracked-files=all",

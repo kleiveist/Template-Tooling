@@ -1474,8 +1474,8 @@
     },
     {
       "path": "tools/integration/discovery.py",
-      "sha256": "sha256:767e327c60219b09de3b887e9178620b81aff07e0d7b111c5b675938afda5152",
-      "size": 23845,
+      "sha256": "sha256:7674a3255519dcbae82763460a09e97c0d4c0412fb21bb4862fbbf880c2df73e",
+      "size": 24573,
       "kind": "file",
       "executable": false
     },
@@ -1544,8 +1544,8 @@
     },
     {
       "path": "tools/integration/workflow.py",
-      "sha256": "sha256:d576a580920e52881266b388c95e3fe8fd6cb3bb90636109a0f3c0ca991c68a2",
-      "size": 59725,
+      "sha256": "sha256:cb5f5ea9f3d776f861b98a21526e96cd3f9220b5a398c9d1daf04860a082814d",
+      "size": 59833,
       "kind": "file",
       "executable": false
     },
@@ -1761,8 +1761,8 @@
     },
     {
       "path": "tools/quality/rust_ast.py",
-      "sha256": "sha256:54e0bf736a504a2e6f7c5d216909988c55ac0e3b0b677898cbc4a432d64aa2bc",
-      "size": 13922,
+      "sha256": "sha256:f4043bbe3d424d3ee1e1357b8425cad36a193d688fa831de5fee3b5d354b115b",
+      "size": 14112,
       "kind": "file",
       "executable": false
     },
@@ -2216,8 +2216,8 @@
     },
     {
       "path": "tools/tests/integration/test_discovery.py",
-      "sha256": "sha256:5fd82c4d92cd6df8b0596c18cee0fb227d9030f7772642005587a2a17f0d1d4d",
-      "size": 8667,
+      "sha256": "sha256:3e4f16f8195299d518c61d31c600a5094e0e3e4d719d8245453ac7aedcc5503c",
+      "size": 9468,
       "kind": "file",
       "executable": false
     },
@@ -2363,8 +2363,8 @@
     },
     {
       "path": "tools/tests/quality/test_rust_wasi_host.py",
-      "sha256": "sha256:d04cd82be4db4e8db20fbe6822983a9b1685d4c34d1aeb1d74ae20119cedf509",
-      "size": 17551,
+      "sha256": "sha256:9337fbba5815e1c25c72fca473ad48a7b42f7cb5f579ed26ac66d2b1b9dafd71",
+      "size": 18226,
       "kind": "file",
       "executable": false
     },
@@ -2607,5 +2607,5 @@
       "executable": false
     }
   ],
-  "digest": "sha256:f7c74d8a3228bb731e57d9f7efead69efef1ffe20b71a962d30c802d0d2cb05f"
+  "digest": "sha256:20d7a864d732bba405d08061f92c756f9459dfde86805251b5531b621f673bb1"
 }

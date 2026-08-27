@@ -30,6 +30,7 @@ from tools.core.filesystem import (
 DEFAULT_MAX_DEPTH = 6
 DEFAULT_MAX_ENTRIES = 4096
 MAX_MARKER_BYTES = 1024 * 1024
+_SUPPORTS_DIRECTORY_FILE_DESCRIPTORS = os.name != "nt"
 
 _VITE_CONFIG_NAMES = frozenset(
     {
@@ -353,24 +354,41 @@ def _directory_entries(
     remaining: int,
     total_limit: int,
 ) -> tuple[tuple[str, int], ...]:
+    def collect(iterator: os.ScandirIterator[str]) -> tuple[tuple[str, int], ...]:
+        entries: list[tuple[str, int]] = []
+        for entry in iterator:
+            if len(entries) >= remaining:
+                raise DiscoveryError(
+                    f"Project discovery exceeded its {total_limit}-entry safety limit."
+                )
+            try:
+                mode = entry.stat(follow_symlinks=False).st_mode
+            except OSError:
+                continue
+            entries.append((entry.name, mode))
+        return tuple(sorted(entries, key=lambda item: (item[0].casefold(), item[0])))
+
+    if not _SUPPORTS_DIRECTORY_FILE_DESCRIPTORS:
+        try:
+            metadata = directory.lstat()
+            if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+                raise FilesystemSafetyError(
+                    f"Could not inspect project directory safely: {directory}."
+                )
+            with os.scandir(directory) as iterator:
+                return collect(iterator)
+        except OSError as exc:
+            raise FilesystemSafetyError(
+                f"Could not inspect project directory safely: {directory}."
+            ) from exc
+
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     descriptor: int | None = None
     try:
         descriptor = os.open(directory, flags)
         with os.scandir(descriptor) as iterator:
-            entries: list[tuple[str, int]] = []
-            for entry in iterator:
-                if len(entries) >= remaining:
-                    raise DiscoveryError(
-                        f"Project discovery exceeded its {total_limit}-entry safety limit."
-                    )
-                try:
-                    mode = entry.stat(follow_symlinks=False).st_mode
-                except OSError:
-                    continue
-                entries.append((entry.name, mode))
-        return tuple(sorted(entries, key=lambda item: (item[0].casefold(), item[0])))
+            return collect(iterator)
     except OSError as exc:
         raise FilesystemSafetyError(
             f"Could not inspect project directory safely: {directory}."

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from tools.integration import discovery
 from tools.integration.discovery import (
     Confidence,
     DiscoveryError,
@@ -214,6 +215,26 @@ def test_symlinked_project_root_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(DiscoveryError, match="must not be a symbolic link"):
         discover_project(link)
+
+
+def test_scan_uses_safe_path_fallback_without_directory_file_descriptors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _vite(tmp_path / "client")
+    monkeypatch.setattr(discovery, "_SUPPORTS_DIRECTORY_FILE_DESCRIPTORS", False)
+    original_open = discovery.os.open
+
+    def forbid_descriptor_open(path: object, flags: int, *args: object, **kwargs: object) -> int:
+        if flags & getattr(discovery.os, "O_DIRECTORY", 0):
+            raise AssertionError("directory descriptor fallback should not call os.open")
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(discovery.os, "open", forbid_descriptor_open)
+
+    result = discover_project(tmp_path)
+
+    assert result.paths.frontend == "client"
 
 
 def test_scan_is_bounded_and_skips_generated_or_documentation_trees(
