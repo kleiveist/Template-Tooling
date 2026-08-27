@@ -155,7 +155,10 @@ def _generated_block(
 def _resolve_markdown_target(
     path: Path, target: str, project_root: Path
 ) -> Path | None:
-    clean_target = unquote(target.split("#", maxsplit=1)[0].split("?", maxsplit=1)[0])
+    encoded_target = target.split("#", maxsplit=1)[0].split("?", maxsplit=1)[0]
+    clean_target = unquote(encoded_target, errors="strict")
+    if any(ord(character) < 32 for character in clean_target):
+        raise ValueError("decoded Markdown target contains a control character")
     if (
         not clean_target
         or "://" in clean_target

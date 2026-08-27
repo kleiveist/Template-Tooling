@@ -30,6 +30,9 @@ REQUIRED_WORKFLOWS = frozenset(
 )
 _PINNED_ACTION = re.compile(r"^actions/[A-Za-z0-9_-]+@[0-9a-f]{40}$")
 _USES = re.compile(r"^\s*uses:\s*([^\s#]+)", re.MULTILINE)
+_NODE24_UPLOAD_ARTIFACT = (
+    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+)
 
 
 def _workflows() -> dict[str, str]:
@@ -172,6 +175,18 @@ def test_workflow_security_contract_is_minimal_and_pinned() -> None:
                 assert _PINNED_ACTION.fullmatch(action), (name, action)
             else:
                 assert action.startswith("./.github/"), (name, action)
+
+
+def test_workflows_use_the_pinned_node24_artifact_action() -> None:
+    upload_actions = [
+        action
+        for content in _workflows().values()
+        for action in _USES.findall(content)
+        if action.startswith("actions/upload-artifact@")
+    ]
+
+    assert upload_actions
+    assert set(upload_actions) == {_NODE24_UPLOAD_ARTIFACT}
 
 
 def test_support_matrix_is_the_only_workflow_runtime_version_source() -> None:

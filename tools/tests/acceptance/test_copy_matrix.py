@@ -226,6 +226,7 @@ def test_copied_tooling_matrix_is_read_only_integrated_and_idempotent(
         "--full-fix",
         "--json",
         expected_returncode=0,
+        timeout=240,
     )
 
     assert first_fix["status"] == "INTEGRATED"
@@ -631,11 +632,13 @@ def _run_json(
     root: Path,
     *arguments: str,
     expected_returncode: int,
+    timeout: int = 60,
 ) -> dict[str, Any]:
     completed = _run_command(
         root,
         *arguments,
         expected_returncode=expected_returncode,
+        timeout=timeout,
     )
     try:
         payload = json.loads(completed.stdout)

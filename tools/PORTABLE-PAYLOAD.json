@@ -1285,8 +1285,8 @@
     },
     {
       "path": "tools/core/manifest.py",
-      "sha256": "sha256:fe596ba3feba854befa00091e19ef42069c741aac49dfdce03a45de97958c812",
-      "size": 20519,
+      "sha256": "sha256:f27449a205343781faee3fecf13a69756f0b8c5a7600e67b6a7f12c1fb314e1e",
+      "size": 20706,
       "kind": "file",
       "executable": false
     },
@@ -1355,8 +1355,8 @@
     },
     {
       "path": "tools/inst/docs_index.py",
-      "sha256": "sha256:8817b1b9781a7a5a17cb051fce1c5349d3f3ff8dd12c5a88754bb3383491f27d",
-      "size": 14832,
+      "sha256": "sha256:e62b3b768d2a21951e723f24c242eec6a17fe8af525bf948f1d1c1e37afd1597",
+      "size": 15029,
       "kind": "file",
       "executable": false
     },
@@ -2062,8 +2062,8 @@
     },
     {
       "path": "tools/tests/acceptance/test_copy_matrix.py",
-      "sha256": "sha256:b45f0885a3e5ba1dd685a4ccedc8189cbc3447af639b30597f9bf5e839d5b3b8",
-      "size": 25317,
+      "sha256": "sha256:657f6e79c9a0cbfcb6cd59fa8b22bd778fb20557f7a4a877fe6722c50ef49dc2",
+      "size": 25386,
       "kind": "file",
       "executable": false
     },
@@ -2153,8 +2153,8 @@
     },
     {
       "path": "tools/tests/core/test_filesystem.py",
-      "sha256": "sha256:af5d28dd45de5effc6e379c398cb3c58f7f523f66343af3643362b0b5f59a460",
-      "size": 4988,
+      "sha256": "sha256:0a114f85376db93115ae4c66ff22c805c02ede2f06995fc80c8c13d337257a8e",
+      "size": 5516,
       "kind": "file",
       "executable": false
     },
@@ -2614,5 +2614,5 @@
       "executable": false
     }
   ],
-  "digest": "sha256:f3ffe66724c7eb0b1791fd28edf361f871f0fe4861880476c914aefdb363f564"
+  "digest": "sha256:1b6418b7d18b50e19a1df84a9652a1864c3c26f1e728e5bb5945f07f8b8058c8"
 }
