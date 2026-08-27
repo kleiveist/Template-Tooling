@@ -6,6 +6,7 @@ from pathlib import Path
 
 import build
 import pytest
+import render_check
 import verify
 
 
@@ -47,9 +48,9 @@ def test_repository_local_output_is_limited_to_the_state_directory() -> None:
 def test_clean_builds_are_exercised_when_the_full_toolchain_is_available(
     tmp_path: Path,
 ) -> None:
-    if not all(
-        shutil.which(command)
-        for command in ("pdflatex", "biber", "pdfinfo", "pdftotext", "pdftoppm")
+    if (
+        not all(shutil.which(command) for command in ("pdflatex", "biber"))
+        or not render_check.pdf_backend_available()
     ):
         pytest.skip("full TeX/PDF toolchain is unavailable")
     targets = build.build(("de", "en"), output_directory=tmp_path, reproducible=True)

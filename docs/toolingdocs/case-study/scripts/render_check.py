@@ -4,141 +4,172 @@ from __future__ import annotations
 
 import argparse
 import re
-import subprocess
 import sys
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 try:  # Supports both ``python scripts/render_check.py`` and package imports in tests.
-    from ._shared import CaseStudyError, executable
+    from ._shared import CaseStudyError
 except ImportError:  # pragma: no cover - command-line entry point.
-    from _shared import CaseStudyError, executable
+    from _shared import CaseStudyError
 
 
-def _run(
-    command: Sequence[str], *, timeout: int = 120
-) -> subprocess.CompletedProcess[str]:
+def _pdf_modules() -> tuple[Any, Any]:
+    """Load the isolated PDF backends only when a PDF operation is requested."""
+
     try:
-        return subprocess.run(
-            command,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-            timeout=timeout,
-            shell=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise CaseStudyError(f"Could not run {' '.join(command)}: {exc}") from exc
+        import pypdfium2
+        from pypdf import PdfReader
+    except ImportError as exc:
+        raise CaseStudyError(
+            "The isolated PDF backend is unavailable. Run "
+            "docs/toolingdocs/case-study/scripts/environment.py setup first."
+        ) from exc
+    return PdfReader, pypdfium2
+
+
+def pdf_backend_available() -> bool:
+    """Return whether the project-local PDF inspection dependencies are importable."""
+
+    try:
+        _pdf_modules()
+    except CaseStudyError:
+        return False
+    return True
+
+
+def _reader(pdf: Path) -> Any:
+    PdfReader, _pdfium = _pdf_modules()
+    try:
+        return PdfReader(pdf)
+    except Exception as exc:  # pypdf exposes parser-specific exception types.
+        raise CaseStudyError(f"The PDF backend rejected {pdf}: {exc}") from exc
+
+
+def _resolved(value: Any) -> Any:
+    getter = getattr(value, "get_object", None)
+    return getter() if callable(getter) else value
 
 
 def pdf_info(pdf: Path, *, pdfinfo: str | None = None) -> dict[str, str]:
-    info = executable("pdfinfo", pdfinfo)
-    completed = _run((info, str(pdf)))
-    if completed.returncode != 0:
-        raise CaseStudyError(f"pdfinfo rejected {pdf}: {completed.stderr.strip()}")
-    values: dict[str, str] = {}
-    for line in completed.stdout.splitlines():
-        if ":" not in line:
-            continue
-        key, value = line.split(":", maxsplit=1)
-        values[key.strip()] = value.strip()
-    return values
+    """Return normalized PDF metadata without requiring Poppler."""
+
+    del pdfinfo  # Retained as a source-compatible keyword for existing callers.
+    metadata = _reader(pdf).metadata or {}
+    return {
+        str(key).removeprefix("/"): str(value)
+        for key, value in metadata.items()
+        if value is not None
+    }
 
 
 def pdf_page_count(pdf: Path, *, pdfinfo: str | None = None) -> int:
-    values = pdf_info(pdf, pdfinfo=pdfinfo)
-    try:
-        pages = int(values["Pages"])
-    except (KeyError, ValueError) as exc:
-        raise CaseStudyError(
-            f"pdfinfo did not report a valid page count for {pdf}."
-        ) from exc
+    del pdfinfo
+    pages = len(_reader(pdf).pages)
     if pages <= 0:
         raise CaseStudyError(f"PDF has no pages: {pdf}")
     return pages
 
 
 def pdf_text(pdf: Path, *, pdftotext: str | None = None) -> str:
-    converter = executable("pdftotext", pdftotext)
-    completed = _run((converter, "-enc", "UTF-8", str(pdf), "-"))
-    if completed.returncode != 0:
-        raise CaseStudyError(f"pdftotext rejected {pdf}: {completed.stderr.strip()}")
-    if not completed.stdout.strip():
+    del pdftotext
+    try:
+        text = "\n".join((page.extract_text() or "") for page in _reader(pdf).pages)
+    except Exception as exc:
+        raise CaseStudyError(f"Could not extract text from {pdf}: {exc}") from exc
+    if not text.strip():
         raise CaseStudyError(f"PDF has no extractable text: {pdf}")
-    return completed.stdout
+    return text
 
 
 def pdf_page_texts(
     pdf: Path, pages: int, *, pdftotext: str | None = None
 ) -> tuple[str, ...]:
-    converter = executable("pdftotext", pdftotext)
+    del pdftotext
+    reader = _reader(pdf)
+    if len(reader.pages) != pages:
+        raise CaseStudyError(f"PDF page count changed while inspecting {pdf}.")
     extracted: list[str] = []
-    for page in range(1, pages + 1):
-        completed = _run(
-            (
-                converter,
-                "-f",
-                str(page),
-                "-l",
-                str(page),
-                "-enc",
-                "UTF-8",
-                str(pdf),
-                "-",
-            )
-        )
-        if completed.returncode != 0:
+    for number, page in enumerate(reader.pages, start=1):
+        try:
+            text = (page.extract_text() or "").strip()
+        except Exception as exc:
             raise CaseStudyError(
-                f"pdftotext rejected page {page} of {pdf}: {completed.stderr.strip()}"
-            )
-        text = completed.stdout.strip()
+                f"Could not extract page {number} of {pdf}: {exc}"
+            ) from exc
         if len(re.sub(r"\s+", "", text)) < 3:
-            raise CaseStudyError(f"PDF has an unexpected blank page {page}: {pdf}")
+            raise CaseStudyError(f"PDF has an unexpected blank page {number}: {pdf}")
         extracted.append(text)
     return tuple(extracted)
 
 
+def _font_descriptors(font: Any) -> tuple[Any, ...]:
+    resolved = _resolved(font)
+    if not hasattr(resolved, "get"):
+        return ()
+    descendants = resolved.get("/DescendantFonts")
+    if descendants:
+        return tuple(
+            descriptor
+            for descendant in descendants
+            if (descriptor := _resolved(descendant).get("/FontDescriptor")) is not None
+        )
+    descriptor = resolved.get("/FontDescriptor")
+    return (descriptor,) if descriptor is not None else ()
+
+
+def _font_is_embedded(font: Any) -> bool:
+    resolved = _resolved(font)
+    if not hasattr(resolved, "get"):
+        return False
+    if resolved.get("/Subtype") == "/Type3":
+        return bool(resolved.get("/CharProcs"))
+    descriptors = _font_descriptors(resolved)
+    return bool(descriptors) and all(
+        any(
+            key in _resolved(descriptor)
+            for key in ("/FontFile", "/FontFile2", "/FontFile3")
+        )
+        for descriptor in descriptors
+    )
+
+
 def pdf_fonts(pdf: Path, *, pdffonts: str | None = None) -> tuple[str, ...]:
-    inspector = executable("pdffonts", pdffonts)
-    completed = _run((inspector, str(pdf)))
-    if completed.returncode != 0:
-        raise CaseStudyError(f"pdffonts rejected {pdf}: {completed.stderr.strip()}")
-    fonts: list[str] = []
-    for line in completed.stdout.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.casefold().startswith(("name ", "---")):
-            continue
-        flags = [
-            token.casefold()
-            for token in stripped.split()
-            if token.casefold() in {"yes", "no"}
-        ]
-        if len(flags) < 3:
-            continue
-        if flags[0] != "yes":
-            raise CaseStudyError(f"PDF has a non-embedded font: {stripped}")
-        fonts.append(stripped)
+    """Require every font resource used by every page to be embedded."""
+
+    del pdffonts
+    fonts: dict[str, str] = {}
+    for page_number, page in enumerate(_reader(pdf).pages, start=1):
+        resources = _resolved(page.get("/Resources", {}))
+        page_fonts = _resolved(resources.get("/Font", {}))
+        for resource_name, raw_font in page_fonts.items():
+            font = _resolved(raw_font)
+            base_name = str(font.get("/BaseFont", resource_name))
+            subtype = str(font.get("/Subtype", "unknown"))
+            description = f"{base_name} ({subtype}, embedded)"
+            if not _font_is_embedded(font):
+                raise CaseStudyError(
+                    f"PDF has a non-embedded font on page {page_number}: "
+                    f"{base_name} ({subtype})"
+                )
+            fonts[base_name] = description
     if not fonts:
-        raise CaseStudyError(f"pdffonts found no embedded fonts in {pdf}")
-    return tuple(fonts)
+        raise CaseStudyError(f"PDF inspection found no embedded fonts in {pdf}")
+    return tuple(fonts[name] for name in sorted(fonts))
 
 
 def pdf_destinations(pdf: Path, *, pdfinfo: str | None = None) -> tuple[str, ...]:
-    info = executable("pdfinfo", pdfinfo)
-    completed = _run((info, "-dests", str(pdf)))
-    if completed.returncode != 0:
-        raise CaseStudyError(
-            f"pdfinfo could not inspect destinations for {pdf}: {completed.stderr.strip()}"
+    del pdfinfo
+    try:
+        destinations = tuple(
+            sorted(str(name) for name in _reader(pdf).named_destinations)
         )
-    destinations = tuple(
-        line.strip()
-        for line in completed.stdout.splitlines()
-        if line.strip() and not line.casefold().startswith(("page ", "----"))
-    )
+    except Exception as exc:
+        raise CaseStudyError(
+            f"Could not inspect named destinations for {pdf}: {exc}"
+        ) from exc
     if not destinations:
         raise CaseStudyError(
             f"PDF has no named destinations for its contents links: {pdf}"
@@ -147,29 +178,51 @@ def pdf_destinations(pdf: Path, *, pdfinfo: str | None = None) -> tuple[str, ...
 
 
 def pdf_language(pdf: Path) -> str:
-    match = re.search(rb"/Lang\s*\(([^()]*)\)", pdf.read_bytes())
-    if match is None:
+    try:
+        root = _resolved(_reader(pdf).trailer["/Root"])
+        language = root.get("/Lang")
+    except Exception as exc:
+        raise CaseStudyError(
+            f"Could not inspect PDF language for {pdf}: {exc}"
+        ) from exc
+    if not language:
         raise CaseStudyError(f"PDF does not declare a document language: {pdf}")
-    return match.group(1).decode("ascii", errors="replace")
+    return str(language)
 
 
 def render_pdf(
     pdf: Path, output: Path, *, pdftoppm: str | None = None
 ) -> tuple[Path, ...]:
-    renderer = executable("pdftoppm", pdftoppm)
+    """Render every page through the venv-owned PDFium binary wheel."""
+
+    del pdftoppm
+    _PdfReader, pdfium = _pdf_modules()
     output.mkdir(parents=True, exist_ok=True)
-    prefix = output / "page"
-    completed = _run(
-        (renderer, "-png", "-r", "144", str(pdf), str(prefix)), timeout=180
-    )
-    if completed.returncode != 0:
-        raise CaseStudyError(f"pdftoppm rejected {pdf}: {completed.stderr.strip()}")
-    pages = tuple(sorted(output.glob("page-*.png")))
-    if not pages or any(page.stat().st_size < 128 for page in pages):
-        raise CaseStudyError(
-            f"PDF rendering did not produce complete PNG pages for {pdf}"
-        )
-    return pages
+    rendered: list[Path] = []
+    try:
+        document = pdfium.PdfDocument(pdf)
+        for index in range(len(document)):
+            page = document[index]
+            bitmap = page.render(scale=2)
+            target = output / f"page-{index + 1:03d}.png"
+            image = bitmap.to_pil()
+            image.save(target, format="PNG")
+            image.close()
+            bitmap.close()
+            page.close()
+            if not target.is_file() or target.stat().st_size < 128:
+                raise CaseStudyError(
+                    f"PDF rendering did not produce page {index + 1} for {pdf}"
+                )
+            rendered.append(target)
+        document.close()
+    except CaseStudyError:
+        raise
+    except Exception as exc:
+        raise CaseStudyError(f"PDFium could not render {pdf}: {exc}") from exc
+    if not rendered:
+        raise CaseStudyError(f"PDF rendering produced no pages for {pdf}")
+    return tuple(rendered)
 
 
 def validate_pdf(pdf: Path) -> tuple[int, str, tuple[Path, ...]]:
@@ -227,6 +280,11 @@ def _parser() -> argparse.ArgumentParser:
         description="Render and inspect every case-study PDF page."
     )
     parser.add_argument("pdf", type=Path, nargs="+", help="PDF file(s) to validate")
+    parser.add_argument(
+        "--render-dir",
+        type=Path,
+        help="optionally retain diagnostic page renders below this directory",
+    )
     return parser
 
 
@@ -234,9 +292,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         for pdf in args.pdf:
-            pages, text, rendered = validate_pdf(pdf.resolve())
+            resolved = pdf.resolve()
+            pages, text, rendered = validate_pdf(resolved)
+            if args.render_dir is not None:
+                render_pdf(resolved, args.render_dir.resolve() / pdf.stem)
             print(
-                f"validated {pdf}: {pages} pages, {len(text)} text characters, {len(rendered)} renders"
+                f"validated {pdf}: {pages} pages, {len(text)} text characters, "
+                f"{len(rendered)} renders"
             )
     except CaseStudyError as exc:
         print(f"PDF validation failed: {exc}", file=sys.stderr)

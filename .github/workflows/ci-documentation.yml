@@ -12,6 +12,7 @@ on:
       - "tools/control*.py"
       - "tools/inst/docs_index.py"
       - "tools/resources/**"
+      - ".github/actions/setup-documentation-environment/**"
       - ".github/actions/setup-tooling-environment/**"
       - ".github/workflows/ci-documentation.yml"
   push:
@@ -26,71 +27,59 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  support-matrix:
+    name: Read documentation support matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      python_primary: ${{ steps.matrix.outputs.python_primary }}
+      linux: ${{ steps.matrix.outputs.linux_runner }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: matrix
+        name: Read central support contract
+        run: python tools/ci_support.py --github-output
+
   documentation-build:
     name: documentation-build
-    runs-on: ubuntu-24.04
+    needs: support-matrix
+    runs-on: ${{ needs.support-matrix.outputs.linux }}
     timeout-minutes: 35
     env:
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONHASHSEED: "0"
       PYTHONNOUSERSITE: "1"
-      TMPDIR: ${{ runner.temp }}
-      TEMP: ${{ runner.temp }}
-      TMP: ${{ runner.temp }}
     steps:
       - name: Check out source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Set up Python
-        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
+      - name: Set up isolated documentation environment
+        uses: ./.github/actions/setup-documentation-environment
         with:
-          python-version: "3.12"
-      - name: Install Python test runner
-        run: python -m pip install --disable-pip-version-check pytest
-      - name: Install TeX and PDF tools from the Ubuntu runner repository
+          python-version: ${{ needs.support-matrix.outputs.python_primary }}
+      - name: Record exact documentation runtime
         shell: pwsh
-        env:
-          TEX_COMPILER: pdflatex
         run: |
-          sudo apt-get update
+          $runtimePath = Join-Path $env:RUNNER_TEMP "documentation-runtime.json"
+          $runtime = & $env:DOCUMENTATION_PYTHON `
+            docs/toolingdocs/case-study/scripts/environment.py `
+            --state-dir $env:DOCUMENTATION_ENVIRONMENT_ROOT `
+            --download-cache $env:DOCUMENTATION_DOWNLOAD_CACHE `
+            info --json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $packages = @(
-            "biber",
-            "poppler-utils",
-            "texlive-bibtex-extra",
-            "texlive-fonts-recommended",
-            "texlive-lang-german",
-            "texlive-latex-extra",
-            "texlive-pictures"
-          )
-          sudo apt-get install --yes --no-install-recommends @packages
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $compilerVersion = (& $env:TEX_COMPILER --version | Select-Object -First 1)
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $biberVersion = (& biber --version | Select-Object -First 1)
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $pdfinfoVersion = (& pdfinfo -v 2>&1 | Select-Object -First 1)
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $pdffontsVersion = (& pdffonts -v 2>&1 | Select-Object -First 1)
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          @(
-            "runner_os=$env:RUNNER_OS",
-            "runner_image=$env:ImageOS",
-            "runner_image_version=$env:ImageVersion",
-            "compiler=$compilerVersion",
-            "biber=$biberVersion",
-            "pdfinfo=$pdfinfoVersion",
-            "pdffonts=$pdffontsVersion"
-          ) | Set-Content -Path (Join-Path $env:RUNNER_TEMP "documentation-runtime.txt") -Encoding utf8
+          $runtime | Set-Content -LiteralPath $runtimePath -Encoding utf8
       - name: Validate documentation sources, navigation, and policy
         shell: pwsh
         run: |
           $junit = Join-Path $env:RUNNER_TEMP "documentation-source.junit.xml"
-          & python tools/control.py docs check
+          & $env:DOCUMENTATION_PYTHON tools/control.py docs check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & python -m pytest -q -p no:cacheprovider --junitxml=$junit `
+          & $env:DOCUMENTATION_PYTHON -m pytest -q -p no:cacheprovider --junitxml=$junit `
             tools/tests/test_portable_documentation.py `
             tests/source/test_repository_documentation.py `
             tests/source/test_repository_packaging_policy.py `
+            tests/source/test_workflow_contracts.py `
+            docs/toolingdocs/case-study/tests/test_environment.py `
             docs/toolingdocs/case-study/tests/test_source_structure.py `
             docs/toolingdocs/case-study/tests/test_template_compliance.py `
             docs/toolingdocs/case-study/tests/test_language_parity.py `
@@ -99,26 +88,38 @@ jobs:
             docs/toolingdocs/case-study/tests/test_markdown_links.py `
             docs/toolingdocs/case-study/tests/test_no_generated_artifacts.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & python docs/toolingdocs/case-study/scripts/verify.py --all
+          & $env:DOCUMENTATION_PYTHON docs/toolingdocs/case-study/scripts/verify.py --all
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build and reproduce German and English PDFs
         shell: pwsh
         run: |
           $pdfs = Join-Path $env:RUNNER_TEMP "case-study-pdfs"
-          & python docs/toolingdocs/case-study/scripts/build.py --all --output-dir $pdfs --reproducible
+          & $env:DOCUMENTATION_PYTHON `
+            docs/toolingdocs/case-study/scripts/environment.py `
+            --state-dir $env:DOCUMENTATION_ENVIRONMENT_ROOT `
+            --download-cache $env:DOCUMENTATION_DOWNLOAD_CACHE `
+            build --all --output-dir $pdfs --reproducible
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run provisioned PDF integrity tests
         shell: pwsh
         run: |
           $junit = Join-Path $env:RUNNER_TEMP "documentation-pdf.junit.xml"
-          & python -m pytest -q -p no:cacheprovider --junitxml=$junit `
+          & $env:DOCUMENTATION_PYTHON -m pytest -q -p no:cacheprovider --junitxml=$junit `
             docs/toolingdocs/case-study/tests/test_pdf_integrity.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify PDF structure and render every page
+        shell: pwsh
+        run: |
+          $pdfs = Join-Path $env:RUNNER_TEMP "case-study-pdfs"
+          & $env:DOCUMENTATION_PYTHON docs/toolingdocs/case-study/scripts/render_check.py `
+            (Join-Path $pdfs "portable-tooling-case-study-de.pdf") `
+            (Join-Path $pdfs "portable-tooling-case-study-en.pdf")
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Record documentation CI evidence
         shell: pwsh
         run: |
           $pdfs = Join-Path $env:RUNNER_TEMP "case-study-pdfs"
-          $runtimePath = Join-Path $env:RUNNER_TEMP "documentation-runtime.txt"
+          $runtimePath = Join-Path $env:RUNNER_TEMP "documentation-runtime.json"
           $checksumsPath = Join-Path $env:RUNNER_TEMP "documentation-checksums.sha256"
           $evidencePath = Join-Path $env:RUNNER_TEMP "documentation-ci-evidence.md"
           if (-not (Test-Path -LiteralPath $runtimePath -PathType Leaf)) {
@@ -146,7 +147,7 @@ jobs:
             "# Documentation CI evidence"
             ""
             "## Runtime"
-            '```text'
+            '```json'
             $runtime
             '```'
             ""
@@ -160,26 +161,20 @@ jobs:
             $checksums
             '```'
           ) | Set-Content -LiteralPath $evidencePath -Encoding utf8
-      - name: Verify PDF structure and render every page
-        shell: pwsh
-        run: |
-          $pdfs = Join-Path $env:RUNNER_TEMP "case-study-pdfs"
-          & $env:TOOLING_PYTHON docs/toolingdocs/case-study/scripts/render_check.py `
-            (Join-Path $pdfs "portable-tooling-case-study-de.pdf") `
-            (Join-Path $pdfs "portable-tooling-case-study-en.pdf")
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Render available PDFs for failure diagnosis
         if: failure()
         shell: pwsh
         run: |
           $pdfs = Join-Path $env:RUNNER_TEMP "case-study-pdfs"
           $renders = Join-Path $env:RUNNER_TEMP "case-study-rendered"
-          if (Test-Path $pdfs) {
-            New-Item -ItemType Directory -Path $renders -Force | Out-Null
-            Get-ChildItem -Path $pdfs -Filter "*.pdf" | ForEach-Object {
-              $prefix = Join-Path $renders $_.BaseName
-              & pdftoppm -png -r 144 $_.FullName $prefix
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (Test-Path -LiteralPath $pdfs -PathType Container) {
+            Get-ChildItem -LiteralPath $pdfs -Filter "*.pdf" | ForEach-Object {
+              & $env:DOCUMENTATION_PYTHON `
+                docs/toolingdocs/case-study/scripts/render_check.py `
+                $_.FullName --render-dir $renders
+              if ($LASTEXITCODE -ne 0) {
+                Write-Warning "could not retain diagnostic renders for $($_.Name)"
+              }
             }
           }
       - name: Confirm source checkout stayed clean
@@ -196,7 +191,7 @@ jobs:
           path: |
             ${{ runner.temp }}/case-study-pdfs
             ${{ runner.temp }}/case-study-rendered
-            ${{ runner.temp }}/documentation-runtime.txt
+            ${{ runner.temp }}/documentation-runtime.json
             ${{ runner.temp }}/documentation-source.junit.xml
             ${{ runner.temp }}/documentation-pdf.junit.xml
             ${{ runner.temp }}/documentation-checksums.sha256

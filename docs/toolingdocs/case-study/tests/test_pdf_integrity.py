@@ -9,8 +9,11 @@ import render_check
 
 
 def _require_toolchain() -> None:
-    required = ("pdflatex", "biber", "pdfinfo", "pdffonts", "pdftotext", "pdftoppm")
-    if not all(shutil.which(command) for command in required):
+    required = ("pdflatex", "biber")
+    if (
+        not all(shutil.which(command) for command in required)
+        or not render_check.pdf_backend_available()
+    ):
         pytest.skip("full TeX/PDF toolchain is unavailable")
 
 

@@ -20,6 +20,16 @@ Before handoff, run:
 python tools/control.py docs check
 ```
 
+For the bilingual PDF case study, use the project-local build environment instead of
+installing TeX or PDF utilities globally:
+
+```sh
+python docs/toolingdocs/case-study/scripts/environment.py build --all --reproducible
+```
+
+The environment is generated below `.tooling-state/docs/environment/`; the Documentation
+workflow runs the same bootstrap and retains its runtime inventory with the PDF artifacts.
+
 Then review the diff for stale names, unsupported command examples and generated
 artifacts. The [documentation navigation](contribution.md) section and
 [evidence index](../acceptance/evidence-index.md) provide related checks.
