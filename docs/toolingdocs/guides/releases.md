@@ -2,9 +2,34 @@
 [← Back](guides.md)
 <!-- AUTO-GENERATED:backlink END -->
 
-# Prepare a release
+# Releases
 
 The normal command surface validates product releases but does not publish them.
+The source repository has a separate, operator-controlled `tooling-v*` workflow for
+publishing the portable tooling itself.
+
+## Obtain and verify an official portable release
+
+An official release uses a tag that exactly matches `tools/VERSION`, for example
+`tooling-v0.4.0`. It publishes a deterministic `Template-Tooling-<version>.tar.gz`,
+an external `SHA256SUMS` file, and a Sigstore provenance bundle. The archive keeps
+the single top-level version directory and contains only `tools/` and
+`docs/toolingdocs/` below it.
+
+Download and verify the archive before extraction:
+
+```sh
+gh release download tooling-v0.4.0 --repo kleiveist/Template-Tooling
+sha256sum --check SHA256SUMS
+gh attestation verify Template-Tooling-0.4.0.tar.gz \
+  --repo kleiveist/Template-Tooling
+tar -xzf Template-Tooling-0.4.0.tar.gz
+```
+
+The external checksum detects a changed archive and the GitHub attestation binds its
+digest to this repository's tag workflow. After extraction,
+`tools/PORTABLE-PAYLOAD.json` independently validates the internal payload. Retain all
+three layers; none is a substitute for the others.
 
 ## Version checks
 
@@ -62,6 +87,8 @@ policy exceptions. Symlinks, hidden runtime objects, case-folding collisions and
 `dist/` object fail closed.
 
 The included payload manifest verifies the exported bytes and relocation-independent paths; it
-does not authenticate the source or sign the directory. Publish checksums/signatures separately,
-start from a trusted pinned revision, follow the [folder replacement guide](folder-replacement.md),
-and never combine files from different exports.
+does not authenticate the source or sign the directory. For an official distribution, use the
+tagged GitHub Release, its external checksum, and its provenance attestation. For a private local
+export, maintain an equivalent trusted revision and checksum/signature chain separately. Follow
+the [folder replacement guide](folder-replacement.md), and never combine files from different
+exports.

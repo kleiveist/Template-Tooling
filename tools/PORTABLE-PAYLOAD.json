@@ -25,8 +25,8 @@
     },
     {
       "path": "docs/toolingdocs/acceptance/definition-of-done.md",
-      "sha256": "sha256:891489343cc5163163dcdafd9400cd5f92575c7cc165fb762c1f2409f53e9eb5",
-      "size": 6642,
+      "sha256": "sha256:d69d7da31d9b6bac47a8b4d754bf565b5b4cd9fe9b659b6d7f5c5a2a34d25eb3",
+      "size": 6768,
       "kind": "file",
       "executable": false
     },
@@ -46,8 +46,8 @@
     },
     {
       "path": "docs/toolingdocs/acceptance/release-gates.md",
-      "sha256": "sha256:de6b956d023e59bff3b998e284e7f792f22f3f9bdac7d06f20d71c95104ccea7",
-      "size": 1302,
+      "sha256": "sha256:d36a73ec0e7d81f3b1e503941fbb8788e3c1d607862f89335c4f3c92ca2f21c7",
+      "size": 1417,
       "kind": "file",
       "executable": false
     },
@@ -102,8 +102,8 @@
     },
     {
       "path": "docs/toolingdocs/architecture/export-and-release.md",
-      "sha256": "sha256:b8a76143ea9f67e841af77fdf7da13119b06b4bdfa661391080b1f7e297169c2",
-      "size": 1152,
+      "sha256": "sha256:822bda47cc5fc207ca0a42f2b09109ee041a517d62db55991398326092fca61d",
+      "size": 1617,
       "kind": "file",
       "executable": false
     },
@@ -998,8 +998,8 @@
     },
     {
       "path": "docs/toolingdocs/development/release-process.md",
-      "sha256": "sha256:6e58513be57524c0cd9176ed2f00837f63fb91368b75d2565220f32980ad9999",
-      "size": 1042,
+      "sha256": "sha256:5a850c34f87bda21655bfe72c95ca7dbb65b6798eb9aecb2827d42205144cbd9",
+      "size": 1893,
       "kind": "file",
       "executable": false
     },
@@ -1061,8 +1061,8 @@
     },
     {
       "path": "docs/toolingdocs/guides/releases.md",
-      "sha256": "sha256:d73c01e33f763d12cf9061384ccc253a4bb625295f18e0ecfce0b0037b0453ab",
-      "size": 2705,
+      "sha256": "sha256:30b84311793182dff347413ffdddd209560d6fe8d2b9bd449a73fb1d0a51d9ab",
+      "size": 3940,
       "kind": "file",
       "executable": false
     },
@@ -2796,5 +2796,5 @@
       "executable": false
     }
   ],
-  "digest": "sha256:eb160602c42c2e3ea90ce911002d75f20c63b565e5bd6b607ee05cc72193d666"
+  "digest": "sha256:4939096be922c8b3a549a5a1b44fbfe10b17c924344cbd155f7f345158088d24"
 }

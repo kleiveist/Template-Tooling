@@ -91,6 +91,11 @@ and the workflow handoff are deliberately absent from the package. The manifest 
 self-consistency; obtain the export from a trusted revision because it is not a publisher
 signature.
 
+Official `tooling-v*` releases add a deterministic tar archive, `SHA256SUMS`, and GitHub
+Sigstore provenance outside that payload boundary. See the
+[0.4.0 release notes](RELEASE-NOTES.md) for download, verification, installation, and migration
+commands.
+
 ## Hosted CI
 
 The source repository has a portable GitHub Actions CI under `.github/workflows/`. Its support

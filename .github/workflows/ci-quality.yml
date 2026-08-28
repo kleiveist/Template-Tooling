@@ -74,6 +74,7 @@ jobs:
         shell: pwsh
         run: |
           $qualityPaths = @(
+            ".github/scripts/create_portable_release.py",
             "conftest.py",
             "tools/ci_gate.py",
             "tools/ci_support.py",
@@ -85,6 +86,7 @@ jobs:
             "tools/tests/core/test_support_matrix.py",
             "tools/tests/system",
             "tests/source/test_ci_gate.py",
+            "tests/source/test_create_portable_release.py",
             "tests/source/test_repository_packaging_policy.py",
             "tests/source/test_skip_policy.py",
             "tests/source/test_workflow_contracts.py",
@@ -101,6 +103,7 @@ jobs:
         shell: pwsh
         run: |
           $qualityPaths = @(
+            ".github/scripts/create_portable_release.py",
             "conftest.py",
             "tools/ci_gate.py",
             "tools/ci_support.py",
@@ -112,6 +115,7 @@ jobs:
             "tools/tests/core/test_support_matrix.py",
             "tools/tests/system",
             "tests/source/test_ci_gate.py",
+            "tests/source/test_create_portable_release.py",
             "tests/source/test_repository_packaging_policy.py",
             "tests/source/test_skip_policy.py",
             "tests/source/test_workflow_contracts.py",
