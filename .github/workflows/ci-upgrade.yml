@@ -88,6 +88,8 @@ jobs:
         shell: pwsh
         run: |
           $junit = Join-Path $env:RUNNER_TEMP "real-version-upgrade.junit.xml"
+          $fixtures = Join-Path $env:RUNNER_TEMP "preintegrated-historical-fixtures"
+          $env:TEMPLATE_TOOLING_PREINTEGRATED_EXPORT_ROOT = $fixtures
           Push-Location $env:UPGRADE_SOURCE_CURRENT
           try {
             & $env:UPGRADE_CURRENT_PYTHON -m pytest -q -p no:cacheprovider --junitxml=$junit tests/source/test_historical_tooling_migration.py
@@ -96,6 +98,14 @@ jobs:
             Pop-Location
           }
           if ($exitCode -ne 0) { exit $exitCode }
+      - name: Upload preintegrated historical fixtures
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: preintegrated-historical-fixtures
+          path: ${{ runner.temp }}/preintegrated-historical-fixtures
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
       - name: Upload upgrade evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -107,7 +117,7 @@ jobs:
 
   windows-upgrade:
     name: windows-upgrade
-    needs: support-matrix
+    needs: [support-matrix, real-version-upgrade]
     runs-on: ${{ needs.support-matrix.outputs.windows }}
     timeout-minutes: 50
     env:
@@ -123,10 +133,16 @@ jobs:
         uses: ./.github/actions/setup-tooling-environment
         with:
           python-version: ${{ needs.support-matrix.outputs.python_primary }}
+      - name: Download preintegrated historical fixtures
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: preintegrated-historical-fixtures
+          path: ${{ runner.temp }}/preintegrated-historical-fixtures
       - name: Exercise historical payload migration on Windows
         shell: pwsh
         run: |
           $junit = Join-Path $env:RUNNER_TEMP "windows-upgrade.junit.xml"
+          $env:TEMPLATE_TOOLING_PREINTEGRATED_ROOT = Join-Path $env:RUNNER_TEMP "preintegrated-historical-fixtures"
           & $env:TOOLING_PYTHON -m pytest -q -p no:cacheprovider --junitxml=$junit tests/source/test_historical_tooling_migration.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload Windows upgrade evidence

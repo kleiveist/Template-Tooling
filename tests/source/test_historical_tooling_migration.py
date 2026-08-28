@@ -22,6 +22,8 @@ from tools.tests.acceptance.test_tooling_replacement import (
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 TARGET_TOOLING_VERSION = "0.4.0"
+PREINTEGRATED_ROOT_ENV = "TEMPLATE_TOOLING_PREINTEGRATED_ROOT"
+PREINTEGRATED_EXPORT_ROOT_ENV = "TEMPLATE_TOOLING_PREINTEGRATED_EXPORT_ROOT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +88,15 @@ def _copy_historical_release(
         f"{release.commit}:docs/toolingdocs",
     )
     resolved = subprocess.run(
-        [git, "-C", str(REPOSITORY_ROOT), "rev-parse", *revisions],
+        [
+            git,
+            "-c",
+            f"safe.directory={REPOSITORY_ROOT}",
+            "-C",
+            str(REPOSITORY_ROOT),
+            "rev-parse",
+            *revisions,
+        ],
         check=False,
         capture_output=True,
         text=True,
@@ -102,6 +112,8 @@ def _copy_historical_release(
     archived = subprocess.run(
         [
             git,
+            "-c",
+            f"safe.directory={REPOSITORY_ROOT}",
             "-C",
             str(REPOSITORY_ROOT),
             "archive",
@@ -144,6 +156,62 @@ def _copy_historical_release(
     _assert_copied_payload_is_clean(project_root)
 
 
+def _external_fixture_root(variable: str, *, require_exists: bool) -> Path | None:
+    configured = os.environ.get(variable)
+    if configured is None:
+        return None
+    root = Path(configured)
+    assert root.is_absolute(), f"{variable} must be an absolute path"
+    assert not root.is_symlink(), f"{variable} must not identify a symbolic link"
+    resolved = root.resolve(strict=require_exists)
+    repository_root = REPOSITORY_ROOT.resolve()
+    assert resolved != repository_root
+    assert not resolved.is_relative_to(repository_root), (
+        f"{variable} must stay outside the source repository"
+    )
+    if require_exists:
+        assert resolved.is_dir() and not resolved.is_symlink(), (
+            f"{variable} must identify a regular directory"
+        )
+    return resolved
+
+
+def _copy_preintegrated_release(
+    project_root: Path,
+    release: HistoricalRelease,
+    fixture_root: Path,
+) -> None:
+    source = fixture_root / release.tooling_version
+    assert source.is_dir() and not source.is_symlink(), (
+        f"missing preintegrated fixture for {release.tooling_version}: {source}"
+    )
+    assert source.resolve().parent == fixture_root
+    assert not any(path.is_symlink() for path in source.rglob("*")), (
+        f"preintegrated fixture contains a symbolic link: {source}"
+    )
+    shutil.copytree(source, project_root)
+    _assert_copied_payload_is_clean(project_root)
+
+
+def _export_preintegrated_release(
+    project_root: Path,
+    release: HistoricalRelease,
+) -> None:
+    export_root = _external_fixture_root(
+        PREINTEGRATED_EXPORT_ROOT_ENV,
+        require_exists=False,
+    )
+    if export_root is None:
+        return
+    export_root.mkdir(parents=True, exist_ok=True)
+    assert export_root.is_dir() and not export_root.is_symlink()
+    target = export_root / release.tooling_version
+    assert not target.exists() and not target.is_symlink(), (
+        f"refusing to replace preintegrated fixture: {target}"
+    )
+    shutil.copytree(project_root, target)
+
+
 @pytest.mark.parametrize(
     "release",
     HISTORICAL_RELEASES,
@@ -159,19 +227,34 @@ def test_real_historical_payload_upgrades_through_registered_migration(
     project_root = tmp_path / (
         f"historical-upgrade-{release.tooling_version.replace('.', '-')}"
     )
-    project_root.mkdir()
-    _copy_historical_release(project_root, release)
-    _write_product_sentinels(project_root)
-    product_before = _product_hashes(project_root)
-
-    integrated, _ = _run_json(
-        project_root,
-        "integrate",
-        "--full-fix",
-        "--json",
+    preintegrated_root = _external_fixture_root(
+        PREINTEGRATED_ROOT_ENV,
+        require_exists=True,
     )
-    assert integrated["status"] == "INTEGRATED"
-    assert integrated["tooling_version"] == release.tooling_version
+    if preintegrated_root is None:
+        assert os.name != "nt", (
+            "Windows upgrade evidence requires fixtures produced by the immutable "
+            "historical tooling on Linux"
+        )
+        project_root.mkdir()
+        _copy_historical_release(project_root, release)
+        _write_product_sentinels(project_root)
+        integrated, _ = _run_json(
+            project_root,
+            "integrate",
+            "--full-fix",
+            "--json",
+        )
+        assert integrated["status"] == "INTEGRATED"
+        assert integrated["tooling_version"] == release.tooling_version
+        _export_preintegrated_release(project_root, release)
+    else:
+        _copy_preintegrated_release(project_root, release, preintegrated_root)
+
+    assert (project_root / "tools" / "VERSION").read_text(
+        encoding="utf-8"
+    ) == f"{release.tooling_version}\n"
+    product_before = _product_hashes(project_root)
     config = project_root / "project-tooling.toml"
     state = project_root / ".tooling-state" / "state.toml"
     config_before_copy = config.read_bytes()
