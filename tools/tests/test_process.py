@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -56,6 +57,75 @@ def test_run_bounded_timeout_terminates_descendants(tmp_path: Path) -> None:
     time.sleep(1)
 
     assert not marker.exists()
+
+
+class _FakePosixProcess:
+    def __init__(self) -> None:
+        self.pid = 4242
+        self.returncode: int | None = None
+
+    def wait(self, timeout: float | None = None) -> int:
+        self.returncode = -signal.SIGTERM
+        return self.returncode
+
+    def poll(self) -> int | None:
+        return self.returncode
+
+    def kill(self) -> None:
+        raise AssertionError("leader fallback must not run after the leader exited")
+
+
+def test_posix_group_permission_error_is_ignored_after_all_members_exit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakePosixProcess()
+
+    def fake_killpg(_group_id: int, requested_signal: int) -> None:
+        if requested_signal == signal.SIGKILL:
+            raise PermissionError("synthetic empty-group race")
+
+    monkeypatch.setattr(process.os, "name", "posix")
+    monkeypatch.setattr(process.os, "killpg", fake_killpg)
+    monkeypatch.setattr(process, "_process_group_has_live_member", lambda _group: False)
+
+    process._terminate_process_group(fake)
+
+
+def test_posix_group_permission_error_is_not_hidden_for_a_live_member(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakePosixProcess()
+
+    def fake_killpg(_group_id: int, requested_signal: int) -> None:
+        if requested_signal == signal.SIGKILL:
+            raise PermissionError("synthetic live-group refusal")
+
+    monkeypatch.setattr(process.os, "name", "posix")
+    monkeypatch.setattr(process.os, "killpg", fake_killpg)
+    monkeypatch.setattr(process, "_process_group_has_live_member", lambda _group: True)
+
+    with pytest.raises(PermissionError, match="live-group refusal"):
+        process._terminate_process_group(fake)
+
+
+def test_process_group_live_member_query_ignores_zombies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    command = ["/bin/ps", "-ax", "-o", "pgid=", "-o", "stat="]
+    monkeypatch.setattr(process.shutil, "which", lambda *_args, **_kwargs: command[0])
+    monkeypatch.setattr(
+        process.subprocess,
+        "run",
+        lambda actual, **_kwargs: subprocess.CompletedProcess(
+            actual,
+            0,
+            stdout="4242 Z+\n4243 S+\n",
+            stderr="",
+        ),
+    )
+
+    assert process._process_group_has_live_member(4242) is False
+    assert process._process_group_has_live_member(4243) is True
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows Job Object assertion")
