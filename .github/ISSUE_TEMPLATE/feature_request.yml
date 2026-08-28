@@ -1,0 +1,52 @@
+name: Feature request
+description: Propose a bounded improvement to Template Tooling.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the user problem and the smallest capability that would solve it while preserving project ownership.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What workflow is difficult or impossible today, and who is affected?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed capability
+      description: Describe the observable behavior, not only an implementation approach.
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Ownership and safety boundaries
+      description: Identify paths and structured keys that may be read or changed, plus required failure and rollback behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe existing commands, workarounds, or smaller solutions you considered.
+  - type: textarea
+    id: verification
+    attributes:
+      label: Acceptance evidence
+      description: What tests or observable results would prove the feature complete and safe?
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and pull requests for this request.
+          required: true
+        - label: The proposal does not assume ownership of arbitrary product files or configuration.
+          required: true

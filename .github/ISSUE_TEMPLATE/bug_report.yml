@@ -1,0 +1,82 @@
+name: Bug report
+description: Report reproducible behavior that does not match the documented contract.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve Template Tooling. Do not include secrets or security vulnerabilities here; use the private security reporting link instead.
+  - type: input
+    id: version
+    attributes:
+      label: Template Tooling version
+      description: Provide the release version or commit SHA.
+      placeholder: 0.4.0 or cb252d9
+    validations:
+      required: true
+  - type: dropdown
+    id: profile
+    attributes:
+      label: Profile
+      description: Select the active profile, if applicable.
+      options:
+        - Not profile-specific
+        - web-only
+        - web-cloud
+        - desktop-local
+        - desktop-cloud
+        - full-platform
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem
+      description: Describe what happened and which command or workflow was involved.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide exact, minimal, sanitized steps that reproduce the problem.
+      placeholder: |
+        1. Run ...
+        2. Configure ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Explain the documented or expected result.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include operating system, Python version, and relevant tool versions.
+      placeholder: Ubuntu 24.04, Python 3.13, Node.js 24.19.0
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Paste relevant logs, plans, or diffs after removing secrets and private project content.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and pull requests for this problem.
+          required: true
+        - label: I removed secrets and private project content from this report.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
