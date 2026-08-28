@@ -57,9 +57,11 @@ Create the candidate from an existing output parent and inspect it before distri
 python tools/control.py tooling export --output PATH
 ```
 
-The result is a directory, not a signed archive or a publication. Its
+The local result is a directory, not a signed archive or a publication. Its
 `tools/PORTABLE-PAYLOAD.json` binds every exported file except the manifest itself and is
 validated again before the staged directory is published. It detects incomplete, mixed or
 changed copies but cannot authenticate an adversarial replacement of both payload and manifest.
-Use a trusted pinned revision, retain release checksums/signatures outside the payload when
-publishing, and follow the [folder replacement guide](../guides/folder-replacement.md).
+The source repository's tagged release workflow adds a deterministic tarball, external checksum,
+and GitHub Sigstore provenance without placing publisher metadata inside the payload. Verify all
+of them from the trusted tag, and follow the
+[folder replacement guide](../guides/folder-replacement.md).

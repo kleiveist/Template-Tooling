@@ -40,6 +40,12 @@ _USES = re.compile(r"^\s*uses:\s*([^\s#]+)", re.MULTILINE)
 _NODE24_UPLOAD_ARTIFACT = (
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
 )
+_DOWNLOAD_ARTIFACT = (
+    "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+)
+_ATTEST_BUILD_PROVENANCE = (
+    "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8"
+)
 
 
 def _workflows() -> dict[str, str]:
@@ -66,6 +72,20 @@ def test_required_portable_ci_workflows_are_present() -> None:
     skip_audit = _job_block(workflows["ci-quality.yml"], "skip-audit")
     assert "tests/source/test_skip_policy.py" in skip_audit
     assert "skip-audit.junit.xml" in skip_audit
+
+
+def test_every_protected_merge_gate_runs_for_pull_requests() -> None:
+    workflows = _workflows()
+
+    for name in (
+        "ci-quality.yml",
+        "ci-core.yml",
+        "ci-system.yml",
+        "ci-acceptance.yml",
+        "ci-upgrade.yml",
+        "ci-documentation.yml",
+    ):
+        assert "  pull_request:\n" in workflows[name], name
 
 
 def test_reusable_acceptance_pins_build_runtimes_and_separates_profile_matrix() -> None:
@@ -205,6 +225,37 @@ def test_workflows_use_the_pinned_node24_artifact_action() -> None:
 
     assert upload_actions
     assert set(upload_actions) == {_NODE24_UPLOAD_ARTIFACT}
+
+
+def test_release_workflow_publishes_durable_verified_assets() -> None:
+    release = _workflows()["release.yml"]
+    contract = _job_block(release, "release-contract")
+    finale = _job_block(release, "release-final")
+
+    assert ".github/scripts/create_portable_release.py" in contract
+    assert "portable-release-assets" in contract
+    assert "Template-Tooling-$version" in contract
+    assert _DOWNLOAD_ARTIFACT in finale
+    assert _ATTEST_BUILD_PROVENANCE in finale
+    assert "subject-checksums:" in finale
+    assert "sha256sum --check SHA256SUMS" in finale
+    assert "gh release create" in finale
+    assert "--verify-tag" in finale
+    assert "--notes-file RELEASE-NOTES.md" in finale
+    assert "attestations: write" in finale
+    assert "contents: write" in finale
+    assert "id-token: write" in finale
+    for job_name, runner_output in (
+        ("release-acceptance-linux", "linux"),
+        ("release-acceptance-windows", "windows"),
+        ("release-acceptance-macos", "macos"),
+    ):
+        acceptance = _job_block(release, job_name)
+        assert (
+            f"runner: ${{{{ needs.support-matrix.outputs.{runner_output} }}}}"
+            in acceptance
+        )
+        assert job_name in finale
 
 
 def test_support_matrix_is_the_only_workflow_runtime_version_source() -> None:

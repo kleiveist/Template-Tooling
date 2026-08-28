@@ -2,6 +2,7 @@ name: Upgrade
 
 on:
   workflow_call:
+  pull_request:
   push:
     branches: [main]
     tags: ["tooling-v*"]
@@ -12,7 +13,7 @@ permissions:
 
 concurrency:
   group: upgrade-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   support-matrix:
