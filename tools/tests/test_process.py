@@ -75,7 +75,6 @@ class _FakePosixProcess:
         raise AssertionError("leader fallback must not run after the leader exited")
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX process-group assertion")
 def test_posix_group_permission_error_is_ignored_after_all_members_exit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -85,14 +84,13 @@ def test_posix_group_permission_error_is_ignored_after_all_members_exit(
         if requested_signal == signal.SIGKILL:
             raise PermissionError("synthetic empty-group race")
 
-    monkeypatch.setattr(process.os, "name", "posix")
-    monkeypatch.setattr(process.os, "killpg", fake_killpg)
+    monkeypatch.setattr(process.signal, "SIGKILL", 9, raising=False)
+    monkeypatch.setattr(process.os, "killpg", fake_killpg, raising=False)
     monkeypatch.setattr(process, "_process_group_has_live_member", lambda _group: False)
 
     process._terminate_process_group(fake)
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX process-group assertion")
 def test_posix_group_permission_error_is_not_hidden_for_a_live_member(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -102,8 +100,8 @@ def test_posix_group_permission_error_is_not_hidden_for_a_live_member(
         if requested_signal == signal.SIGKILL:
             raise PermissionError("synthetic live-group refusal")
 
-    monkeypatch.setattr(process.os, "name", "posix")
-    monkeypatch.setattr(process.os, "killpg", fake_killpg)
+    monkeypatch.setattr(process.signal, "SIGKILL", 9, raising=False)
+    monkeypatch.setattr(process.os, "killpg", fake_killpg, raising=False)
     monkeypatch.setattr(process, "_process_group_has_live_member", lambda _group: True)
 
     with pytest.raises(PermissionError, match="live-group refusal"):
