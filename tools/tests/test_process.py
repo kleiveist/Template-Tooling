@@ -75,6 +75,7 @@ class _FakePosixProcess:
         raise AssertionError("leader fallback must not run after the leader exited")
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process-group assertion")
 def test_posix_group_permission_error_is_ignored_after_all_members_exit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -91,6 +92,7 @@ def test_posix_group_permission_error_is_ignored_after_all_members_exit(
     process._terminate_process_group(fake)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process-group assertion")
 def test_posix_group_permission_error_is_not_hidden_for_a_live_member(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
