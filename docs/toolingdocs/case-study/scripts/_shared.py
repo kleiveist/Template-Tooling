@@ -69,6 +69,11 @@ def require_audited_config(config: dict[str, Any]) -> None:
         "tex_distribution",
         "environment_pinning",
         "shell_escape",
+        "tinytex_release",
+        "tinytex_archive",
+        "tinytex_sha256",
+        "tinytex_repository",
+        "tinytex_packages",
     }
     required_build = {
         "source_date_epoch",
@@ -107,6 +112,15 @@ def require_audited_config(config: dict[str, Any]) -> None:
         )
     if toolchain["shell_escape"] is not False:
         raise CaseStudyError("Shell escape must remain disabled.")
+    if (
+        not isinstance(toolchain["tinytex_sha256"], str)
+        or len(toolchain["tinytex_sha256"]) != 64
+        or any(
+            character not in "0123456789abcdef"
+            for character in toolchain["tinytex_sha256"]
+        )
+    ):
+        raise CaseStudyError("TinyTeX archive SHA-256 must be complete and lowercase.")
     for language in LANGUAGES:
         language_config = languages.get(language)
         if (

@@ -15,6 +15,13 @@ WORKFLOW_ROOT = REPOSITORY_ROOT / ".github" / "workflows"
 SETUP_ACTION = (
     REPOSITORY_ROOT / ".github" / "actions" / "setup-tooling-environment" / "action.yml"
 )
+DOCUMENTATION_ACTION = (
+    REPOSITORY_ROOT
+    / ".github"
+    / "actions"
+    / "setup-documentation-environment"
+    / "action.yml"
+)
 REQUIRED_WORKFLOWS = frozenset(
     {
         "ci-quality.yml",
@@ -209,6 +216,42 @@ def test_setup_action_creates_only_external_isolated_environments() -> None:
     assert "RUNNER_TEMP" in content
     assert "tools/.venv" not in content
     assert "TOOLING_PYTHON=" in content
+    for action in _USES.findall(content):
+        assert _PINNED_ACTION.fullmatch(action), action
+
+
+def test_documentation_workflow_uses_only_the_isolated_pinned_toolchain() -> None:
+    workflow = _workflows()["ci-documentation.yml"]
+    build = _job_block(workflow, "documentation-build")
+
+    assert "needs: support-matrix" in build
+    assert "runs-on: ${{ needs.support-matrix.outputs.linux }}" in build
+    assert "uses: ./.github/actions/setup-documentation-environment" in build
+    assert "DOCUMENTATION_PYTHON" in build
+    assert "scripts/environment.py" in build
+    assert "build --all --output-dir $pdfs --reproducible" in build
+    assert "documentation-runtime.json" in build
+    assert "test_pdf_integrity.py" in build
+    assert "scripts/render_check.py" in build
+    assert "sudo " not in workflow
+    assert "apt-get" not in workflow
+    assert "pdftoppm" not in workflow
+    assert "TOOLING_PYTHON" not in workflow
+    assert "TMPDIR: ${{ runner.temp }}" not in workflow
+
+
+def test_documentation_action_pins_and_confines_every_dependency() -> None:
+    content = DOCUMENTATION_ACTION.read_text(encoding="utf-8")
+
+    assert "runs:\n  using: composite" in content
+    assert "actions/setup-python@" in content
+    assert "actions/cache@" in content
+    assert "runner.temp" in content
+    assert "scripts/environment.py" in content
+    assert "DOCUMENTATION_ENVIRONMENT_ROOT=" in content
+    assert "DOCUMENTATION_PYTHON=" in content
+    assert "sudo " not in content
+    assert "apt-get" not in content
     for action in _USES.findall(content):
         assert _PINNED_ACTION.fullmatch(action), action
 

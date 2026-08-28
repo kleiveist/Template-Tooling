@@ -174,15 +174,16 @@ def _compile_language(
             environment=environment,
             timeout=timeout,
         )
-        logs = [first_log, biber_log]
+        latex_logs = [first_log]
         for _ in range(int(config["build"]["max_latex_passes"]) - 1):
-            logs.append(
+            latex_logs.append(
                 _run(
                     command, cwd=language_root, environment=environment, timeout=timeout
                 )
             )
-        combined_log = "\n".join(logs)
-        _warning_check(combined_log, language)
+        # The first clean LaTeX pass necessarily reports unresolved references.
+        # Enforce the warning policy against Biber and the converged final pass.
+        _warning_check("\n".join((biber_log, latex_logs[-1])), language)
         pdf = build / "main.pdf"
         if not pdf.is_file():
             raise CaseStudyError(f"TeX did not produce a PDF for {language}.")

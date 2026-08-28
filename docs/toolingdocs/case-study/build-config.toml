@@ -9,9 +9,14 @@ license_status = "no-license-declared-no-upstream-files-imported"
 [toolchain]
 engine = "pdflatex"
 bibliography_backend = "biber"
-tex_distribution = "CI-recorded TeX Live package set (reference PDF: TeX Live 2025)"
-environment_pinning = "runner label pinned; package repository release recorded, not immutable"
+tex_distribution = "TinyTeX v2026.08 (TeX Live 2026)"
+environment_pinning = "archive and Python packages pinned; supplemental TeX revisions recorded"
 shell_escape = false
+tinytex_release = "v2026.08"
+tinytex_archive = "TinyTeX-linux-x86_64-v2026.08.tar.xz"
+tinytex_sha256 = "59685643fb4160f779df5e3d7d78266a86818ebb86ac25c7900723b0fd73a7cd"
+tinytex_repository = "https://tlnet.yihui.org"
+tinytex_packages = ["babel-german", "biblatex-apa"]
 
 [build]
 source_date_epoch = 1787788800 # 2026-08-27T00:00:00Z

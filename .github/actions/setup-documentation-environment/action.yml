@@ -1,0 +1,62 @@
+name: Set up case-study documentation environment
+description: Create an isolated Python and TinyTeX environment outside the checkout.
+
+inputs:
+  python-version:
+    description: Python version selected from tools/resources/config/support-matrix.toml.
+    required: true
+
+outputs:
+  python:
+    description: Absolute path to the isolated documentation Python executable.
+    value: ${{ steps.environment.outputs.python }}
+  state_dir:
+    description: Absolute path to the generated environment root.
+    value: ${{ steps.environment.outputs.state_dir }}
+  tex_bin:
+    description: Absolute path to the isolated TinyTeX binaries.
+    value: ${{ steps.environment.outputs.tex_bin }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Restore the checksum-verified TinyTeX download
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/template-tooling-documentation-downloads
+        key: documentation-tinytex-${{ runner.os }}-${{ hashFiles('docs/toolingdocs/case-study/build-config.toml') }}
+
+    - id: environment
+      name: Install the isolated case-study toolchain
+      shell: pwsh
+      env:
+        DOCUMENTATION_ENVIRONMENT_ROOT: ${{ runner.temp }}/template-tooling-documentation-environment
+        DOCUMENTATION_DOWNLOAD_CACHE: ${{ runner.temp }}/template-tooling-documentation-downloads
+      run: |
+        $output = & python docs/toolingdocs/case-study/scripts/environment.py `
+          --state-dir $env:DOCUMENTATION_ENVIRONMENT_ROOT `
+          --download-cache $env:DOCUMENTATION_DOWNLOAD_CACHE `
+          setup --json
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $info = (($output -join [Environment]::NewLine) | ConvertFrom-Json)
+        $python = [string]$info.python_executable
+        $texBin = [string]$info.tex_bin
+        if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+          throw "isolated documentation Python is missing: $python"
+        }
+        if (-not (Test-Path -LiteralPath (Join-Path $texBin "pdflatex") -PathType Leaf)) {
+          throw "isolated pdflatex is missing below: $texBin"
+        }
+        "python=$python" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        "state_dir=$env:DOCUMENTATION_ENVIRONMENT_ROOT" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        "tex_bin=$texBin" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        "DOCUMENTATION_PYTHON=$python" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "DOCUMENTATION_ENVIRONMENT_ROOT=$env:DOCUMENTATION_ENVIRONMENT_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "DOCUMENTATION_DOWNLOAD_CACHE=$env:DOCUMENTATION_DOWNLOAD_CACHE" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        $texBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        (Split-Path -Parent $python) | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append

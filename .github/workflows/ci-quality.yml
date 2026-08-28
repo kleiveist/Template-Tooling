@@ -89,7 +89,11 @@ jobs:
             "tests/source/test_skip_policy.py",
             "tests/source/test_workflow_contracts.py",
             "docs/toolingdocs/case-study/scripts/_shared.py",
-            "docs/toolingdocs/case-study/scripts/verify.py"
+            "docs/toolingdocs/case-study/scripts/build.py",
+            "docs/toolingdocs/case-study/scripts/environment.py",
+            "docs/toolingdocs/case-study/scripts/render_check.py",
+            "docs/toolingdocs/case-study/scripts/verify.py",
+            "docs/toolingdocs/case-study/tests/test_environment.py"
           )
           & $env:TOOLING_PYTHON -m ruff format --check $qualityPaths
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -112,7 +116,11 @@ jobs:
             "tests/source/test_skip_policy.py",
             "tests/source/test_workflow_contracts.py",
             "docs/toolingdocs/case-study/scripts/_shared.py",
-            "docs/toolingdocs/case-study/scripts/verify.py"
+            "docs/toolingdocs/case-study/scripts/build.py",
+            "docs/toolingdocs/case-study/scripts/environment.py",
+            "docs/toolingdocs/case-study/scripts/render_check.py",
+            "docs/toolingdocs/case-study/scripts/verify.py",
+            "docs/toolingdocs/case-study/tests/test_environment.py"
           )
           & $env:TOOLING_PYTHON -m ruff check $qualityPaths
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

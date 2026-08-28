@@ -44,24 +44,36 @@ Upstream-Kompatibilität.
 
 ## Build and verification / Build und Verifikation
 
-Build outputs are published only under `.tooling-state/docs/case-study/` locally. CI uses a
-fresh `$RUNNER_TEMP` directory. `pdflatex` and `biber` are required for a real PDF build;
-the static verifier is useful without a TeX installation.
+Build outputs are published only under `.tooling-state/docs/case-study/` locally. The
+bootstrap keeps its Python virtual environment, TinyTeX tree, caches, and configuration
+below `.tooling-state/docs/environment/`; it never invokes `sudo`, `apt`, or a global
+`pip`. The TinyTeX release and archive SHA-256 as well as every Python package version are
+pinned. Exact supplemental TeX package revisions are written to the environment report.
+
+The bootstrap currently supports Linux x86_64. `build`, `verify`, and `test` create the
+environment on first use, so activation is not necessary:
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/build.py --language de
-PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/build.py --language en
-PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/build.py --all
-PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/build.py --all --clean
-PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/build.py --all --reproducible
-PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/verify.py --all
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/environment.py setup
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/environment.py build --language de
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/environment.py build --language en
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/environment.py build --all --clean
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/environment.py build --all --reproducible
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/environment.py verify --all
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/environment.py test
+PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/environment.py info --json
 PYTHONDONTWRITEBYTECODE=1 python docs/toolingdocs/case-study/scripts/clean.py
 ```
 
-```sh
-PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider \
-  docs/toolingdocs/case-study/tests
-```
+The first setup downloads the checksum-verified TinyTeX archive; later runs reuse the
+project-local environment. The `Documentation` GitHub workflow uses the same bootstrap,
+rebuilds both editions twice, runs PDF integrity tests, renders every page, and publishes
+the PDFs, checksums, JUnit reports, and exact runtime inventory as one CI artifact.
+
+Der Bootstrap hält Python-`venv`, TinyTeX, Caches und Konfiguration vollständig unter
+`.tooling-state`. Der erste Aufruf lädt das per SHA-256 geprüfte TinyTeX-Archiv; spätere
+Aufrufe verwenden die lokale Umgebung erneut. Auch die GitHub-Action nutzt denselben
+Ablauf und dokumentiert die tatsächlich installierten Versionen als CI-Evidenz.
 
 No PDF, auxiliary file, Biber output, SyncTeX file, rendered diagram, or other TeX build
 state belongs in this source tree. / PDFs, Hilfsdateien, Biber-Ausgaben, SyncTeX-Dateien,

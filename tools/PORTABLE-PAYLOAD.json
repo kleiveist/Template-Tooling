@@ -158,8 +158,8 @@
     },
     {
       "path": "docs/toolingdocs/case-study/README.md",
-      "sha256": "sha256:583ec2525ac33408c6be499a5c77eeaf0cb2d8481d63292a150539139e20895a",
-      "size": 537,
+      "sha256": "sha256:7e8d8a69ffbb6d6bc97b543b4835de40e5ea075be013dad4f99985f95875c386",
+      "size": 749,
       "kind": "file",
       "executable": false
     },
@@ -270,8 +270,8 @@
     },
     {
       "path": "docs/toolingdocs/case-study/build-config.toml",
-      "sha256": "sha256:ba1dfe36ed206067c38bfb017353e119bff4e83e4a75e988162238f67f0f1642",
-      "size": 1122,
+      "sha256": "sha256:5d0894dba786a678170f296d2c901a6dda0bd81901f820301e34e7ea1708c470",
+      "size": 1360,
       "kind": "file",
       "executable": false
     },
@@ -284,8 +284,8 @@
     },
     {
       "path": "docs/toolingdocs/case-study/case-study.md",
-      "sha256": "sha256:0d86d1dfa9f1cafafb179c3d39dcc43319734c200ef568bcff30649912acd65b",
-      "size": 3876,
+      "sha256": "sha256:ed50a774a3618f2aff00723a693914c99ec00a98ee10a502abae8d24dcd32692",
+      "size": 5054,
       "kind": "file",
       "executable": false
     },
@@ -311,6 +311,13 @@
       "executable": false
     },
     {
+      "path": "docs/toolingdocs/case-study/requirements.txt",
+      "sha256": "sha256:dfe4fbec52387065313f6f8c5728eb201a5953d6f4f2a59fc8223a9590cd4886",
+      "size": 125,
+      "kind": "file",
+      "executable": false
+    },
+    {
       "path": "docs/toolingdocs/case-study/scripts/__init__.py",
       "sha256": "sha256:678143b6c9a2d0731f1e3528df53254668e7bad1a3980d4c8500d644c730dd43",
       "size": 69,
@@ -319,15 +326,15 @@
     },
     {
       "path": "docs/toolingdocs/case-study/scripts/_shared.py",
-      "sha256": "sha256:854db6522800bea6123e73aed88c1b001e178b0264165eefdb4dfe391825543d",
-      "size": 7561,
+      "sha256": "sha256:11e454410d7e027fd17a2d743271f2d62592b5956842d02f7d21f8de92d4ede6",
+      "size": 8041,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/scripts/build.py",
-      "sha256": "sha256:abd4943b37a7164092c3a2d9abd7ded7879d3ea435df1a49c445414aca4eb852",
-      "size": 12052,
+      "sha256": "sha256:0e50f649890911cc3c2206fef004d66182110d1d278a6f383192f0d8d0a55f73",
+      "size": 12201,
       "kind": "file",
       "executable": false
     },
@@ -339,16 +346,23 @@
       "executable": false
     },
     {
+      "path": "docs/toolingdocs/case-study/scripts/environment.py",
+      "sha256": "sha256:f98e1e263066bf66e7dcf83ad180406064edd7225ed0e6ae9d9b23a5e87f5681",
+      "size": 21884,
+      "kind": "file",
+      "executable": false
+    },
+    {
       "path": "docs/toolingdocs/case-study/scripts/render_check.py",
-      "sha256": "sha256:c28af984399c4319c80ebfcaf2d5f621e0d3f8c7475c1529acaa7877c5c4ac60",
-      "size": 8849,
+      "sha256": "sha256:b2caab5f4b8c524d05b2b858c5b7b3ad0d49d309b31ab22bf08873f12099c1ed",
+      "size": 10856,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/scripts/verify.py",
-      "sha256": "sha256:57543636758b6b63039158af209077cb0e51a268e2a399b1b3d419d9d4b5a639",
-      "size": 22100,
+      "sha256": "sha256:7ac4d85187bc6fc57978f6099e9c09b8ef272a4367aa631731033912995ff5b6",
+      "size": 22198,
       "kind": "file",
       "executable": false
     },
@@ -382,8 +396,8 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/common/preamble/packages.tex",
-      "sha256": "sha256:9b62eb6d6113ce3e44058b6124718f40d16c18bc1a1f4ebc8e252e33be22c956",
-      "size": 1072,
+      "sha256": "sha256:f43073dbd0ab607767211e93a7445f321d5780e44b9cba965f164ac0581a2b1e",
+      "size": 1175,
       "kind": "file",
       "executable": false
     },
@@ -424,8 +438,8 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/appendices/a-cli-reference.tex",
-      "sha256": "sha256:8124be903890b524ccb40b2d5588a11dfaf62498566b96d9bbbd45bc39c883c2",
-      "size": 428,
+      "sha256": "sha256:33a900be6f0e1392f0a62f861dd8557c305b6afa3db469fa74834df6de9a5404",
+      "size": 483,
       "kind": "file",
       "executable": false
     },
@@ -550,7 +564,7 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/de/main.tex",
-      "sha256": "sha256:e9ff9be40e168f956a98e22291005ab2484f7b5a8cb17ee36df75601422c76a5",
+      "sha256": "sha256:23cab1d03d55a9e34f70214b54612531a121e91c95b5e687fdbdc4f7941e3e0d",
       "size": 1927,
       "kind": "file",
       "executable": false
@@ -564,8 +578,8 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/appendices/a-cli-reference.tex",
-      "sha256": "sha256:724b020f73945be24c6a55a8896ade68834d21027071c9cf67992fa472be3daa",
-      "size": 413,
+      "sha256": "sha256:f201fe41fd682cc6f479ea03f39b026d6fbc3de26be543d74861041152ccbc46",
+      "size": 467,
       "kind": "file",
       "executable": false
     },
@@ -690,7 +704,7 @@
     },
     {
       "path": "docs/toolingdocs/case-study/source/en/main.tex",
-      "sha256": "sha256:7c582a751e3ebf2f1cb38a7b2c2901b6e360a2d5f8d1ea369a510ea4686148e7",
+      "sha256": "sha256:a53884c9ec5123920832d96f5a24fc6e9b4876e1b3952c1ce4adbf0815ec1397",
       "size": 1911,
       "kind": "file",
       "executable": false
@@ -713,6 +727,13 @@
       "path": "docs/toolingdocs/case-study/tests/test_cross_references.py",
       "sha256": "sha256:682853b65a4c3631ca8e01d03fc281007c4476ed331c8ccfc934adfeccb0167e",
       "size": 187,
+      "kind": "file",
+      "executable": false
+    },
+    {
+      "path": "docs/toolingdocs/case-study/tests/test_environment.py",
+      "sha256": "sha256:d59c6b052c1c7ef20e16c260fcac053e70ad294994bd3f5e28a3256369dd9a8c",
+      "size": 4581,
       "kind": "file",
       "executable": false
     },
@@ -746,15 +767,15 @@
     },
     {
       "path": "docs/toolingdocs/case-study/tests/test_pdf_integrity.py",
-      "sha256": "sha256:c0b4a97fa12292dd543cfc20e1350f3df9087289a104fd5c69ae67492f3c583b",
-      "size": 1555,
+      "sha256": "sha256:88bf233c62b7fae3761da4ab8aba6f4c3bfdb191ad817fd552148fdd120cfe24",
+      "size": 1575,
       "kind": "file",
       "executable": false
     },
     {
       "path": "docs/toolingdocs/case-study/tests/test_reproducible_build.py",
-      "sha256": "sha256:9ecec505b63b91ea3644e3fc869bafbd7129fcc4bb9dd23f0d2c317c1dc15ac9",
-      "size": 2222,
+      "sha256": "sha256:ea42e0ff7c89b40b0962e5b8243a4ea459902103cc5bb26cd33e78951655ff9a",
+      "size": 2252,
       "kind": "file",
       "executable": false
     },
@@ -795,8 +816,8 @@
     },
     {
       "path": "docs/toolingdocs/development/documentation-development.md",
-      "sha256": "sha256:bfd9d94dc40801ac80dda56fecefb45c0d8336c24af79bf566bbc65dd53c0f53",
-      "size": 1063,
+      "sha256": "sha256:254953ab184b3e02b1dbfe6d6e6e4a2eb4845d463de74528609001e0036fd89d",
+      "size": 1468,
       "kind": "file",
       "executable": false
     },
@@ -2614,5 +2635,5 @@
       "executable": false
     }
   ],
-  "digest": "sha256:8a481f6e379fd3fbbf2e6cd12256bab5dafc2a7204cd08c2585f6d61c6ee4a98"
+  "digest": "sha256:7ee52e53d5ab86ecbade5f7c2c4166d4c12592f986a3ad76fa4547ab665708fd"
 }
