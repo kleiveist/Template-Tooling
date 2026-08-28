@@ -94,6 +94,17 @@ def test_reusable_acceptance_pins_build_runtimes_and_separates_profile_matrix() 
     assert "portable-profile-integration.junit.xml" in reusable
 
 
+def test_reusable_acceptance_fetches_history_for_historical_upgrades() -> None:
+    reusable = _workflows()["_portable-acceptance.yml"]
+    checkout = _step_block(reusable, "Check out source")
+
+    assert (
+        "fetch-depth: ${{ inputs.include-historical-upgrade && '0' || '1' }}"
+        in checkout
+    )
+    assert "include-historical-upgrade && 0" not in checkout
+
+
 def test_reusable_acceptance_callers_pass_central_node_and_rust_versions() -> None:
     for name, content in _workflows().items():
         if "uses: ./.github/workflows/_portable-acceptance.yml" not in content:
