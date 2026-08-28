@@ -6,7 +6,7 @@
 <!-- AUTO-GENERATED:docs-index START -->
 
 ## 📄 Pages
-- ⏭️ (keine Seiten)
+- ⏭️ (no pages)
 
 ## 📁 Bibliography
 - 🗂️ [Overview](bibliography/bibliography.md)

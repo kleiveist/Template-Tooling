@@ -50,7 +50,7 @@ Run the command-surface and documentation checks when their inputs change:
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python tools/control.py --help
-PYTHONDONTWRITEBYTECODE=1 python tools/control.py docs check
+PYTHONDONTWRITEBYTECODE=1 python tools/control.py docs check --docs-dir docs
 ```
 
 Use `python tools/control.py integrate --check` only against a deliberate fixture or target; the
@@ -78,9 +78,13 @@ Each section overview is named after its directory and also has exactly one gene
 block. Preserve the exact `AUTO-GENERATED:backlink` and `AUTO-GENERATED:docs-index` START/END
 marker pairs; repeating them in examples would itself make the navigation invalid.
 
-Use relative Markdown links. `python tools/control.py docs index` delegates to PyGitIndex and is
-allowed to maintain navigation only below `docs/toolingdocs/`; it must never rewrite the
-repository root `README.md`.
+Use relative Markdown links. In this source repository,
+`python tools/control.py docs index --docs-dir docs` delegates to PyGitIndex and maintains the
+repository-wide hierarchy below `docs/`. The default command without `--docs-dir` remains
+limited to the configured portable `docs/toolingdocs/` tree. Neither mode rewrites the project
+root `README.md`. After repository-wide generation, the wrapper keeps the generated
+`toolingdocs.md` overview linked to the portable `toolingdocs/index.md`, so copied payloads do
+not depend on a repository-only `docs/index.md`.
 
 ## Portable cleanliness
 

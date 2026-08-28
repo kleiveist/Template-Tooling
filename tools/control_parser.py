@@ -388,10 +388,11 @@ def _add_docs_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     docs_check_parser = docs_subparsers.add_parser(
         "check",
-        help="validate portable tooling documentation navigation",
+        help="validate documentation navigation in the selected scope",
         description=(
-            "Read only the configured docs/toolingdocs tree and validate its "
-            "generated indices, internal backlinks and targets."
+            "Read the configured docs/toolingdocs tree, or an explicit safe "
+            "project-relative documentation tree, and validate its generated "
+            "indices, internal backlinks and targets."
         ),
         formatter_class=HelpFormatter,
     )
@@ -412,8 +413,9 @@ def _add_docs_parser(subparsers: argparse._SubParsersAction) -> None:
         docs_parser,
         """examples:
   python tools/control.py docs check
+  python tools/control.py docs check --docs-dir docs
   python tools/control.py docs index --dry-run
-  python tools/control.py docs index""",
+  python tools/control.py docs index --docs-dir docs""",
     )
 
 
@@ -458,7 +460,7 @@ def _configure_docs_index_parser(docs_index_parser: argparse.ArgumentParser) -> 
         docs_index_parser,
         """examples:
   python tools/control.py docs index --dry-run
-  python tools/control.py docs index
+  python tools/control.py docs index --docs-dir docs
   python tools/control.py docs index --script /path/to/PyGitIndex.py""",
     )
 

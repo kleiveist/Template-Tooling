@@ -6,7 +6,7 @@
 <!-- AUTO-GENERATED:docs-index START -->
 
 ## 📄 Pages
-- ⏭️ (keine Seiten)
+- ⏭️ (no pages)
 
 ## 📁 Releases
 - 🗂️ [Overview](releases/releases.md)

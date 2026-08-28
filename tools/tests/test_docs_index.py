@@ -74,6 +74,28 @@ def test_generated_empty_labels_are_translated_but_authored_text_is_preserved(
     assert "(no pages)" in index.read_text(encoding="utf-8")
 
 
+def test_normalize_uses_explicit_repository_documentation_scope(tmp_path) -> None:
+    root = tmp_path / "project"
+    docs = root / "docs"
+    tooling_docs = docs / "toolingdocs"
+    tooling_docs.mkdir(parents=True)
+    readme = root / "README.md"
+    readme.write_text(
+        f"{docs_index.INDEX_START}\n- ⏭️ (keine Seiten)\n{docs_index.INDEX_END}\n",
+        encoding="utf-8",
+    )
+    for path in (docs / "index.md", tooling_docs / "index.md"):
+        path.write_text(
+            f"{docs_index.INDEX_START}\n- ⏭️ (keine Seiten)\n{docs_index.INDEX_END}\n",
+            encoding="utf-8",
+        )
+
+    assert docs_index.normalize_generated_english(root, docs_dir="docs") == 2
+    assert "(no pages)" in (docs / "index.md").read_text(encoding="utf-8")
+    assert "(no pages)" in (tooling_docs / "index.md").read_text(encoding="utf-8")
+    assert "(keine Seiten)" in readme.read_text(encoding="utf-8")
+
+
 def test_normalize_rejects_symlinked_tooling_document(tmp_path: Path) -> None:
     root = tmp_path / "project"
     docs = root / "docs" / "toolingdocs"
@@ -174,6 +196,90 @@ def test_navigation_check_accepts_complete_indices_and_backlinks(
     monkeypatch.setattr(docs_index, "ROOT", root)
 
     assert docs_index.check(argparse.Namespace(docs_dir="docs")) == 0
+
+
+def test_repository_navigation_does_not_index_nested_index_pages(
+    monkeypatch, tmp_path
+) -> None:
+    root = tmp_path / "project"
+    docs = root / "docs"
+    tooling_docs = docs / "toolingdocs"
+    tooling_docs.mkdir(parents=True)
+    (docs / "index.md").write_text(
+        _page("Docs", "../README.md", "[Tooling](toolingdocs/toolingdocs.md)"),
+        encoding="utf-8",
+    )
+    (tooling_docs / "toolingdocs.md").write_text(
+        _page("Tooling", "../index.md", "- (no pages)"),
+        encoding="utf-8",
+    )
+    (tooling_docs / "index.md").write_text(
+        _page("Portable docs", "toolingdocs.md"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(docs_index, "ROOT", root)
+
+    assert docs_index.check(argparse.Namespace(docs_dir="docs")) == 0
+
+
+def test_portable_navigation_uses_named_overview_when_present(tmp_path) -> None:
+    root = tmp_path / "project"
+    docs = root / "handbook" / "toolingdocs"
+    section = docs / "guide"
+    section.mkdir(parents=True)
+    context = _project_context(root, docs="handbook")
+    (docs / "toolingdocs.md").write_text(
+        _page("Tooling", "index.md", "[Guide](guide/guide.md)"),
+        encoding="utf-8",
+    )
+    (docs / "index.md").write_text(
+        _page("Portable docs", "toolingdocs.md"),
+        encoding="utf-8",
+    )
+    (section / "guide.md").write_text(
+        _page("Guide", "../toolingdocs.md", "- (no pages)"),
+        encoding="utf-8",
+    )
+
+    assert docs_index.check(argparse.Namespace(docs_dir=None), context=context) == 0
+
+
+def test_repository_index_preserves_portable_root_backlink(tmp_path) -> None:
+    root = tmp_path / "project"
+    docs = root / "docs"
+    tooling_docs = docs / "toolingdocs"
+    tooling_docs.mkdir(parents=True)
+    context = _project_context(root)
+    (docs / "index.md").write_text("# Docs\n", encoding="utf-8")
+    (tooling_docs / "index.md").write_text("# Portable docs\n", encoding="utf-8")
+    script = tmp_path / "PyGitIndex.py"
+    script.write_text("# fake", encoding="utf-8")
+
+    def fake_run(
+        command: list[str], cwd: Path, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        (tooling_docs / "toolingdocs.md").write_text(
+            _page("Tooling", "../index.md", "- (no pages)"),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0)
+
+    original_run = docs_index.subprocess.run
+    docs_index.subprocess.run = fake_run
+    try:
+        assert (
+            docs_index.main(
+                _args(script, docs_dir="docs"),
+                context=context,
+            )
+            == 0
+        )
+    finally:
+        docs_index.subprocess.run = original_run
+
+    overview = (tooling_docs / "toolingdocs.md").read_text(encoding="utf-8")
+    assert "[← Back](index.md)" in overview
+    assert "[← Back](../index.md)" not in overview
 
 
 def test_navigation_check_accepts_url_encoded_unicode_targets(

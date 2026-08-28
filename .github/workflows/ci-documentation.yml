@@ -72,7 +72,7 @@ jobs:
         shell: pwsh
         run: |
           $junit = Join-Path $env:RUNNER_TEMP "documentation-source.junit.xml"
-          & $env:DOCUMENTATION_PYTHON tools/control.py docs check
+          & $env:DOCUMENTATION_PYTHON tools/control.py docs check --docs-dir docs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $env:DOCUMENTATION_PYTHON -m pytest -q -p no:cacheprovider --junitxml=$junit `
             tools/tests/test_portable_documentation.py `

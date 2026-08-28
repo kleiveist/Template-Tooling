@@ -1,12 +1,12 @@
 <!-- AUTO-GENERATED:backlink START -->
-[← Back](../index.md)
+[← Back](index.md)
 <!-- AUTO-GENERATED:backlink END -->
 # Toolingdocs
 
 <!-- AUTO-GENERATED:docs-index START -->
 
 ## 📄 Pages
-- ⏭️ (keine Seiten)
+- ⏭️ (no pages)
 
 ## 📁 Acceptance
 - 🗂️ [Overview](acceptance/acceptance.md)

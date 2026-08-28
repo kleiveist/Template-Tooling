@@ -17,7 +17,7 @@ indexing workflow maintain their contents; examples must not repeat marker text.
 Before handoff, run:
 
 ```sh
-python tools/control.py docs check
+python tools/control.py docs check --docs-dir docs
 ```
 
 For the bilingual PDF case study, use the project-local build environment instead of
