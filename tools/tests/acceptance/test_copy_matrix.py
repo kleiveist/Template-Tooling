@@ -28,6 +28,8 @@ SOURCE_TOOLS = REPOSITORY_ROOT / "tools"
 SOURCE_DOCS = REPOSITORY_ROOT / "docs"
 TOOLING_VERSION = (SOURCE_TOOLS / "VERSION").read_text(encoding="utf-8").strip()
 RUST_ANALYZER_WASM = Path("tools/quality/rust_analyzer/dist/rust_quality_analyzer.wasm")
+# The complete copied suite is materially slower on hosted Windows runners.
+_COPIED_RUNTIME_TIMEOUT_SECONDS = 360 if os.name == "nt" else 240
 
 _CACHE_OR_RUNTIME_DIRECTORIES = frozenset(
     {
@@ -226,7 +228,7 @@ def test_copied_tooling_matrix_is_read_only_integrated_and_idempotent(
         "--full-fix",
         "--json",
         expected_returncode=0,
-        timeout=240,
+        timeout=_COPIED_RUNTIME_TIMEOUT_SECONDS,
     )
 
     assert first_fix["status"] == "INTEGRATED"
@@ -304,7 +306,7 @@ def test_copied_tooling_matrix_is_read_only_integrated_and_idempotent(
         "--suite",
         "all",
         expected_returncode=0,
-        timeout=240,
+        timeout=_COPIED_RUNTIME_TIMEOUT_SECONDS,
     )
     assert "suite:tools" in complete_test.stdout
     assert "Overall test status: OK" in complete_test.stdout

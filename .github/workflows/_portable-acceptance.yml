@@ -53,7 +53,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: ${{ inputs.include-historical-upgrade && 0 || 1 }}
+          fetch-depth: ${{ inputs.include-historical-upgrade && '0' || '1' }}
       - name: Set up isolated tooling environment
         uses: ./.github/actions/setup-tooling-environment
         with:

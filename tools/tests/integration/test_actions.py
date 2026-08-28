@@ -13,6 +13,9 @@ from tools.integration import actions as actions_module
 from tools.integration.actions import ActionKind, ActionRunner, ActionSpec
 from tools.integration.model import FindingStatus, IntegrationError
 
+# Hosted Windows process startup can exceed the Unix budget in the nested matrix.
+_REAL_NPM_TIMEOUT_SECONDS = 90 if os.name == "nt" else 30
+
 
 def _staging_root(tmp_path: Path) -> Path:
     root = tmp_path / "staging"
@@ -438,7 +441,7 @@ def test_real_locked_empty_npm_project_installs_offline_in_staging(
             ActionSpec(
                 ActionKind.DEPENDENCIES,
                 paths=("frontend/package.json",),
-                timeout_seconds=30,
+                timeout_seconds=_REAL_NPM_TIMEOUT_SECONDS,
             ),
         )
     )(root)
