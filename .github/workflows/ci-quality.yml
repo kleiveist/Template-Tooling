@@ -127,7 +127,7 @@ jobs:
       - name: Validate documentation and repository policy
         shell: pwsh
         run: |
-          & $env:TOOLING_PYTHON tools/control.py docs check
+          & $env:TOOLING_PYTHON tools/control.py docs check --docs-dir docs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $env:TOOLING_PYTHON -m pytest -q -p no:cacheprovider tests/source/test_repository_packaging_policy.py tests/source/test_workflow_contracts.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

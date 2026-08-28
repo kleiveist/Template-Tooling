@@ -249,6 +249,10 @@ def _terminate_process_group(process: subprocess.Popen[bytes]) -> None:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
         return
+    except PermissionError:
+        if _process_group_has_live_member(process.pid):
+            raise
+        return
     try:
         process.wait(timeout=0.2)
     except subprocess.TimeoutExpired:
@@ -257,6 +261,9 @@ def _terminate_process_group(process: subprocess.Popen[bytes]) -> None:
         os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
+    except PermissionError:
+        if _process_group_has_live_member(process.pid):
+            raise
     if process.poll() is None:
         process.kill()
         process.wait()
@@ -269,11 +276,52 @@ def _terminate_remaining_group(process: subprocess.Popen[bytes]) -> None:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
         return
+    except PermissionError:
+        if _process_group_has_live_member(process.pid):
+            raise
+        return
     time.sleep(0.02)
     try:
         os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
+    except PermissionError:
+        if _process_group_has_live_member(process.pid):
+            raise
+
+
+def _process_group_has_live_member(group_id: int) -> bool:
+    """Fail closed unless a POSIX process listing proves the group is empty."""
+
+    ps = shutil.which("ps", path=os.defpath)
+    if ps is None:
+        return True
+    environment = {"LC_ALL": "C", "PATH": os.defpath}
+    try:
+        completed = subprocess.run(
+            [ps, "-ax", "-o", "pgid=", "-o", "stat="],
+            check=False,
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            timeout=2,
+            env=environment,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return True
+    if completed.returncode != 0:
+        return True
+    for line in completed.stdout.splitlines():
+        fields = line.split()
+        if len(fields) < 2:
+            continue
+        try:
+            observed_group = int(fields[0])
+        except ValueError:
+            continue
+        if observed_group == group_id and not fields[1].startswith("Z"):
+            return True
+    return False
 
 
 def _create_windows_kill_job() -> int:

@@ -20,7 +20,18 @@ def test_audited_template_contract_is_complete_and_no_unlicensed_source_is_impor
     assert "biber" in audit
     assert "Shell escape" in audit
     template = CASE_STUDY / "source/common/template"
-    assert {path.name for path in template.iterdir()} == {"NOTICE.txt"}
+    assert {path.name for path in template.iterdir()} == {"NOTICE.txt", "template.md"}
+    navigation = (template / "template.md").read_text(encoding="utf-8")
+    assert navigation == (
+        "<!-- AUTO-GENERATED:backlink START -->\n"
+        "[← Back](../common.md)\n"
+        "<!-- AUTO-GENERATED:backlink END -->\n"
+        "# Template\n\n"
+        "<!-- AUTO-GENERATED:docs-index START -->\n\n"
+        "## 📄 Pages\n"
+        "- ⏭️ (no pages)\n\n"
+        "<!-- AUTO-GENERATED:docs-index END -->\n"
+    )
     assert verify.verify_source_structure() == []
 
 

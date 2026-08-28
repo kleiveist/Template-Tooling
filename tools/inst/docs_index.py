@@ -95,12 +95,13 @@ def normalize_generated_english(
     project_root: Path | None = None,
     *,
     context: ProjectContext | None = None,
+    docs_dir: str | None = None,
 ) -> int:
     selected_context = _context(
         context,
         project_root=(project_root or ROOT).resolve(),
     )
-    docs_root = _documentation_root(selected_context, None)
+    docs_root = _documentation_root(selected_context, docs_dir)
     if docs_root is None:
         raise FilesystemSafetyError("Configured tooling documentation root is unsafe.")
     documents = [
@@ -122,6 +123,42 @@ def normalize_generated_english(
         atomic_write_text(path, updated, root=docs_root)
         changed += 1
     return changed
+
+
+def normalize_portable_root_backlink(
+    *,
+    context: ProjectContext,
+    indexed_docs_root: Path,
+) -> int:
+    """Keep the generated repository hierarchy valid after portable copying."""
+
+    portable_root = context.docs_root
+    if portable_root == indexed_docs_root:
+        return 0
+    try:
+        portable_root.relative_to(indexed_docs_root)
+    except ValueError:
+        return 0
+
+    overview = portable_root / f"{portable_root.name}.md"
+    portable_index = portable_root / "index.md"
+    if not overview.is_file() or not portable_index.is_file():
+        return 0
+    original = read_regular_text(
+        overview,
+        root=indexed_docs_root,
+        label="Portable documentation overview",
+    )
+    pattern = re.compile(
+        re.escape(BACKLINK_START) + r".*?" + re.escape(BACKLINK_END),
+        re.DOTALL,
+    )
+    replacement = f"{BACKLINK_START}\n[← Back](index.md)\n{BACKLINK_END}"
+    updated, replacements = pattern.subn(replacement, original)
+    if replacements != 1 or updated == original:
+        return 0
+    atomic_write_text(overview, updated, root=indexed_docs_root)
+    return 1
 
 
 def _generated_block(
@@ -202,6 +239,9 @@ def _block_targets(
 
 def _directory_overview(directory: Path, docs_root: Path) -> Path:
     if directory == docs_root:
+        named_overview = docs_root / f"{docs_root.name}.md"
+        if named_overview.is_file():
+            return named_overview
         return docs_root / "index.md"
     return directory / f"{directory.name}.md"
 
@@ -211,7 +251,7 @@ def _expected_index_targets(overview: Path, docs_root: Path) -> set[Path]:
     expected = {
         path.resolve()
         for path in directory.glob("*.md")
-        if path.name != "README.md" and path != overview
+        if path.name not in {"README.md", "index.md"} and path != overview
     }
     child_directories = sorted(path for path in directory.iterdir() if path.is_dir())
     for child in child_directories:
@@ -221,7 +261,7 @@ def _expected_index_targets(overview: Path, docs_root: Path) -> set[Path]:
         expected.update(
             path.resolve()
             for path in child.glob("*.md")
-            if path.name != "README.md" and path != child_overview
+            if path.name not in {"README.md", "index.md"} and path != child_overview
         )
     return expected
 
@@ -246,6 +286,7 @@ def _check_backlinks(
     docs_files: list[Path],
     docs_root: Path,
     project_root: Path,
+    portable_root: Path,
 ) -> list[str]:
     issues: list[str] = []
     for path in docs_files:
@@ -262,11 +303,22 @@ def _check_backlinks(
         if block is None:
             continue
         actual = set(_block_targets(path, block, project_root, issues))
-        expected = expected.resolve()
-        if actual != {expected}:
-            issues.append(
-                f"{path}: backlink must target {expected.relative_to(project_root).as_posix()}"
+        expected_targets = {expected.resolve()}
+        portable_index = path.parent / "index.md"
+        if (
+            path == portable_root / f"{portable_root.name}.md"
+            and portable_index.is_file()
+            and portable_index == portable_root / "index.md"
+        ):
+            expected_targets.add(portable_index.resolve())
+        if actual not in ({target} for target in expected_targets):
+            descriptions = " or ".join(
+                sorted(
+                    target.relative_to(project_root).as_posix()
+                    for target in expected_targets
+                )
             )
+            issues.append(f"{path}: backlink must target {descriptions}")
     return issues
 
 
@@ -380,7 +432,12 @@ def check(
         return 1
     try:
         docs_files = _documentation_files(docs_root)
-        issues = _check_backlinks(docs_files, docs_root, project_root)
+        issues = _check_backlinks(
+            docs_files,
+            docs_root,
+            project_root,
+            selected_context.docs_root,
+        )
         issues.extend(_check_overview_indices(docs_files, docs_root, project_root))
     except FilesystemSafetyError as exc:
         logger.fail(f"Refusing unsafe tooling documentation path: {exc}")
@@ -467,10 +524,19 @@ def main(
         return 0
 
     try:
-        translated = normalize_generated_english(context=selected_context)
+        boundary_adjusted = normalize_portable_root_backlink(
+            context=selected_context,
+            indexed_docs_root=docs_root,
+        )
+        translated = normalize_generated_english(
+            context=selected_context,
+            docs_dir=docs_relative,
+        )
     except FilesystemSafetyError as exc:
         logger.fail(f"Refusing unsafe tooling documentation path: {exc}")
         return 1
+    if boundary_adjusted:
+        logger.info("Preserved the portable documentation root backlink")
     if translated:
         logger.info(f"Normalized generated English labels in {translated} file(s)")
     logger.ok("Documentation indices and backlinks are up to date")

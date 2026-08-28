@@ -436,6 +436,7 @@ def _evidence_test_path(test_file: str) -> Path:
 
 def verify_no_generated_artifacts() -> list[str]:
     issues: list[str] = []
+    allowed_template_files = {"NOTICE.txt", "template.md"}
     for path in CASE_STUDY_ROOT.rglob("*"):
         relative = path.relative_to(CASE_STUDY_ROOT)
         folded = relative.as_posix().casefold()
@@ -455,7 +456,7 @@ def verify_no_generated_artifacts() -> list[str]:
         if (
             folded.startswith("source/common/template/")
             and path.is_file()
-            and path.name != "NOTICE.txt"
+            and path.name not in allowed_template_files
         ):
             issues.append(f"unlicensed upstream template file is present: {relative}")
     return issues

@@ -6,6 +6,6 @@
 <!-- AUTO-GENERATED:docs-index START -->
 
 ## 📄 Pages
-- ⏭️ (keine Seiten)
+- ⏭️ (no pages)
 
 <!-- AUTO-GENERATED:docs-index END -->

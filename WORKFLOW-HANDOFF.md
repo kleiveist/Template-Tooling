@@ -320,7 +320,7 @@ PYTHONDONTWRITEBYTECODE=1 "$TOOLING_PYTHON" tests/source/portable_customer_smoke
   --export-root "$EXPORT_PARENT/Template-Tooling-0.4.0" \
   --work-root "$CUSTOMER_ROOT"
 
-PYTHONDONTWRITEBYTECODE=1 "$TOOLING_PYTHON" tools/control.py docs check
+PYTHONDONTWRITEBYTECODE=1 "$TOOLING_PYTHON" tools/control.py docs check --docs-dir docs
 ```
 
 Vor einem Release das Manifest nach jeder Änderung innerhalb von `tools/` oder
